@@ -1,0 +1,313 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 820" font-family="'Segoe UI', Arial, sans-serif">
+  <defs>
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="110%">
+      <feDropShadow dx="2" dy="2" stdDeviation="3" flood-color="#00000022"/>
+    </filter>
+    <marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#6b7280"/>
+    </marker>
+    <marker id="arrow-white" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#9ca3af"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1100" height="820" fill="#f8fafc"/>
+
+  <!-- Title -->
+  <text x="550" y="38" text-anchor="middle" font-size="22" font-weight="700" fill="#1e293b">OpenCase — High-Level Architecture</text>
+  <text x="550" y="58" text-anchor="middle" font-size="13" fill="#64748b">Nextcloud App · v0.0.63</text>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- ROW 1: BROWSER / NEXTCLOUD INTEGRATIONS                -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+
+  <!-- Browser / SPA -->
+  <rect x="30" y="78" width="310" height="148" rx="10" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="185" y="99" text-anchor="middle" font-size="13" font-weight="700" fill="#1d4ed8">Browser · Vue 2 SPA</text>
+  <line x1="50" y1="107" x2="320" y2="107" stroke="#93c5fd" stroke-width="1"/>
+  <!-- boxes -->
+  <rect x="45"  y="113" width="85" height="30" rx="5" fill="#bfdbfe" stroke="#60a5fa" stroke-width="1"/>
+  <text x="87"  y="132" text-anchor="middle" font-size="11" fill="#1e3a8a">Views (18)</text>
+  <rect x="140" y="113" width="85" height="30" rx="5" fill="#bfdbfe" stroke="#60a5fa" stroke-width="1"/>
+  <text x="182" y="132" text-anchor="middle" font-size="11" fill="#1e3a8a">Components (60+)</text>
+  <rect x="235" y="113" width="80" height="30" rx="5" fill="#bfdbfe" stroke="#60a5fa" stroke-width="1"/>
+  <text x="275" y="132" text-anchor="middle" font-size="11" fill="#1e3a8a">Vuex Store</text>
+  <!-- row 2 -->
+  <rect x="45"  y="152" width="85" height="28" rx="5" fill="#bfdbfe" stroke="#60a5fa" stroke-width="1"/>
+  <text x="87"  y="170" text-anchor="middle" font-size="11" fill="#1e3a8a">Vue Router</text>
+  <rect x="140" y="152" width="85" height="28" rx="5" fill="#bfdbfe" stroke="#60a5fa" stroke-width="1"/>
+  <text x="182" y="170" text-anchor="middle" font-size="11" fill="#1e3a8a">Dashboard Widgets</text>
+  <rect x="235" y="152" width="80" height="28" rx="5" fill="#bfdbfe" stroke="#60a5fa" stroke-width="1"/>
+  <text x="275" y="170" text-anchor="middle" font-size="11" fill="#1e3a8a">api.js (Axios)</text>
+  <!-- row 3 label -->
+  <text x="185" y="208" text-anchor="middle" font-size="11" fill="#1d4ed8">Files plugin · Talk plugin · Admin settings</text>
+
+  <!-- Nextcloud Platform -->
+  <rect x="360" y="78" width="310" height="148" rx="10" fill="#dcfce7" stroke="#22c55e" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="515" y="99" text-anchor="middle" font-size="13" font-weight="700" fill="#15803d">Nextcloud Platform</text>
+  <line x1="380" y1="107" x2="650" y2="107" stroke="#86efac" stroke-width="1"/>
+  <rect x="375" y="113" width="85" height="30" rx="5" fill="#bbf7d0" stroke="#4ade80" stroke-width="1"/>
+  <text x="417" y="132" text-anchor="middle" font-size="11" fill="#14532d">Files App</text>
+  <rect x="470" y="113" width="85" height="30" rx="5" fill="#bbf7d0" stroke="#4ade80" stroke-width="1"/>
+  <text x="512" y="132" text-anchor="middle" font-size="11" fill="#14532d">Talk (Chat)</text>
+  <rect x="565" y="113" width="85" height="30" rx="5" fill="#bbf7d0" stroke="#4ade80" stroke-width="1"/>
+  <text x="607" y="132" text-anchor="middle" font-size="11" fill="#14532d">Collabora/OO</text>
+  <rect x="375" y="152" width="85" height="28" rx="5" fill="#bbf7d0" stroke="#4ade80" stroke-width="1"/>
+  <text x="417" y="170" text-anchor="middle" font-size="11" fill="#14532d">User Auth</text>
+  <rect x="470" y="152" width="85" height="28" rx="5" fill="#bbf7d0" stroke="#4ade80" stroke-width="1"/>
+  <text x="512" y="170" text-anchor="middle" font-size="11" fill="#14532d">Notifications</text>
+  <rect x="565" y="152" width="85" height="28" rx="5" fill="#bbf7d0" stroke="#4ade80" stroke-width="1"/>
+  <text x="607" y="170" text-anchor="middle" font-size="11" fill="#14532d">Cron / Jobs</text>
+  <text x="515" y="208" text-anchor="middle" font-size="11" fill="#15803d">Virtual FS Mount · Version Backend · Search Provider</text>
+
+  <!-- Auth / SAML -->
+  <rect x="690" y="78" width="380" height="148" rx="10" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="880" y="99" text-anchor="middle" font-size="13" font-weight="700" fill="#92400e">Auth &amp; Security</text>
+  <line x1="710" y1="107" x2="1050" y2="107" stroke="#fcd34d" stroke-width="1"/>
+  <rect x="705" y="113" width="100" height="30" rx="5" fill="#fde68a" stroke="#fbbf24" stroke-width="1"/>
+  <text x="755" y="132" text-anchor="middle" font-size="11" fill="#78350f">SAML SSO</text>
+  <rect x="815" y="113" width="100" height="30" rx="5" fill="#fde68a" stroke="#fbbf24" stroke-width="1"/>
+  <text x="865" y="132" text-anchor="middle" font-size="11" fill="#78350f">RBAC / Roles</text>
+  <rect x="925" y="113" width="105" height="30" rx="5" fill="#fde68a" stroke="#fbbf24" stroke-width="1"/>
+  <text x="977" y="132" text-anchor="middle" font-size="11" fill="#78350f">mTLS Public API</text>
+  <rect x="705" y="152" width="100" height="28" rx="5" fill="#fde68a" stroke="#fbbf24" stroke-width="1"/>
+  <text x="755" y="170" text-anchor="middle" font-size="11" fill="#78350f">Access Profiles</text>
+  <rect x="815" y="152" width="100" height="28" rx="5" fill="#fde68a" stroke="#fbbf24" stroke-width="1"/>
+  <text x="865" y="170" text-anchor="middle" font-size="11" fill="#78350f">Middleware</text>
+  <rect x="925" y="152" width="105" height="28" rx="5" fill="#fde68a" stroke="#fbbf24" stroke-width="1"/>
+  <text x="977" y="170" text-anchor="middle" font-size="11" fill="#78350f">Audit Log</text>
+  <text x="880" y="208" text-anchor="middle" font-size="11" fill="#92400e">PermissionService · RoleService · PrivilegeService</text>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- ROW 2: API / CONTROLLERS                               -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <rect x="30" y="254" width="1040" height="72" rx="10" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="550" y="274" text-anchor="middle" font-size="13" font-weight="700" fill="#334155">OCS REST API Layer · 123 Endpoints (appinfo/routes.php)</text>
+  <line x1="50" y1="280" x2="1050" y2="280" stroke="#cbd5e1" stroke-width="1"/>
+
+  <rect x="48"  y="287" width="88" height="26" rx="4" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+  <text x="92"  y="304" text-anchor="middle" font-size="10" fill="#334155">Cases (15)</text>
+  <rect x="144" y="287" width="88" height="26" rx="4" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+  <text x="188" y="304" text-anchor="middle" font-size="10" fill="#334155">Documents (8)</text>
+  <rect x="240" y="287" width="80" height="26" rx="4" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+  <text x="280" y="304" text-anchor="middle" font-size="10" fill="#334155">Files (9)</text>
+  <rect x="328" y="287" width="88" height="26" rx="4" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+  <text x="372" y="304" text-anchor="middle" font-size="10" fill="#334155">Workflows (6)</text>
+  <rect x="424" y="287" width="88" height="26" rx="4" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+  <text x="468" y="304" text-anchor="middle" font-size="10" fill="#334155">Search (1)</text>
+  <rect x="520" y="287" width="88" height="26" rx="4" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+  <text x="564" y="304" text-anchor="middle" font-size="10" fill="#334155">Templates (4)</text>
+  <rect x="616" y="287" width="90" height="26" rx="4" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+  <text x="661" y="304" text-anchor="middle" font-size="10" fill="#334155">Digital Post (5)</text>
+  <rect x="714" y="287" width="80" height="26" rx="4" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+  <text x="754" y="304" text-anchor="middle" font-size="10" fill="#334155">Admin (10)</text>
+  <rect x="802" y="287" width="86" height="26" rx="4" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+  <text x="845" y="304" text-anchor="middle" font-size="10" fill="#334155">Reminders (6)</text>
+  <rect x="896" y="287" width="80" height="26" rx="4" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+  <text x="936" y="304" text-anchor="middle" font-size="10" fill="#334155">AI (prompts)</text>
+  <rect x="984" y="287" width="78" height="26" rx="4" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1"/>
+  <text x="1023" y="304" text-anchor="middle" font-size="10" fill="#334155">+ more…</text>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- ROW 3: SERVICE LAYER                                   -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <rect x="30" y="352" width="700" height="130" rx="10" fill="#faf5ff" stroke="#a855f7" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="380" y="372" text-anchor="middle" font-size="13" font-weight="700" fill="#7e22ce">Business Logic · Service Layer</text>
+  <line x1="50" y1="380" x2="710" y2="380" stroke="#d8b4fe" stroke-width="1"/>
+
+  <rect x="46"  y="387" width="95" height="28" rx="5" fill="#ede9fe" stroke="#c084fc" stroke-width="1"/>
+  <text x="93"  y="405" text-anchor="middle" font-size="11" fill="#581c87">CaseService</text>
+  <rect x="149" y="387" width="100" height="28" rx="5" fill="#ede9fe" stroke="#c084fc" stroke-width="1"/>
+  <text x="199" y="405" text-anchor="middle" font-size="11" fill="#581c87">DocumentService</text>
+  <rect x="257" y="387" width="95" height="28" rx="5" fill="#ede9fe" stroke="#c084fc" stroke-width="1"/>
+  <text x="304" y="405" text-anchor="middle" font-size="11" fill="#581c87">FileService</text>
+  <rect x="360" y="387" width="100" height="28" rx="5" fill="#ede9fe" stroke="#c084fc" stroke-width="1"/>
+  <text x="410" y="405" text-anchor="middle" font-size="11" fill="#581c87">WorkflowService</text>
+  <rect x="468" y="387" width="98" height="28" rx="5" fill="#ede9fe" stroke="#c084fc" stroke-width="1"/>
+  <text x="517" y="405" text-anchor="middle" font-size="11" fill="#581c87">SearchService</text>
+  <rect x="574" y="387" width="106" height="28" rx="5" fill="#ede9fe" stroke="#c084fc" stroke-width="1"/>
+  <text x="627" y="405" text-anchor="middle" font-size="11" fill="#581c87">TemplateMerge</text>
+
+  <rect x="46"  y="424" width="95" height="28" rx="5" fill="#ede9fe" stroke="#c084fc" stroke-width="1"/>
+  <text x="93"  y="442" text-anchor="middle" font-size="11" fill="#581c87">AuditService</text>
+  <rect x="149" y="424" width="100" height="28" rx="5" fill="#ede9fe" stroke="#c084fc" stroke-width="1"/>
+  <text x="199" y="442" text-anchor="middle" font-size="11" fill="#581c87">FileShareService</text>
+  <rect x="257" y="424" width="95" height="28" rx="5" fill="#ede9fe" stroke="#c084fc" stroke-width="1"/>
+  <text x="304" y="442" text-anchor="middle" font-size="11" fill="#581c87">SamlService</text>
+  <rect x="360" y="424" width="100" height="28" rx="5" fill="#ede9fe" stroke="#c084fc" stroke-width="1"/>
+  <text x="410" y="442" text-anchor="middle" font-size="11" fill="#581c87">PermissionSvc</text>
+  <rect x="468" y="424" width="98" height="28" rx="5" fill="#ede9fe" stroke="#c084fc" stroke-width="1"/>
+  <text x="517" y="442" text-anchor="middle" font-size="11" fill="#581c87">ElasticSearch</text>
+  <rect x="574" y="424" width="106" height="28" rx="5" fill="#ede9fe" stroke="#c084fc" stroke-width="1"/>
+  <text x="627" y="442" text-anchor="middle" font-size="11" fill="#581c87">RoleService</text>
+
+  <text x="380" y="472" text-anchor="middle" font-size="11" fill="#7e22ce">+ Listeners (FilesIntegration, TalkIntegration, FileUpdated)</text>
+
+  <!-- Background Jobs -->
+  <rect x="748" y="352" width="322" height="130" rx="10" fill="#fff7ed" stroke="#f97316" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="909" y="372" text-anchor="middle" font-size="13" font-weight="700" fill="#c2410c">Background Jobs (Cron)</text>
+  <line x1="768" y1="380" x2="1050" y2="380" stroke="#fed7aa" stroke-width="1"/>
+
+  <rect x="763" y="387" width="138" height="28" rx="5" fill="#ffedd5" stroke="#fb923c" stroke-width="1"/>
+  <text x="832" y="405" text-anchor="middle" font-size="10" fill="#7c2d12">DispatchDigitalPostJob</text>
+  <rect x="910" y="387" width="148" height="28" rx="5" fill="#ffedd5" stroke="#fb923c" stroke-width="1"/>
+  <text x="984" y="405" text-anchor="middle" font-size="10" fill="#7c2d12">ProcessDP/DistReceivements</text>
+
+  <rect x="763" y="424" width="138" height="28" rx="5" fill="#ffedd5" stroke="#fb923c" stroke-width="1"/>
+  <text x="832" y="442" text-anchor="middle" font-size="10" fill="#7c2d12">SyncOrganisationsJob</text>
+  <rect x="910" y="424" width="148" height="28" rx="5" fill="#ffedd5" stroke="#fb923c" stroke-width="1"/>
+  <text x="984" y="442" text-anchor="middle" font-size="10" fill="#7c2d12">SyncClassificationsJob</text>
+
+  <text x="909" y="472" text-anchor="middle" font-size="11" fill="#c2410c">IndexFileJob · BulkReindexJob · SyncFilecache</text>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- ROW 4: DATA LAYER                                      -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <rect x="30" y="510" width="490" height="128" rx="10" fill="#fff1f2" stroke="#f43f5e" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="275" y="530" text-anchor="middle" font-size="13" font-weight="700" fill="#be123c">Database Layer (MySQL / PostgreSQL)</text>
+  <line x1="50" y1="538" x2="500" y2="538" stroke="#fda4af" stroke-width="1"/>
+
+  <rect x="46"  y="544" width="100" height="26" rx="4" fill="#ffe4e6" stroke="#fb7185" stroke-width="1"/>
+  <text x="96"  y="561" text-anchor="middle" font-size="10" fill="#9f1239">Cases &amp; Docs</text>
+  <rect x="154" y="544" width="100" height="26" rx="4" fill="#ffe4e6" stroke="#fb7185" stroke-width="1"/>
+  <text x="204" y="561" text-anchor="middle" font-size="10" fill="#9f1239">Files &amp; Versions</text>
+  <rect x="262" y="544" width="100" height="26" rx="4" fill="#ffe4e6" stroke="#fb7185" stroke-width="1"/>
+  <text x="312" y="561" text-anchor="middle" font-size="10" fill="#9f1239">Workflows</text>
+  <rect x="370" y="544" width="110" height="26" rx="4" fill="#ffe4e6" stroke="#fb7185" stroke-width="1"/>
+  <text x="425" y="561" text-anchor="middle" font-size="10" fill="#9f1239">Organisations</text>
+
+  <rect x="46"  y="578" width="100" height="26" rx="4" fill="#ffe4e6" stroke="#fb7185" stroke-width="1"/>
+  <text x="96"  y="595" text-anchor="middle" font-size="10" fill="#9f1239">Audit Logs</text>
+  <rect x="154" y="578" width="100" height="26" rx="4" fill="#ffe4e6" stroke="#fb7185" stroke-width="1"/>
+  <text x="204" y="595" text-anchor="middle" font-size="10" fill="#9f1239">Digital Post</text>
+  <rect x="262" y="578" width="100" height="26" rx="4" fill="#ffe4e6" stroke="#fb7185" stroke-width="1"/>
+  <text x="312" y="595" text-anchor="middle" font-size="10" fill="#9f1239">Roles &amp; Access</text>
+  <rect x="370" y="578" width="110" height="26" rx="4" fill="#ffe4e6" stroke="#fb7185" stroke-width="1"/>
+  <text x="425" y="595" text-anchor="middle" font-size="10" fill="#9f1239">Templates &amp; AI</text>
+
+  <text x="275" y="628" text-anchor="middle" font-size="11" fill="#be123c">72 Entities/Mappers · 37 Migrations · Stored Procedures · Reference Data</text>
+
+  <!-- Elasticsearch -->
+  <rect x="540" y="510" width="210" height="128" rx="10" fill="#ecfdf5" stroke="#10b981" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="645" y="530" text-anchor="middle" font-size="13" font-weight="700" fill="#065f46">Elasticsearch</text>
+  <line x1="560" y1="538" x2="730" y2="538" stroke="#6ee7b7" stroke-width="1"/>
+  <rect x="558" y="544" width="172" height="28" rx="5" fill="#d1fae5" stroke="#34d399" stroke-width="1"/>
+  <text x="644" y="562" text-anchor="middle" font-size="11" fill="#064e3b">Full-text search index</text>
+  <rect x="558" y="580" width="172" height="28" rx="5" fill="#d1fae5" stroke="#34d399" stroke-width="1"/>
+  <text x="644" y="598" text-anchor="middle" font-size="11" fill="#064e3b">Cases · Docs · Files</text>
+  <text x="645" y="628" text-anchor="middle" font-size="11" fill="#065f46">Danish language support</text>
+
+  <!-- Nextcloud Files Storage -->
+  <rect x="768" y="510" width="302" height="128" rx="10" fill="#f0f9ff" stroke="#0ea5e9" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="919" y="530" text-anchor="middle" font-size="13" font-weight="700" fill="#0369a1">Nextcloud File Storage</text>
+  <line x1="788" y1="538" x2="1050" y2="538" stroke="#7dd3fc" stroke-width="1"/>
+  <rect x="784" y="544" width="130" height="28" rx="5" fill="#e0f2fe" stroke="#38bdf8" stroke-width="1"/>
+  <text x="849" y="562" text-anchor="middle" font-size="11" fill="#0c4a6e">Virtual FS Mount</text>
+  <rect x="924" y="544" width="130" height="28" rx="5" fill="#e0f2fe" stroke="#38bdf8" stroke-width="1"/>
+  <text x="989" y="562" text-anchor="middle" font-size="11" fill="#0c4a6e">Permission Wrapper</text>
+  <rect x="784" y="580" width="130" height="28" rx="5" fill="#e0f2fe" stroke="#38bdf8" stroke-width="1"/>
+  <text x="849" y="598" text-anchor="middle" font-size="11" fill="#0c4a6e">Cache Wrapper</text>
+  <rect x="924" y="580" width="130" height="28" rx="5" fill="#e0f2fe" stroke="#38bdf8" stroke-width="1"/>
+  <text x="989" y="598" text-anchor="middle" font-size="11" fill="#0c4a6e">Version Backend</text>
+  <text x="919" y="628" text-anchor="middle" font-size="11" fill="#0369a1">Scanner · IteratorDirectory</text>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- ROW 5: EXTERNAL INTEGRATIONS                           -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+
+  <!-- Serviceplatformen -->
+  <rect x="30" y="666" width="480" height="130" rx="10" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="270" y="686" text-anchor="middle" font-size="13" font-weight="700" fill="#15803d">Serviceplatformen (Danish Gov API)</text>
+  <line x1="50" y1="694" x2="490" y2="694" stroke="#86efac" stroke-width="1"/>
+
+  <rect x="46"  y="700" width="110" height="26" rx="4" fill="#bbf7d0" stroke="#4ade80" stroke-width="1"/>
+  <text x="101" y="717" text-anchor="middle" font-size="10" fill="#14532d">OrganisationClient</text>
+  <rect x="164" y="700" width="100" height="26" rx="4" fill="#bbf7d0" stroke="#4ade80" stroke-width="1"/>
+  <text x="214" y="717" text-anchor="middle" font-size="10" fill="#14532d">UserClient</text>
+  <rect x="272" y="700" width="115" height="26" rx="4" fill="#bbf7d0" stroke="#4ade80" stroke-width="1"/>
+  <text x="329" y="717" text-anchor="middle" font-size="10" fill="#14532d">ClassificationClient</text>
+  <rect x="395" y="700" width="85" height="26" rx="4" fill="#bbf7d0" stroke="#4ade80" stroke-width="1"/>
+  <text x="437" y="717" text-anchor="middle" font-size="10" fill="#14532d">AccessToken</text>
+
+  <rect x="46"  y="734" width="140" height="26" rx="4" fill="#bbf7d0" stroke="#4ade80" stroke-width="1"/>
+  <text x="116" y="751" text-anchor="middle" font-size="10" fill="#14532d">DigitalPostSendClient</text>
+  <rect x="194" y="734" width="130" height="26" rx="4" fill="#bbf7d0" stroke="#4ade80" stroke-width="1"/>
+  <text x="259" y="751" text-anchor="middle" font-size="10" fill="#14532d">PostForespoergClient</text>
+  <rect x="332" y="734" width="148" height="26" rx="4" fill="#bbf7d0" stroke="#4ade80" stroke-width="1"/>
+  <text x="406" y="751" text-anchor="middle" font-size="10" fill="#14532d">KombiPost / DigitalPost</text>
+
+  <text x="270" y="784" text-anchor="middle" font-size="11" fill="#15803d">27 classes · mTLS certificate auth · Secure government mail</text>
+
+  <!-- Datafordeler -->
+  <rect x="528" y="666" width="250" height="130" rx="10" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="653" y="686" text-anchor="middle" font-size="13" font-weight="700" fill="#15803d">Datafordeler</text>
+  <line x1="548" y1="694" x2="758" y2="694" stroke="#86efac" stroke-width="1"/>
+
+  <rect x="544" y="700" width="100" height="26" rx="4" fill="#bbf7d0" stroke="#4ade80" stroke-width="1"/>
+  <text x="594" y="717" text-anchor="middle" font-size="10" fill="#14532d">CitizenClient</text>
+  <rect x="652" y="700" width="100" height="26" rx="4" fill="#bbf7d0" stroke="#4ade80" stroke-width="1"/>
+  <text x="702" y="717" text-anchor="middle" font-size="10" fill="#14532d">CompanyClient</text>
+
+  <rect x="544" y="734" width="100" height="26" rx="4" fill="#bbf7d0" stroke="#4ade80" stroke-width="1"/>
+  <text x="594" y="751" text-anchor="middle" font-size="10" fill="#14532d">CPR lookup</text>
+  <rect x="652" y="734" width="100" height="26" rx="4" fill="#bbf7d0" stroke="#4ade80" stroke-width="1"/>
+  <text x="702" y="751" text-anchor="middle" font-size="10" fill="#14532d">CVR lookup</text>
+
+  <text x="653" y="784" text-anchor="middle" font-size="11" fill="#15803d">Danish public data registry</text>
+
+  <!-- SAML / CLI -->
+  <rect x="796" y="666" width="274" height="130" rx="10" fill="#fef9c3" stroke="#eab308" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="933" y="686" text-anchor="middle" font-size="13" font-weight="700" fill="#854d0e">CLI &amp; SAML IdP</text>
+  <line x1="816" y1="694" x2="1050" y2="694" stroke="#fde047" stroke-width="1"/>
+
+  <rect x="812" y="700" width="118" height="26" rx="4" fill="#fef08a" stroke="#facc15" stroke-width="1"/>
+  <text x="871" y="717" text-anchor="middle" font-size="10" fill="#713f12">24 CLI Commands</text>
+  <rect x="938" y="700" width="118" height="26" rx="4" fill="#fef08a" stroke="#facc15" stroke-width="1"/>
+  <text x="997" y="717" text-anchor="middle" font-size="10" fill="#713f12">SAML IdP (SSO)</text>
+
+  <rect x="812" y="734" width="118" height="26" rx="4" fill="#fef08a" stroke="#facc15" stroke-width="1"/>
+  <text x="871" y="751" text-anchor="middle" font-size="10" fill="#713f12">Sync / Reindex</text>
+  <rect x="938" y="734" width="118" height="26" rx="4" fill="#fef08a" stroke="#facc15" stroke-width="1"/>
+  <text x="997" y="751" text-anchor="middle" font-size="10" fill="#713f12">Cert / Token Mgmt</text>
+
+  <text x="933" y="784" text-anchor="middle" font-size="11" fill="#854d0e">php-saml · Certificate auth · Admin operations</text>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- ARROWS                                                 -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+
+  <!-- Browser → API -->
+  <line x1="185" y1="226" x2="185" y2="254" stroke="#6b7280" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <!-- Nextcloud → API -->
+  <line x1="515" y1="226" x2="515" y2="254" stroke="#6b7280" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <!-- Auth → API -->
+  <line x1="880" y1="226" x2="880" y2="254" stroke="#6b7280" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- API → Services -->
+  <line x1="380" y1="326" x2="380" y2="352" stroke="#6b7280" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <!-- API → BG Jobs -->
+  <line x1="909" y1="326" x2="909" y2="352" stroke="#6b7280" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Services → DB -->
+  <line x1="275" y1="482" x2="275" y2="510" stroke="#6b7280" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <!-- Services → ES -->
+  <line x1="530" y1="450" x2="600" y2="510" stroke="#6b7280" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <!-- Services → Files -->
+  <line x1="650" y1="450" x2="850" y2="510" stroke="#6b7280" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Services → Serviceplatformen -->
+  <line x1="200" y1="482" x2="200" y2="666" stroke="#6b7280" stroke-width="1.5" stroke-dasharray="6,3" marker-end="url(#arrow)"/>
+  <!-- Services → Datafordeler -->
+  <line x1="600" y1="482" x2="630" y2="666" stroke="#6b7280" stroke-width="1.5" stroke-dasharray="6,3" marker-end="url(#arrow)"/>
+
+  <!-- BG Jobs → Serviceplatformen (digital post) -->
+  <line x1="820" y1="482" x2="400" y2="666" stroke="#6b7280" stroke-width="1.2" stroke-dasharray="6,3" marker-end="url(#arrow)"/>
+
+  <!-- Legend -->
+  <rect x="30" y="800" width="220" height="16" rx="3" fill="none"/>
+  <line x1="32" y1="810" x2="60" y2="810" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="65" y="814" font-size="10" fill="#6b7280">synchronous call</text>
+  <line x1="150" y1="810" x2="178" y2="810" stroke="#6b7280" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <text x="183" y="814" font-size="10" fill="#6b7280">external integration</text>
+</svg>
