@@ -1,0 +1,82 @@
+# IDE and Editor files
+/.idea/
+/*.iml
+/.vscode/
+/.vs/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Dependencies
+/vendor-bin/*/vendor/
+/node_modules/
+
+# Build artifacts
+*.map
+
+# PHP
+/.php-cs-fixer.cache
+/tests/.phpunit.cache
+composer.lock
+.phpunit.result.cache
+
+# Node.js
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.npm
+.eslintcache
+.stylelintcache
+
+# Build tools
+/dist/
+/build/
+*.local
+
+# Environment and configuration
+.env
+.env.local
+.env.*.local
+*.log
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Desktop.ini
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+*~
+
+# Coverage reports
+/coverage/
+.phpunit.cache/
+.nyc_output/
+
+# Vite
+.vite/
+
+# Certificates
+certificates/
+*.p12
+*.cer
+*.pfx
+
+# Claude
+.claude/
+
+# Python
+/.venv/
+
+# MkDocs
+/site/

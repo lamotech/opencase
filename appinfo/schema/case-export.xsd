@@ -1,0 +1,263 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns="https://opencase.dk/case"
+           targetNamespace="https://opencase.dk/case"
+           elementFormDefault="qualified">
+
+    <!--
+        Schema for the per-case export produced by ExportClosedCasesJob
+        (OCA\OpenCase\Service\CaseExportService).
+
+        Two documents are validated against this schema:
+          - <case_number>/case.xml         (root element: Case)
+          - <case_number>/logs/*.xml       (root element: AuditLog)
+    -->
+
+    <!-- ============================== Case ============================== -->
+
+    <xs:element name="Case" type="CaseType"/>
+
+    <xs:complexType name="CaseType">
+        <xs:sequence>
+            <xs:element name="Id" type="xs:long"/>
+            <xs:element name="CaseNumber" type="xs:string"/>
+            <xs:element name="Title" type="xs:string"/>
+            <!-- Case summary ("Sagsresume") as rich-text HTML; omitted when unset -->
+            <xs:element name="Summary" type="xs:string" minOccurs="0"/>
+            <xs:element name="Uuid" type="xs:string" minOccurs="0"/>
+            <xs:element name="OrgUuid" type="xs:string" minOccurs="0"/>
+            <xs:element name="OrganisationName" type="xs:string" minOccurs="0"/>
+            <xs:element name="Year" type="xs:string"/>
+            <xs:element name="StatusId" type="xs:int"/>
+            <xs:element name="StatusName" type="xs:string" minOccurs="0"/>
+            <xs:element name="CasetypeId" type="xs:int" minOccurs="0"/>
+            <xs:element name="CasetypeName" type="xs:string" minOccurs="0"/>
+            <xs:element name="InsightLevelId" type="xs:int" minOccurs="0"/>
+            <xs:element name="InsightLevelName" type="xs:string" minOccurs="0"/>
+            <xs:element name="ClassificationCodeUuid" type="xs:string" minOccurs="0"/>
+            <xs:element name="ClassificationCode" type="xs:string" minOccurs="0"/>
+            <xs:element name="ClassificationFacetUuid" type="xs:string" minOccurs="0"/>
+            <xs:element name="ClassificationFacetCode" type="xs:string" minOccurs="0"/>
+            <xs:element name="SensitivityUuid" type="xs:string" minOccurs="0"/>
+            <xs:element name="SensitivityName" type="xs:string" minOccurs="0"/>
+            <xs:element name="CreatedAt" type="xs:dateTime"/>
+            <xs:element name="UpdatedAt" type="xs:dateTime"/>
+            <xs:element name="CreatedBy" type="xs:string"/>
+            <xs:element name="ResponsibleUserId" type="xs:string" minOccurs="0"/>
+            <xs:element name="ResponsibleUserDisplayName" type="xs:string" minOccurs="0"/>
+            <xs:element name="ExportedAt" type="xs:dateTime"/>
+            <xs:element name="Participants" type="ParticipantsType"/>
+            <xs:element name="JournalNotes" type="JournalNotesType"/>
+            <xs:element name="Caseworkers" type="CaseworkersType"/>
+            <xs:element name="Documents" type="DocumentsType"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <!-- ── Participants ────────────────────────────────────────────────── -->
+
+    <xs:complexType name="ParticipantsType">
+        <xs:sequence>
+            <xs:element name="Participant" type="PartyType" minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <!-- Shared shape for case participants and document contacts -->
+    <xs:complexType name="PartyType">
+        <xs:sequence>
+            <xs:element name="Id" type="xs:long"/>
+            <xs:element name="RoleId" type="xs:int"/>
+            <xs:element name="RoleName" type="xs:string" minOccurs="0"/>
+            <xs:element name="CprCvr" type="xs:string" minOccurs="0"/>
+            <xs:element name="Pnumber" type="xs:string" minOccurs="0"/>
+            <xs:element name="Name" type="xs:string" minOccurs="0"/>
+            <xs:element name="Streetname" type="xs:string" minOccurs="0"/>
+            <xs:element name="Housenumber" type="xs:string" minOccurs="0"/>
+            <xs:element name="Floor" type="xs:string" minOccurs="0"/>
+            <xs:element name="Door" type="xs:string" minOccurs="0"/>
+            <xs:element name="Zipcode" type="xs:string" minOccurs="0"/>
+            <xs:element name="Zipdistrict" type="xs:string" minOccurs="0"/>
+            <xs:element name="Phone" type="xs:string" minOccurs="0"/>
+            <xs:element name="Email" type="xs:string" minOccurs="0"/>
+            <xs:element name="UpdatedDate" type="xs:dateTime" minOccurs="0"/>
+            <xs:element name="HasAddressProtection" type="xs:boolean"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <!-- ── Journal notes ───────────────────────────────────────────────── -->
+
+    <xs:complexType name="JournalNotesType">
+        <xs:sequence>
+            <xs:element name="JournalNote" type="NoteType" minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <!-- Shared shape for journal notes and document notes -->
+    <xs:complexType name="NoteType">
+        <xs:sequence>
+            <xs:element name="Id" type="xs:long"/>
+            <xs:element name="Title" type="xs:string"/>
+            <xs:element name="Text" type="xs:string" minOccurs="0"/>
+            <xs:element name="CreatedAt" type="xs:dateTime" minOccurs="0"/>
+            <xs:element name="CreatedBy" type="xs:string" minOccurs="0"/>
+            <xs:element name="UpdatedAt" type="xs:dateTime" minOccurs="0"/>
+            <xs:element name="IsLocked" type="xs:boolean" minOccurs="0"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <!-- ── Caseworkers ─────────────────────────────────────────────────── -->
+
+    <xs:complexType name="CaseworkersType">
+        <xs:sequence>
+            <xs:element name="Caseworker" type="CaseworkerType" minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <xs:complexType name="CaseworkerType">
+        <xs:sequence>
+            <xs:element name="UserId" type="xs:string"/>
+            <xs:element name="DisplayName" type="xs:string" minOccurs="0"/>
+            <xs:element name="PriorCanWrite" type="xs:int" minOccurs="0"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <!-- ============================== Documents ============================== -->
+
+    <xs:complexType name="DocumentsType">
+        <xs:sequence>
+            <xs:element name="Document" type="DocumentType" minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <xs:complexType name="DocumentType">
+        <xs:sequence>
+            <xs:element name="Id" type="xs:long"/>
+            <xs:element name="DocumentNumber" type="xs:string" minOccurs="0"/>
+            <xs:element name="Title" type="xs:string"/>
+            <xs:element name="DocumentType" type="xs:string" minOccurs="0"/>
+            <xs:element name="Status" type="xs:int"/>
+            <xs:element name="StatusName" type="xs:string" minOccurs="0"/>
+            <xs:element name="DocumentCategoryId" type="xs:int" minOccurs="0"/>
+            <xs:element name="DocumentCategoryName" type="xs:string" minOccurs="0"/>
+            <xs:element name="InsightLevelId" type="xs:int" minOccurs="0"/>
+            <xs:element name="InsightLevelName" type="xs:string" minOccurs="0"/>
+            <xs:element name="Uuid" type="xs:string" minOccurs="0"/>
+            <xs:element name="DocumentDate" type="xs:string" minOccurs="0"/>
+            <xs:element name="ReceivedDate" type="xs:string" minOccurs="0"/>
+            <xs:element name="RegisteredDate" type="xs:string" minOccurs="0"/>
+            <xs:element name="CreatedAt" type="xs:dateTime"/>
+            <xs:element name="UpdatedAt" type="xs:dateTime"/>
+            <xs:element name="CreatedBy" type="xs:string"/>
+            <xs:element name="Files" type="FilesType"/>
+            <xs:element name="Contacts" type="ContactsType"/>
+            <xs:element name="Notes" type="DocumentNotesType"/>
+            <xs:element name="WorkflowHistory" type="WorkflowHistoryType"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <!-- ── Files ───────────────────────────────────────────────────────── -->
+
+    <xs:complexType name="FilesType">
+        <xs:sequence>
+            <xs:element name="File" type="FileType" minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <xs:complexType name="FileType">
+        <xs:sequence>
+            <xs:element name="Id" type="xs:long"/>
+            <xs:element name="Uuid" type="xs:string" minOccurs="0"/>
+            <xs:element name="OriginalFilename" type="xs:string"/>
+            <!-- Path of the copied file, relative to the case folder, e.g. files/123/document.pdf -->
+            <xs:element name="RelativePath" type="xs:string"/>
+            <xs:element name="MimeType" type="xs:string"/>
+            <xs:element name="Size" type="xs:nonNegativeInteger"/>
+            <xs:element name="Version" type="xs:int"/>
+            <xs:element name="Checksum" type="xs:string" minOccurs="0"/>
+            <xs:element name="CreatedAt" type="xs:dateTime"/>
+            <xs:element name="UpdatedAt" type="xs:dateTime"/>
+            <xs:element name="CreatedBy" type="xs:string"/>
+            <xs:element name="LastModifiedBy" type="xs:string" minOccurs="0"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <!-- ── Contacts ────────────────────────────────────────────────────── -->
+
+    <xs:complexType name="ContactsType">
+        <xs:sequence>
+            <xs:element name="Contact" type="PartyType" minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <!-- ── Document notes ──────────────────────────────────────────────── -->
+
+    <xs:complexType name="DocumentNotesType">
+        <xs:sequence>
+            <xs:element name="Note" type="NoteType" minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <!-- ── Workflow history ────────────────────────────────────────────── -->
+
+    <xs:complexType name="WorkflowHistoryType">
+        <xs:sequence>
+            <xs:element name="Workflow" type="WorkflowType" minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <xs:complexType name="WorkflowType">
+        <xs:sequence>
+            <xs:element name="Id" type="xs:long"/>
+            <xs:element name="Type" type="xs:string"/>
+            <xs:element name="Status" type="xs:string"/>
+            <xs:element name="Deadline" type="xs:dateTime" minOccurs="0"/>
+            <xs:element name="CreatedBy" type="xs:string"/>
+            <xs:element name="CreatedAt" type="xs:dateTime"/>
+            <xs:element name="UpdatedAt" type="xs:dateTime"/>
+            <xs:element name="Steps" type="WorkflowStepsType"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <xs:complexType name="WorkflowStepsType">
+        <xs:sequence>
+            <xs:element name="Step" type="WorkflowStepType" minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <xs:complexType name="WorkflowStepType">
+        <xs:sequence>
+            <xs:element name="Id" type="xs:long"/>
+            <xs:element name="UserId" type="xs:string"/>
+            <xs:element name="DisplayName" type="xs:string" minOccurs="0"/>
+            <xs:element name="SortOrder" type="xs:int"/>
+            <xs:element name="Status" type="xs:string"/>
+            <xs:element name="Comment" type="xs:string" minOccurs="0"/>
+            <xs:element name="Deadline" type="xs:dateTime" minOccurs="0"/>
+            <xs:element name="ActedAt" type="xs:dateTime" minOccurs="0"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <!-- ============================== Audit log ============================== -->
+
+    <!-- Root element for logs/case.xml and logs/document_<id>.xml -->
+    <xs:element name="AuditLog" type="AuditLogType"/>
+
+    <xs:complexType name="AuditLogType">
+        <xs:sequence>
+            <xs:element name="Entry" type="AuditLogEntryType" minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <xs:complexType name="AuditLogEntryType">
+        <xs:sequence>
+            <xs:element name="Id" type="xs:long"/>
+            <xs:element name="CaseId" type="xs:long"/>
+            <xs:element name="DocumentId" type="xs:long" minOccurs="0"/>
+            <xs:element name="FileId" type="xs:long" minOccurs="0"/>
+            <xs:element name="UserId" type="xs:string"/>
+            <xs:element name="EventType" type="xs:string"/>
+            <xs:element name="Details" type="xs:string" minOccurs="0"/>
+            <xs:element name="CreatedAt" type="xs:dateTime"/>
+        </xs:sequence>
+    </xs:complexType>
+
+</xs:schema>

@@ -1,0 +1,102 @@
+<?xml version="1.0"?>
+<info xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	  xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
+	<id>opencase</id>
+	<name>OpenCase</name>
+	<summary>Case and content management system to Danish municipalities</summary>
+    <description><![CDATA[
+OpenCase provides a comprehensive case and document management system
+(ESDH) designed for Danish municipalities, built as a native Nextcloud app.
+
+Features:
+- Case management with KLE classification codes
+- Document management with versioning
+- Fine-grained access control based on organisation, classification, and sensitivity
+- Full-text search via Elasticsearch with Danish language support
+- Native integration with Nextcloud Office (Collabora/ONLYOFFICE)
+- Virtual filesystem integration — access case files from Mail, Talk, and other apps
+- Per-user document access overrides
+- Comprehensive REST API
+    ]]></description>
+	<version>0.9.7</version>
+	<licence>agpl</licence>
+	<author mail="dev@lamotech.dk" homepage="https://lamotech.dk">Lamotech Solutions ApS</author>
+	<namespace>OpenCase</namespace>
+	<types>
+		<filesystem/>
+	</types>
+    <documentation>
+        <user>https://docs.opencase.dk/</user>
+        <admin>https://docs.opencase.dk/administrator/</admin>
+        <developer>https://github.com/lamotech/opencase</developer>
+    </documentation>	
+	<category>integration</category>
+	<category>office</category>
+	<category>organization</category>
+	<bugs>https://github.com/lamotech/opencase/issues</bugs>
+	<repository>https://github.com/lamotech/opencase</repository>
+
+    <screenshot>https://raw.githubusercontent.com/lamotech/opencase/main/readme/opencase-main.png</screenshot>
+    <screenshot>https://raw.githubusercontent.com/lamotech/opencase/main/readme/Case.png</screenshot>
+    <screenshot>https://raw.githubusercontent.com/lamotech/opencase/main/readme/Fileversion.png</screenshot>
+    <screenshot>https://raw.githubusercontent.com/lamotech/opencase/main/readme/Workflow.png</screenshot>
+    <screenshot>https://raw.githubusercontent.com/lamotech/opencase/main/readme/AI.png</screenshot>
+
+	<dependencies>
+		<nextcloud min-version="34" max-version="34"/>
+	</dependencies>
+
+	<repair-steps>
+		<post-migration>
+			<step>OCA\OpenCase\Migration\InstallStoredProcedures</step>
+			<step>OCA\OpenCase\Migration\SeedReferenceData</step>
+			<step>OCA\OpenCase\Migration\SetupElasticsearchIndex</step>
+		</post-migration>
+		<install>
+			<step>OCA\OpenCase\Migration\SeedReferenceData</step>
+			<step>OCA\OpenCase\Migration\InstallStoredProcedures</step>
+			<step>OCA\OpenCase\Migration\SetupElasticsearchIndex</step>
+		</install>
+	</repair-steps>
+
+	<commands>
+		<command>OCA\OpenCase\Command\SyncFilecache</command>
+		<command>OCA\OpenCase\Command\RegisterCertificateCommand</command>
+		<command>OCA\OpenCase\Command\RegisterApiClientCommand</command>
+		<command>OCA\OpenCase\Command\IssueTokenCommand</command>
+		<command>OCA\OpenCase\Command\HasDigitalPostCommand</command>
+		<command>OCA\OpenCase\Command\KombiPostAfsendCommand</command>
+		<command>OCA\OpenCase\Command\FetchOrganisationsCommand</command>
+		<command>OCA\OpenCase\Command\SyncOrganisationsCommand</command>
+		<command>OCA\OpenCase\Command\FetchClassificationsCommand</command>
+		<command>OCA\OpenCase\Command\TraceEnableCommand</command>
+		<command>OCA\OpenCase\Command\TraceDisableCommand</command>
+		<command>OCA\OpenCase\Command\SyncClassificationsCommand</command>
+		<command>OCA\OpenCase\Command\GenerateSAMLMetadataCommand</command>
+		<command>OCA\OpenCase\Command\GetUserCommand</command>
+		<command>OCA\OpenCase\Command\GetOrgCommand</command>
+		<command>OCA\OpenCase\Command\UpdateUserCommand</command>
+		<command>OCA\OpenCase\Command\ImportUserCommand</command>
+		<command>OCA\OpenCase\Command\FetchCompanyByCVRCommand</command>
+		<command>OCA\OpenCase\Command\FetchCompanyByNameCommand</command>
+		<command>OCA\OpenCase\Command\FetchCitizenByCPRCommand</command>
+		<command>OCA\OpenCase\Command\SearchCitizensCommand</command>
+		<command>OCA\OpenCase\Command\ReindexCommand</command>
+		<command>OCA\OpenCase\Command\SendDistributionReceiptCommand</command>
+		<command>OCA\OpenCase\Command\EnterpriseEnableCommand</command>
+		<command>OCA\OpenCase\Command\RecalculatePrivilegesCommand</command>
+		<command>OCA\OpenCase\Command\ConfigListCommand</command>
+		<command>OCA\OpenCase\Command\ConfigGetCommand</command>
+		<command>OCA\OpenCase\Command\ConfigSetCommand</command>
+		<command>OCA\OpenCase\Command\ExportClosedCasesCommand</command>
+		<command>OCA\OpenCase\Command\ImportTemplatesCommand</command>
+	</commands>
+	<settings>
+		<admin>OCA\OpenCase\Settings\AdminSettings</admin>
+		<admin-section>OCA\OpenCase\Settings\AdminSection</admin-section>
+	</settings>
+
+	<versions>
+		<backend for="OCA\OpenCase\Storage\OpenCaseStorage">OCA\OpenCase\Versions\OpenCaseVersionsBackend</backend>
+	</versions>
+</info>

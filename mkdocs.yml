@@ -1,0 +1,39 @@
+site_name: OpenCase dokumentation
+site_url: https://docs.opencase.dk/
+site_description: Brugervejledning og administratorvejledning til OpenCase
+
+theme:
+  name: material
+  language: da
+  logo: images/opencase-logo.svg
+  favicon: images/favicon.ico
+  
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+
+plugins:
+  - search
+  - awesome-pages
+
+extra_css:
+  - stylesheets/opencase.css
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+
+extra:
+  generator: false
+
+copyright: |
+  © 2026 Lamotech Solutions ApS - CVR 44447622. Alle rettigheder forbeholdes.
