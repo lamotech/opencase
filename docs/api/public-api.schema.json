@@ -1,0 +1,658 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://opencase.dk/schema/public-api.schema.json",
+  "title": "OpenCase Public API",
+  "description": "JSON Schema for the request and response bodies of the mTLS/SF1512-token-authenticated public API (lib/Controller/PublicApi/, base path /index.php/apps/opencase/public/v1/api). See API.md#public-api for the endpoint-by-endpoint reference this schema backs. Each request/response body listed under '$defs' has an $anchor matching its name below (e.g. '#CaseType') for direct $ref use from external tooling. The controller source is authoritative if the two ever disagree.",
+
+  "$defs": {
+
+    "NumericString": {
+      "$anchor": "NumericString",
+      "type": ["string", "null"],
+      "pattern": "^-?[0-9]+$",
+      "description": "An integer serialized as a JSON string — this API's fields for Id/StatusId/Size/... are NOT JSON numbers, because the same field-builder code also serializes to XML. See the '\\u26a0\\ufe0f' note in API.md#public-api."
+    },
+    "BoolString": {
+      "$anchor": "BoolString",
+      "type": "string",
+      "enum": ["true", "false"],
+      "description": "A boolean serialized as the JSON string \"true\"/\"false\", not a JSON boolean."
+    },
+    "IsoDateTime": {
+      "$anchor": "IsoDateTime",
+      "type": ["string", "null"],
+      "format": "date-time",
+      "description": "ISO 8601 / RFC 3339 timestamp (PHP DateTimeInterface::ATOM), e.g. \"2026-08-08T14:32:00+02:00\"."
+    },
+    "Error": {
+      "$anchor": "Error",
+      "type": "object",
+      "description": "Returned (with a 4xx/5xx HTTP status) by any endpoint on failure.",
+      "properties": {
+        "error": { "type": "string" }
+      },
+      "required": ["error"]
+    },
+
+    "PartyType": {
+      "$anchor": "PartyType",
+      "title": "Case participant or document contact",
+      "description": "Shared shape for CaseType.Participants[] and DocumentType.Contacts[]. Populated from a Datafordeler CPR/CVR lookup.",
+      "type": "object",
+      "properties": {
+        "Id": { "$ref": "#NumericString" },
+        "RoleId": { "$ref": "#NumericString", "description": "ParticipantRoleId (case) or ContactRoleId (document) — see GET /participantroles / GET /contactroles." },
+        "RoleName": { "type": ["string", "null"] },
+        "CprCvr": { "type": ["string", "null"], "description": "10 digits (CPR/citizen) or 8 digits (CVR/company)." },
+        "Pnumber": { "type": ["string", "null"] },
+        "Name": { "type": ["string", "null"] },
+        "Streetname": { "type": ["string", "null"] },
+        "Housenumber": { "type": ["string", "null"] },
+        "Floor": { "type": ["string", "null"] },
+        "Door": { "type": ["string", "null"] },
+        "Zipcode": { "type": ["string", "null"] },
+        "Zipdistrict": { "type": ["string", "null"] },
+        "Phone": { "type": ["string", "null"] },
+        "Email": { "type": ["string", "null"] },
+        "UpdatedDate": { "$ref": "#IsoDateTime" },
+        "HasAddressProtection": { "$ref": "#BoolString" }
+      },
+      "required": ["Id", "RoleId", "HasAddressProtection"]
+    },
+
+    "JournalNoteType": {
+      "$anchor": "JournalNoteType",
+      "title": "Case journal note",
+      "type": "object",
+      "properties": {
+        "Id": { "$ref": "#NumericString" },
+        "Title": { "type": "string" },
+        "Text": { "type": ["string", "null"] },
+        "CreatedAt": { "$ref": "#IsoDateTime" },
+        "CreatedBy": { "type": ["string", "null"] },
+        "UpdatedAt": { "$ref": "#IsoDateTime" },
+        "IsLocked": { "$ref": "#BoolString" }
+      },
+      "required": ["Id", "Title"]
+    },
+    "DocumentNoteType": {
+      "$anchor": "DocumentNoteType",
+      "title": "Document note",
+      "description": "Same idea as JournalNoteType, but this variant never carries an IsLocked field (the key is absent, not just null).",
+      "type": "object",
+      "properties": {
+        "Id": { "$ref": "#NumericString" },
+        "Title": { "type": "string" },
+        "Text": { "type": ["string", "null"] },
+        "CreatedAt": { "$ref": "#IsoDateTime" },
+        "CreatedBy": { "type": ["string", "null"] },
+        "UpdatedAt": { "$ref": "#IsoDateTime" }
+      },
+      "required": ["Id", "Title"],
+      "additionalProperties": false
+    },
+
+    "CaseworkerType": {
+      "$anchor": "CaseworkerType",
+      "type": "object",
+      "properties": {
+        "UserId": { "type": "string" },
+        "DisplayName": { "type": ["string", "null"] },
+        "PriorCanWrite": { "$ref": "#NumericString", "description": "The user's write-access level (0/1) before being added as a caseworker, or null if they had no prior access — used to restore access if the assignment is later removed." }
+      },
+      "required": ["UserId"]
+    },
+
+    "FileType": {
+      "$anchor": "FileType",
+      "title": "Document file",
+      "type": "object",
+      "properties": {
+        "Id": { "$ref": "#NumericString" },
+        "Uuid": { "type": ["string", "null"] },
+        "OriginalFilename": { "type": "string" },
+        "RelativePath": { "type": "string", "description": "Path relative to the case export folder, e.g. files/123/document.pdf." },
+        "MimeType": { "type": "string" },
+        "Size": { "$ref": "#NumericString", "description": "Bytes." },
+        "Version": { "$ref": "#NumericString" },
+        "Checksum": { "type": ["string", "null"] },
+        "CreatedAt": { "$ref": "#IsoDateTime" },
+        "UpdatedAt": { "$ref": "#IsoDateTime" },
+        "CreatedBy": { "type": ["string", "null"] },
+        "LastModifiedBy": { "type": ["string", "null"] },
+        "Content": { "type": "string", "contentEncoding": "base64", "description": "Only present on GET /files (current content)." }
+      },
+      "required": ["Id", "OriginalFilename", "RelativePath", "MimeType", "Size", "Version"]
+    },
+    "FileVersionType": {
+      "$anchor": "FileVersionType",
+      "title": "Historical file version",
+      "type": "object",
+      "properties": {
+        "Uuid": { "type": ["string", "null"] },
+        "Timestamp": { "$ref": "#NumericString", "description": "Unix timestamp of the version." },
+        "Size": { "$ref": "#NumericString" },
+        "MimeType": { "type": ["string", "null"] },
+        "Checksum": { "type": ["string", "null"] },
+        "CreatedBy": { "type": ["string", "null"] },
+        "CreatedAt": { "$ref": "#IsoDateTime" },
+        "Content": { "type": "string", "contentEncoding": "base64", "description": "Only present on GET /files/versions/content." }
+      }
+    },
+
+    "WorkflowStepType": {
+      "$anchor": "WorkflowStepType",
+      "type": "object",
+      "properties": {
+        "Id": { "$ref": "#NumericString" },
+        "UserId": { "type": ["string", "null"] },
+        "DisplayName": { "type": ["string", "null"] },
+        "SortOrder": { "$ref": "#NumericString" },
+        "Status": { "type": ["string", "null"] },
+        "Comment": { "type": ["string", "null"] },
+        "Deadline": { "$ref": "#IsoDateTime" },
+        "ActedAt": { "$ref": "#IsoDateTime" }
+      }
+    },
+    "WorkflowType": {
+      "$anchor": "WorkflowType",
+      "type": "object",
+      "properties": {
+        "Id": { "$ref": "#NumericString" },
+        "Type": { "type": ["string", "null"] },
+        "Status": { "type": ["string", "null"] },
+        "Deadline": { "$ref": "#IsoDateTime" },
+        "CreatedBy": { "type": ["string", "null"] },
+        "CreatedAt": { "$ref": "#IsoDateTime" },
+        "UpdatedAt": { "$ref": "#IsoDateTime" },
+        "Steps": { "type": "array", "items": { "$ref": "#WorkflowStepType" } }
+      }
+    },
+
+    "DocumentType": {
+      "$anchor": "DocumentType",
+      "title": "Document, full detail",
+      "description": "Response shape of GET/PUT /documents, and the Document element inside GET /cases/documents and POST /cases/documents.",
+      "type": "object",
+      "properties": {
+        "Id": { "$ref": "#NumericString" },
+        "DocumentNumber": { "type": ["string", "null"] },
+        "Title": { "type": "string" },
+        "DocumentType": { "type": ["string", "null"] },
+        "Status": { "$ref": "#NumericString" },
+        "StatusName": { "type": ["string", "null"] },
+        "DocumentCategoryId": { "$ref": "#NumericString" },
+        "DocumentCategoryName": { "type": ["string", "null"] },
+        "InsightLevelId": { "$ref": "#NumericString" },
+        "InsightLevelName": { "type": ["string", "null"] },
+        "Uuid": { "type": ["string", "null"] },
+        "DocumentDate": { "type": ["string", "null"] },
+        "ReceivedDate": { "type": ["string", "null"] },
+        "RegisteredDate": { "type": ["string", "null"] },
+        "CreatedAt": { "$ref": "#IsoDateTime" },
+        "UpdatedAt": { "$ref": "#IsoDateTime" },
+        "CreatedBy": { "type": ["string", "null"] },
+        "Files": { "type": "array", "items": { "$ref": "#FileType" } },
+        "Contacts": { "type": "array", "items": { "$ref": "#PartyType" } },
+        "Notes": { "type": "array", "items": { "$ref": "#DocumentNoteType" } },
+        "WorkflowHistory": { "type": "array", "items": { "$ref": "#WorkflowType" } }
+      },
+      "required": ["Id", "Title", "Status"]
+    },
+
+    "CaseFields": {
+      "$anchor": "CaseFields",
+      "title": "Case, scalar fields only",
+      "description": "The flat field set shared by every case shape. Used standalone (no Participants/Caseworkers/Documents) as each item of CaseSearchResult.Cases.",
+      "type": "object",
+      "properties": {
+        "Id": { "$ref": "#NumericString" },
+        "CaseNumber": { "type": "string" },
+        "Title": { "type": "string" },
+        "Summary": { "type": ["string", "null"], "description": "Rich-text HTML." },
+        "Uuid": { "type": ["string", "null"] },
+        "OrgUuid": { "type": ["string", "null"] },
+        "OrganisationName": { "type": ["string", "null"] },
+        "Year": { "type": "string" },
+        "StatusId": { "$ref": "#NumericString" },
+        "StatusName": { "type": ["string", "null"] },
+        "CasetypeId": { "$ref": "#NumericString" },
+        "CasetypeName": { "type": ["string", "null"] },
+        "InsightLevelId": { "$ref": "#NumericString" },
+        "InsightLevelName": { "type": ["string", "null"] },
+        "ClassificationCodeUuid": { "type": ["string", "null"] },
+        "ClassificationCode": { "type": ["string", "null"] },
+        "ClassificationFacetUuid": { "type": ["string", "null"] },
+        "ClassificationFacetCode": { "type": ["string", "null"] },
+        "SensitivityUuid": { "type": ["string", "null"] },
+        "SensitivityName": { "type": ["string", "null"] },
+        "CreatedAt": { "$ref": "#IsoDateTime" },
+        "UpdatedAt": { "$ref": "#IsoDateTime" },
+        "CreatedBy": { "type": "string" },
+        "ResponsibleUserId": { "type": ["string", "null"] },
+        "ResponsibleUserDisplayName": { "type": ["string", "null"] },
+        "ExportedAt": { "$ref": "#IsoDateTime", "description": "Null until the case is closed and picked up by the nightly export job (see README.md's occ command table / ExportClosedCasesJob)." }
+      },
+      "required": ["Id", "CaseNumber", "Title", "Year", "StatusId", "CreatedAt", "UpdatedAt", "CreatedBy"]
+    },
+    "CaseDetail": {
+      "$anchor": "CaseDetail",
+      "title": "Case, full detail",
+      "description": "Response shape of GET/POST/PUT /cases: CaseFields plus Participants and Caseworkers (but NOT Documents/JournalNotes — fetch those via the dedicated /cases/documents and /cases/journal-notes endpoints).",
+      "allOf": [
+        { "$ref": "#CaseFields" },
+        {
+          "type": "object",
+          "properties": {
+            "Participants": { "type": "array", "items": { "$ref": "#PartyType" } },
+            "Caseworkers": { "type": "array", "items": { "$ref": "#CaseworkerType" } }
+          },
+          "required": ["Participants", "Caseworkers"]
+        }
+      ]
+    },
+
+    "DocumentSearchItem": {
+      "$anchor": "DocumentSearchItem",
+      "title": "Document search result row",
+      "description": "Flatter, search-specific shape returned by GET /documents/search — NOT the same shape as DocumentType.",
+      "type": "object",
+      "properties": {
+        "Id": { "$ref": "#NumericString" },
+        "Uuid": { "type": ["string", "null"] },
+        "DocumentNumber": { "type": ["string", "null"] },
+        "Title": { "type": ["string", "null"] },
+        "DocumentType": { "type": ["string", "null"] },
+        "Status": { "$ref": "#NumericString" },
+        "DocumentDate": { "type": ["string", "null"] },
+        "ReceivedDate": { "type": ["string", "null"] },
+        "CreatedAt": { "$ref": "#IsoDateTime" },
+        "UpdatedAt": { "$ref": "#IsoDateTime" },
+        "CreatedBy": { "type": ["string", "null"] },
+        "CaseId": { "$ref": "#NumericString" },
+        "CaseNumber": { "type": ["string", "null"] },
+        "CaseTitle": { "type": ["string", "null"] },
+        "OrgName": { "type": ["string", "null"] }
+      }
+    },
+
+    "ParticipantAddResult": {
+      "$anchor": "ParticipantAddResult",
+      "title": "One item of POST /cases/participants' response",
+      "description": "Id/RoleId/ContactType are native JSON numbers here (unlike PartyType.Id/RoleId, which are NumericString) — this response is built ad hoc in PublicCaseApiController::addOneParticipant rather than via CaseExportService.",
+      "type": "object",
+      "properties": {
+        "Id": { "type": "integer" },
+        "RoleId": { "type": "integer" },
+        "RoleName": { "type": "string" },
+        "ContactType": { "type": "integer" },
+        "CprCvr": { "type": ["string", "null"] },
+        "Name": { "type": ["string", "null"] },
+        "Streetname": { "type": ["string", "null"] },
+        "Housenumber": { "type": ["string", "null"] },
+        "Floor": { "type": ["string", "null"] },
+        "Door": { "type": ["string", "null"] },
+        "Zipcode": { "type": ["string", "null"] },
+        "Zipdistrict": { "type": ["string", "null"] },
+        "Phone": { "type": ["string", "null"] },
+        "Email": { "type": ["string", "null"] },
+        "HasAddressProtection": { "$ref": "#BoolString" },
+        "Pnumber": { "type": ["string", "null"] }
+      },
+      "required": ["Id", "RoleId", "CprCvr"]
+    },
+    "ContactAddResult": {
+      "$anchor": "ContactAddResult",
+      "title": "One item of POST /documents/contacts' response",
+      "description": "Same shape/type quirks as ParticipantAddResult (see PublicDocumentApiController::addOneContact).",
+      "$ref": "#ParticipantAddResult"
+    },
+    "PartyAddError": {
+      "$anchor": "PartyAddError",
+      "title": "One failed item of POST /cases/participants or /documents/contacts",
+      "type": "object",
+      "properties": {
+        "CprCvr": { "type": ["string", "null"] },
+        "Error": { "type": "string" }
+      },
+      "required": ["Error"]
+    },
+    "CaseworkerAddResult": {
+      "$anchor": "CaseworkerAddResult",
+      "title": "One succeeded item of POST /cases/caseworkers' response",
+      "type": "object",
+      "properties": {
+        "UserId": { "type": "string" },
+        "DisplayName": { "type": ["string", "null"] },
+        "PriorCanWrite": { "type": ["integer", "null"], "description": "Native JSON integer/null here (0/1), unlike CaseworkerType.PriorCanWrite which is a NumericString." }
+      },
+      "required": ["UserId"]
+    },
+    "CaseworkerAddError": {
+      "$anchor": "CaseworkerAddError",
+      "title": "One failed item of POST /cases/caseworkers' response",
+      "type": "object",
+      "properties": {
+        "UserId": { "type": ["string", "null"] },
+        "Error": { "type": "string" }
+      },
+      "required": ["Error"]
+    },
+
+    "CaseCreateRequest": {
+      "$anchor": "CaseCreateRequest",
+      "title": "POST /cases request body",
+      "description": "Lowercase/snake_case field names (organisation, classification_code, sensitivity, classification_facet_uuid, responsible_user_id, insight_level_id, casetype_id, parent_case_id) are also accepted in place of the PascalCase names shown.",
+      "type": "object",
+      "properties": {
+        "Title": { "type": "string" },
+        "Summary": { "type": "string", "description": "Rich-text HTML." },
+        "OrgUuid": { "type": "string", "description": "See GET /organisations. One of OrgUuid/organisation is required." },
+        "organisation": { "type": "string" },
+        "ClassificationCodeUuid": { "type": "string", "description": "See GET /kle-numbers. One of ClassificationCodeUuid/classification_code is required." },
+        "classification_code": { "type": "string" },
+        "SensitivityUuid": { "type": "string", "description": "See GET /sensitivities. One of SensitivityUuid/sensitivity is required." },
+        "sensitivity": { "type": "string" },
+        "ClassificationFacetUuid": { "type": "string", "description": "See GET /classification-facets. Required." },
+        "ResponsibleUserId": { "type": "string" },
+        "InsightLevelId": { "type": ["string", "integer"] },
+        "CasetypeId": { "type": ["string", "integer"] },
+        "ParentCaseId": { "type": ["string", "integer"] }
+      },
+      "required": ["Title", "ClassificationFacetUuid"]
+    },
+    "CaseUpdateRequest": {
+      "$anchor": "CaseUpdateRequest",
+      "title": "PUT /cases request body",
+      "description": "Uuid or CaseNumber identifies the case being updated; every other field is optional and, if omitted, left unchanged. ClassificationFacetUuid/InsightLevelId/Summary can be explicitly cleared by sending an empty string.",
+      "allOf": [
+        { "$ref": "#CaseCreateRequest" },
+        {
+          "type": "object",
+          "properties": {
+            "Uuid": { "type": "string" },
+            "uuid": { "type": "string" },
+            "CaseNumber": { "type": "string" },
+            "case_number": { "type": "string" }
+          },
+          "anyOf": [
+            { "required": ["Uuid"] }, { "required": ["uuid"] },
+            { "required": ["CaseNumber"] }, { "required": ["case_number"] }
+          ]
+        }
+      ],
+      "required": []
+    },
+    "AddParticipantsRequest": {
+      "$anchor": "AddParticipantsRequest",
+      "title": "POST /cases/participants request body",
+      "type": "object",
+      "properties": {
+        "Uuid": { "type": "string" },
+        "CaseNumber": { "type": "string" },
+        "Participants": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "properties": {
+              "ParticipantRoleId": { "type": ["string", "integer"], "description": "See GET /participantroles." },
+              "CprCvr": { "type": "string", "description": "10 digits (CPR) or 8 digits (CVR)." }
+            },
+            "required": ["ParticipantRoleId", "CprCvr"]
+          }
+        }
+      },
+      "required": ["Participants"]
+    },
+    "AddCaseworkersRequest": {
+      "$anchor": "AddCaseworkersRequest",
+      "title": "POST /cases/caseworkers request body",
+      "type": "object",
+      "properties": {
+        "Uuid": { "type": "string" },
+        "CaseNumber": { "type": "string" },
+        "Caseworkers": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "properties": { "UserId": { "type": "string" } },
+            "required": ["UserId"]
+          }
+        }
+      },
+      "required": ["Caseworkers"]
+    },
+    "CreateDocumentRequest": {
+      "$anchor": "CreateDocumentRequest",
+      "title": "POST /cases/documents request body",
+      "type": "object",
+      "properties": {
+        "Uuid": { "type": "string" },
+        "CaseNumber": { "type": "string" },
+        "Title": { "type": "string" },
+        "DocumentCategoryId": { "type": ["string", "integer"], "description": "See GET /documentcategory." },
+        "DocumentType": { "type": "string" },
+        "InsightLevelId": { "type": ["string", "integer"] },
+        "DocumentDate": { "type": "string" },
+        "ReceivedDate": { "type": "string" },
+        "RegisteredDate": { "type": "string" }
+      },
+      "required": ["Title", "DocumentCategoryId"]
+    },
+    "AddJournalNoteRequest": {
+      "$anchor": "AddJournalNoteRequest",
+      "title": "POST /cases/journal-notes request body",
+      "type": "object",
+      "properties": {
+        "Uuid": { "type": "string" },
+        "CaseNumber": { "type": "string" },
+        "Title": { "type": "string" },
+        "Text": { "type": "string" }
+      },
+      "required": ["Title"]
+    },
+    "DocumentUpdateRequest": {
+      "$anchor": "DocumentUpdateRequest",
+      "title": "PUT /documents request body",
+      "description": "Uuid or DocumentNumber identifies the document; every other field is optional and, if omitted, left unchanged (InsightLevelId/DocumentDate/ReceivedDate/RegisteredDate can be explicitly cleared by sending an empty string). Setting Status to a final status locks the document's files read-only.",
+      "type": "object",
+      "properties": {
+        "Uuid": { "type": "string" },
+        "DocumentNumber": { "type": "string" },
+        "Title": { "type": "string" },
+        "DocumentType": { "type": "string" },
+        "Status": { "type": ["string", "integer"], "description": "See GET /documentstatus." },
+        "InsightLevelId": { "type": ["string", "integer"] },
+        "DocumentDate": { "type": "string" },
+        "ReceivedDate": { "type": "string" },
+        "RegisteredDate": { "type": "string" }
+      }
+    },
+    "AddDocumentNoteRequest": {
+      "$anchor": "AddDocumentNoteRequest",
+      "title": "POST /documents/notes request body",
+      "type": "object",
+      "properties": {
+        "Uuid": { "type": "string" },
+        "DocumentNumber": { "type": "string" },
+        "Title": { "type": "string" },
+        "Text": { "type": "string" }
+      },
+      "required": ["Title"]
+    },
+    "AddContactsRequest": {
+      "$anchor": "AddContactsRequest",
+      "title": "POST /documents/contacts request body",
+      "type": "object",
+      "properties": {
+        "Uuid": { "type": "string" },
+        "DocumentNumber": { "type": "string" },
+        "Contacts": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "properties": {
+              "ContactRoleId": { "type": ["string", "integer"], "description": "See GET /contactroles." },
+              "CprCvr": { "type": "string" }
+            },
+            "required": ["ContactRoleId", "CprCvr"]
+          }
+        }
+      },
+      "required": ["Contacts"]
+    },
+    "UploadFileRequest": {
+      "$anchor": "UploadFileRequest",
+      "title": "POST /documents/files request body",
+      "description": "No multipart/form-data upload on this API — content travels as base64 in the JSON/XML body.",
+      "type": "object",
+      "properties": {
+        "Uuid": { "type": "string" },
+        "DocumentNumber": { "type": "string" },
+        "FileName": { "type": "string" },
+        "Content": { "type": "string", "contentEncoding": "base64" },
+        "MimeType": { "type": "string", "default": "application/octet-stream" }
+      },
+      "required": ["FileName", "Content"]
+    },
+    "CreateFileFromTemplateRequest": {
+      "$anchor": "CreateFileFromTemplateRequest",
+      "title": "POST /documents/files/from-template request body",
+      "type": "object",
+      "properties": {
+        "Uuid": { "type": "string" },
+        "DocumentNumber": { "type": "string" },
+        "TemplateId": { "type": ["string", "integer"], "description": "See GET /templates." }
+      },
+      "required": ["TemplateId"]
+    },
+    "UploadFileVersionRequest": {
+      "$anchor": "UploadFileVersionRequest",
+      "title": "POST /files/version request body",
+      "type": "object",
+      "properties": {
+        "Uuid": { "type": "string", "description": "The file's uuid." },
+        "Content": { "type": "string", "contentEncoding": "base64" }
+      },
+      "required": ["Uuid", "Content"]
+    },
+
+    "SearchResultCaseItem": {
+      "$anchor": "SearchResultCaseItem",
+      "type": "object",
+      "properties": {
+        "Id": { "$ref": "#NumericString" },
+        "CaseNumber": { "type": ["string", "null"] },
+        "Title": { "type": ["string", "null"] },
+        "Year": { "type": ["string", "null"] },
+        "CasetypeId": { "$ref": "#NumericString" },
+        "CasetypeName": { "type": ["string", "null"] }
+      }
+    },
+    "SearchResultDocumentItem": {
+      "$anchor": "SearchResultDocumentItem",
+      "type": "object",
+      "properties": {
+        "Id": { "$ref": "#NumericString" },
+        "Title": { "type": ["string", "null"] },
+        "DocumentType": { "type": ["string", "null"] },
+        "CaseId": { "$ref": "#NumericString" },
+        "CaseNumber": { "type": ["string", "null"] },
+        "CaseTitle": { "type": ["string", "null"] }
+      }
+    },
+    "SearchResultFileItem": {
+      "$anchor": "SearchResultFileItem",
+      "description": "From Elasticsearch — omitted entirely (not an error) when ES is unavailable.",
+      "type": "object",
+      "properties": {
+        "FileId": { "$ref": "#NumericString" },
+        "DocumentId": { "$ref": "#NumericString" },
+        "CaseId": { "$ref": "#NumericString" },
+        "CaseNumber": { "type": ["string", "null"] },
+        "CaseTitle": { "type": ["string", "null"] },
+        "Filename": { "type": ["string", "null"] },
+        "DocumentType": { "type": ["string", "null"] },
+        "MimeType": { "type": ["string", "null"] },
+        "Organisation": { "type": ["string", "null"] },
+        "Year": { "type": ["string", "null"] },
+        "Score": { "type": ["string", "null"], "description": "Elasticsearch relevance score." },
+        "VirtualPath": { "type": ["string", "null"], "description": "Path under the virtual /Sager mount — see README.md#architecture." }
+      }
+    },
+
+    "ReferenceCodeItem": {
+      "$anchor": "ReferenceCodeItem",
+      "title": "Generic {Id, Name, Expired} reference row",
+      "description": "Shape of GET /contactroles, /documentcategory, /participantroles items. Unlike the Case/Document/File resources, Id is a native JSON integer and Expired a native JSON boolean.",
+      "type": "object",
+      "properties": {
+        "Id": { "type": "integer" },
+        "Name": { "type": "string" },
+        "Expired": { "type": "boolean" }
+      },
+      "required": ["Id", "Name", "Expired"]
+    },
+
+    "ErrorOr": {
+      "$anchor": "ErrorOr",
+      "description": "Helper: either the given success schema, or #Error.",
+      "type": "object"
+    }
+  },
+
+  "endpoints": {
+    "description": "Non-normative index of request/response $defs per operation, for quick lookup. Not part of the schema tree itself — see API.md#public-api for the prose version.",
+
+    "GET /cases": { "response": "#/$defs/CaseDetail", "wrapper": "{ \"Case\": CaseDetail }" },
+    "GET /cases/search": { "response": { "Total": "string", "Limit": "string", "Offset": "string", "Cases": "#/$defs/CaseFields[]" }, "wrapper": "{ \"CaseSearchResult\": {...} }" },
+    "POST /cases": { "request": "#/$defs/CaseCreateRequest", "response": "#/$defs/CaseDetail", "wrapper": "{ \"Case\": CaseDetail }" },
+    "PUT /cases": { "request": "#/$defs/CaseUpdateRequest", "response": "#/$defs/CaseDetail", "wrapper": "{ \"Case\": CaseDetail }" },
+    "GET /cases/documents": { "response": "#/$defs/DocumentType[]", "wrapper": "{ \"Documents\": DocumentType[] }" },
+    "POST /cases/documents": { "request": "#/$defs/CreateDocumentRequest", "response": "#/$defs/DocumentType", "wrapper": "{ \"Document\": DocumentType }" },
+    "GET /cases/journal-notes": { "response": "#/$defs/JournalNoteType[]", "wrapper": "{ \"JournalNotes\": JournalNoteType[] }" },
+    "POST /cases/journal-notes": { "request": "#/$defs/AddJournalNoteRequest", "response": "#/$defs/JournalNoteType", "wrapper": "{ \"JournalNote\": JournalNoteType }" },
+    "POST /cases/participants": { "request": "#/$defs/AddParticipantsRequest", "response": "(#/$defs/ParticipantAddResult | #/$defs/PartyAddError)[]", "wrapper": "{ \"Participants\": [...] }" },
+    "POST /cases/caseworkers": { "request": "#/$defs/AddCaseworkersRequest", "response": "(#/$defs/CaseworkerAddResult | #/$defs/CaseworkerAddError)[]", "wrapper": "{ \"Caseworkers\": [...] }" },
+
+    "GET /documents": { "response": "#/$defs/DocumentType", "wrapper": "{ \"Document\": DocumentType }" },
+    "GET /documents/search": { "response": { "Total": "string", "Limit": "string", "Offset": "string", "Documents": "#/$defs/DocumentSearchItem[]" }, "wrapper": "{ \"DocumentSearchResult\": {...} }" },
+    "PUT /documents": { "request": "#/$defs/DocumentUpdateRequest", "response": "#/$defs/DocumentType", "wrapper": "{ \"Document\": DocumentType }" },
+    "POST /documents/notes": { "request": "#/$defs/AddDocumentNoteRequest", "response": "#/$defs/DocumentNoteType", "wrapper": "{ \"Note\": DocumentNoteType }" },
+    "POST /documents/contacts": { "request": "#/$defs/AddContactsRequest", "response": "(#/$defs/ContactAddResult | #/$defs/PartyAddError)[]", "wrapper": "{ \"Contacts\": [...] }" },
+    "POST /documents/files": { "request": "#/$defs/UploadFileRequest", "response": "#/$defs/FileType", "wrapper": "{ \"File\": FileType }" },
+    "POST /documents/files/from-template": { "request": "#/$defs/CreateFileFromTemplateRequest", "response": "#/$defs/FileType", "wrapper": "{ \"File\": FileType }" },
+
+    "GET /files": { "response": "#/$defs/FileType (with Content)", "wrapper": "{ \"File\": FileType }" },
+    "POST /files/version": { "request": "#/$defs/UploadFileVersionRequest", "response": "#/$defs/FileType", "wrapper": "{ \"File\": FileType }" },
+    "GET /files/versions": { "response": "#/$defs/FileVersionType[]", "wrapper": "{ \"FileVersions\": FileVersionType[] }" },
+    "GET /files/versions/content": { "response": "#/$defs/FileVersionType (with Content)", "wrapper": "{ \"FileVersion\": FileVersionType }" },
+
+    "GET /casestatus": { "response": "{Id:int, Name:string, IsClosed:bool, Expired:bool}[]", "wrapper": "{ \"CaseStatuses\": [...] }" },
+    "GET /casetype": { "response": "{Id:int, Name:string, PrimaryParticipant:string, Expired:bool}[]", "wrapper": "{ \"CaseTypes\": [...] }" },
+    "GET /contactroles": { "response": "#/$defs/ReferenceCodeItem[]", "wrapper": "{ \"ContactRoles\": [...] }" },
+    "GET /documentcategory": { "response": "#/$defs/ReferenceCodeItem[]", "wrapper": "{ \"DocumentCategories\": [...] }" },
+    "GET /documentstatus": { "response": "{Id:int, Name:string, IsFinal:bool, Expired:bool}[]", "wrapper": "{ \"DocumentStatuses\": [...] }" },
+    "GET /insightlevel": { "response": "{Id:int, Name:string, Description:string|null}[]", "wrapper": "{ \"InsightLevels\": [...] }" },
+    "GET /participantroles": { "response": "#/$defs/ReferenceCodeItem[]", "wrapper": "{ \"ParticipantRoles\": [...] }" },
+    "GET /organisations": { "response": "{Uuid:string, Name:string}[]", "wrapper": "{ \"Organisations\": [...] }" },
+    "GET /kle-numbers": { "response": "{Uuid:string, Code:string, Title:string}[]", "wrapper": "{ \"KleNumbers\": [...] }" },
+    "GET /classification-facets": { "response": "{Uuid:string, Code:string, Title:string}[]", "wrapper": "{ \"ClassificationFacets\": [...] }" },
+    "GET /sensitivities": { "response": "{Uuid:string, Key:string, Title:string}[]", "wrapper": "{ \"Sensitivities\": [...] }" },
+    "GET /users": { "response": "{Id:string, DisplayName:string}[]", "wrapper": "{ \"Users\": [...] }" },
+    "GET /templates": { "response": "{Id:int, Name:string, OriginalFilename:string, MimeType:string, Size:int, UploadedBy:string, CreatedAt:string}[]", "wrapper": "{ \"Templates\": [...] }" },
+
+    "GET /search": {
+      "response": {
+        "Total": "string", "Limit": "string", "Offset": "string",
+        "Cases": "#/$defs/SearchResultCaseItem[]",
+        "Documents": "#/$defs/SearchResultDocumentItem[]",
+        "Files": "#/$defs/SearchResultFileItem[]"
+      },
+      "wrapper": "{ \"SearchResult\": {...} }"
+    }
+  }
+}

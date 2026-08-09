@@ -1,0 +1,102 @@
+:root {
+  --opencase-primary: #660033;
+  --opencase-primary-dark: #4d0026;
+  --opencase-background: #ffffff;
+  --opencase-foreground: #171717;
+
+  --md-primary-fg-color: var(--opencase-primary);
+  --md-primary-fg-color--dark: var(--opencase-primary-dark);
+  --md-accent-fg-color: var(--opencase-primary);
+  --md-default-bg-color: var(--opencase-background);
+  --md-default-fg-color: var(--opencase-foreground);
+}
+
+/* Font */
+body,
+input,
+button,
+textarea,
+select {
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Header */
+.md-header {
+  background-color: var(--opencase-primary);
+  color: #ffffff;
+  box-shadow: 0 4px 6px rgb(0 0 0 / 0.1);
+}
+
+/* Tabs under header */
+.md-tabs {
+  background-color: var(--opencase-primary);
+  color: #ffffff;
+}
+
+/* Logo */
+.md-header__button.md-logo img,
+.md-header__button.md-logo svg {
+  width: auto;
+  height: 2rem;
+}
+
+/* Navigation links */
+.md-nav__link:hover,
+.md-nav__link--active {
+  color: var(--opencase-primary);
+}
+
+/* Links in content */
+.md-typeset a {
+  color: var(--opencase-primary);
+}
+
+.md-typeset a:hover {
+  color: var(--opencase-primary-dark);
+}
+
+/* Headings */
+.md-typeset h1,
+.md-typeset h2,
+.md-typeset h3 {
+  color: var(--opencase-foreground);
+  font-weight: 700;
+}
+
+/* Primary buttons */
+.md-typeset .md-button--primary {
+  background-color: var(--opencase-primary);
+  border-color: var(--opencase-primary);
+  color: #ffffff;
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 6px rgb(0 0 0 / 0.1);
+}
+
+.md-typeset .md-button--primary:hover {
+  background-color: var(--opencase-primary-dark);
+  border-color: var(--opencase-primary-dark);
+}
+
+/* Secondary buttons */
+.md-typeset .md-button:not(.md-button--primary) {
+  border-color: var(--opencase-primary);
+  color: var(--opencase-primary);
+  border-radius: 0.5rem;
+}
+
+/* Search focus */
+.md-search__form {
+  border-radius: 0.5rem;
+}
+
+/* Information boxes */
+.md-typeset .admonition,
+.md-typeset details {
+  border-radius: 0.5rem;
+}
+
+/* Footer */
+.md-footer {
+  background-color: var(--opencase-primary);
+  color: #ffffff;
+}
