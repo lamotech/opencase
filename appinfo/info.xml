@@ -18,7 +18,7 @@ Features:
 - Per-user document access overrides
 - Comprehensive REST API
     ]]></description>
-	<version>0.9.8</version>
+	<version>1.0.0</version>
 	<licence>agpl</licence>
 	<author mail="dev@lamotech.dk" homepage="https://lamotech.dk">Lamotech Solutions ApS</author>
 	<namespace>OpenCase</namespace>

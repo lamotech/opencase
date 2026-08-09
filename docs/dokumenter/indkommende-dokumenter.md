@@ -35,7 +35,7 @@ For hvert dokument kan du blandt andet se:
 
 Herfra kan dokumentet åbnes og behandles.
 
-![Liste over indkommende dokumenter](images/indkommende-dokumenter/oversigt.png)
+![Liste over indkommende dokumenter](../images/indkommende-dokumenter/oversigt.png)
 
 ---
 

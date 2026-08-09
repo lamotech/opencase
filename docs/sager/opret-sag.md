@@ -1,6 +1,6 @@
 # Opret en sag
 
-En ny sag oprettes fra OpenCases forside ved at klikke på **Opret ny sag**.
+En ny sag oprettes fra OpenCases menulinje ved at klikke på **Opret ny sag**.
 
 ![Knappen Opret ny sag](../images/sager/opret-ny-sag-knap.png)
 
@@ -86,6 +86,11 @@ Mulige værdier er:
 | **Lukket** | Sagen indeholder stærkt fortrolige eller personlige oplysninger. |
 
 Vælg den indsigtsgrad, som passer til organisationens retningslinjer.
+
+
+### Sagsresume
+
+Her kan skrives det beskrives hvad sagen handler om.
 
 ---
 
