@@ -19,7 +19,7 @@
     "@nextcloud/initial-state": "^2.1.0",
     "@nextcloud/l10n": "^2.2.0",
     "@nextcloud/router": "^3.0.0",
-    "@nextcloud/vue": "^9.8.2",
+    "@nextcloud/vue": "^9.10.0",
     "@tiptap/extension-underline": "^3.27.1",
     "@tiptap/starter-kit": "^3.27.1",
     "@tiptap/vue-3": "^3.27.1",
