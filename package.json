@@ -22,7 +22,7 @@
     "@nextcloud/vue": "^9.8.2",
     "@tiptap/extension-underline": "^3.27.1",
     "@tiptap/starter-kit": "^3.27.1",
-    "@tiptap/vue-3": "^3.27.1",
+    "@tiptap/vue-3": "^3.30.6",
     "jspdf": "^4.2.1",
     "qrcode": "^1.5.4",
     "vue": "^3.5.18",
