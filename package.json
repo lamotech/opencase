@@ -13,7 +13,7 @@
   "dependencies": {
     "@nextcloud/auth": "^2.6.0",
     "@nextcloud/axios": "^2.4.0",
-    "@nextcloud/dialogs": "^7.4.0",
+    "@nextcloud/dialogs": "^7.5.0",
     "@nextcloud/event-bus": "^3.3.3",
     "@nextcloud/files": "^4.0.0",
     "@nextcloud/initial-state": "^2.1.0",
