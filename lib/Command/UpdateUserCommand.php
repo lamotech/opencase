@@ -8,12 +8,14 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
+use OCA\OpenCase\Db\UserInfoMapper;
 use OCA\OpenCase\Service\UserSyncService;
 
 class UpdateUserCommand extends Command {
 
     public function __construct(
         private UserSyncService $userSyncService,
+        private UserInfoMapper $userInfoMapper,
     ) {
         parent::__construct();
     }
@@ -29,8 +31,15 @@ class UpdateUserCommand extends Command {
         $uuid = $input->getArgument('uuid');
         $output->writeln('<info>Updating user: ' . $uuid . '</info>');
 
+        $userInfo = $this->userInfoMapper->findByUuid($uuid);
+        $userId = $userInfo?->getUserId();
+        if ($userId === null) {
+            $output->writeln('<error>No opencase_userinfo record found for uuid ' . $uuid . '</error>');
+            return Command::FAILURE;
+        }
+
         try {
-            $this->userSyncService->updateUser($uuid);
+            $this->userSyncService->updateUser($uuid, $userId);
             $output->writeln('<info>User updated successfully.</info>');
             return Command::SUCCESS;
         } catch (\Throwable $e) {

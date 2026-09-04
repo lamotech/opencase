@@ -49,6 +49,7 @@
             <xs:element name="Participants" type="ParticipantsType"/>
             <xs:element name="JournalNotes" type="JournalNotesType"/>
             <xs:element name="Caseworkers" type="CaseworkersType"/>
+            <xs:element name="Estates" type="EstatesType"/>
             <xs:element name="Documents" type="DocumentsType"/>
         </xs:sequence>
     </xs:complexType>
@@ -117,6 +118,24 @@
             <xs:element name="UserId" type="xs:string"/>
             <xs:element name="DisplayName" type="xs:string" minOccurs="0"/>
             <xs:element name="PriorCanWrite" type="xs:int" minOccurs="0"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <!-- ── Estates ─────────────────────────────────────────────────────── -->
+
+    <xs:complexType name="EstatesType">
+        <xs:sequence>
+            <xs:element name="Estate" type="EstateType" minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <xs:complexType name="EstateType">
+        <xs:sequence>
+            <xs:element name="RoleId" type="xs:int" minOccurs="0"/>
+            <xs:element name="RoleName" type="xs:string" minOccurs="0"/>
+            <xs:element name="Type" type="xs:string"/>
+            <xs:element name="BfeNumber" type="xs:int" minOccurs="0"/>
+            <xs:element name="LocationAddress" type="xs:string" minOccurs="0"/>
         </xs:sequence>
     </xs:complexType>
 

@@ -588,6 +588,41 @@
 		</div>
 
 		<div v-show="activeTab === 'datafordeler'">
+			<NcSettingsSection :name="t('opencase', 'Person')">
+				<p v-if="!enterpriseVersion" class="enterprise-version-warning">
+					{{ t('opencase', 'Integrationen er kun tilgængelig i Enterprise versionen') }}
+				</p>
+				<p>{{ t('opencase', 'Indstillinger for CPR service integration.') }}</p>
+
+				<table class="opencase-cert-table">
+					<tr>
+						<td class="opencase-cert-label">
+							<label for="df-endpoint-cpr">{{ t('opencase', 'Endpoint for CPR service') }}</label>
+						</td>
+						<td>
+							<input id="df-endpoint-cpr"
+								v-model="datafordelerEndpointCpr"
+								type="text"
+								:disabled="!enterpriseVersion"
+								:style="{ width: '600px', maxWidth: '100%', boxSizing: 'border-box' }"
+								@change="saveConfigValue('datafordeler_endpoint_cpr', datafordelerEndpointCpr)">
+						</td>
+					</tr>
+				</table>
+
+				<div v-if="certDatafordeler.error === 'not_found'" class="certificate-error">
+					{{ t('opencase', 'The certificate was not found at the specified path') }}
+				</div>
+				<div v-else-if="certDatafordeler.error === 'cannot_read'" class="certificate-error">
+					{{ t('opencase', 'The certificate cannot be read') }}
+				</div>
+				<div v-else-if="certDatafordeler.valid" class="opencase-cert-info-box">
+					<div><strong>{{ t('opencase', 'Name:') }}</strong> {{ certDatafordeler.subject }}</div>
+					<div><strong>{{ t('opencase', 'Serial number:') }}</strong> {{ certDatafordeler.serialNumber }}</div>
+					<div><strong>{{ t('opencase', 'Expires:') }}</strong> {{ certDatafordelerExpiresFormatted }}</div>
+				</div>
+			</NcSettingsSection>
+
 			<NcSettingsSection :name="t('opencase', 'Virksomhed')">
 				<p v-if="!enterpriseVersion" class="enterprise-version-warning">
 					{{ t('opencase', 'Integrationen er kun tilgængelig i Enterprise versionen') }}
@@ -625,39 +660,41 @@
 				</table>
 			</NcSettingsSection>
 
-			<NcSettingsSection :name="t('opencase', 'Person')">
+			<NcSettingsSection :name="t('opencase', 'Ejendom')">
 				<p v-if="!enterpriseVersion" class="enterprise-version-warning">
 					{{ t('opencase', 'Integrationen er kun tilgængelig i Enterprise versionen') }}
 				</p>
-				<p>{{ t('opencase', 'Indstillinger for CPR service integration.') }}</p>
+				<p>{{ t('opencase', 'Settings for estate (BFE) service integration.') }}</p>
 
 				<table class="opencase-cert-table">
 					<tr>
 						<td class="opencase-cert-label">
-							<label for="df-endpoint-cpr">{{ t('opencase', 'Endpoint for CPR service') }}</label>
+							<label for="df-endpoint-estate">{{ t('opencase', 'Endpoint for estate service') }}</label>
 						</td>
 						<td>
-							<input id="df-endpoint-cpr"
-								v-model="datafordelerEndpointCpr"
+							<input id="df-endpoint-estate"
+								v-model="datafordelerEndpointEstate"
 								type="text"
 								:disabled="!enterpriseVersion"
 								:style="{ width: '600px', maxWidth: '100%', boxSizing: 'border-box' }"
-								@change="saveConfigValue('datafordeler_endpoint_cpr', datafordelerEndpointCpr)">
+								@change="saveConfigValue('datafordeler_endpoint_estate', datafordelerEndpointEstate)">
+						</td>
+					</tr>
+					<tr>
+						<td class="opencase-cert-label">
+							<label for="df-apikey-estate">{{ t('opencase', 'API key for estate service') }}</label>
+						</td>
+						<td>
+							<input id="df-apikey-estate"
+								v-model="datafordelerApikeyEstate"
+								type="password"
+								autocomplete="new-password"
+								:disabled="!enterpriseVersion"
+								:style="{ width: '400px', maxWidth: '100%', boxSizing: 'border-box' }"
+								@change="saveConfigValue('datafordeler_apikey_estate', datafordelerApikeyEstate)">
 						</td>
 					</tr>
 				</table>
-
-				<div v-if="certDatafordeler.error === 'not_found'" class="certificate-error">
-					{{ t('opencase', 'The certificate was not found at the specified path') }}
-				</div>
-				<div v-else-if="certDatafordeler.error === 'cannot_read'" class="certificate-error">
-					{{ t('opencase', 'The certificate cannot be read') }}
-				</div>
-				<div v-else-if="certDatafordeler.valid" class="opencase-cert-info-box">
-					<div><strong>{{ t('opencase', 'Name:') }}</strong> {{ certDatafordeler.subject }}</div>
-					<div><strong>{{ t('opencase', 'Serial number:') }}</strong> {{ certDatafordeler.serialNumber }}</div>
-					<div><strong>{{ t('opencase', 'Expires:') }}</strong> {{ certDatafordelerExpiresFormatted }}</div>
-				</div>
 			</NcSettingsSection>
 		</div>
 
@@ -1350,6 +1387,356 @@
 			</NcSettingsSection>
 		</div>
 
+		<div v-show="activeTab === 'import'">
+			<NcSettingsSection :name="t('opencase', 'Mapper')">
+				<p v-if="folderLocations.length === 0" class="opencase-api-clients-empty">
+					{{ t('opencase', 'Ingen mapper er tilføjet endnu.') }}
+				</p>
+				<table v-else class="opencase-sync-log-table opencase-api-clients-table">
+					<thead>
+						<tr>
+							<th>{{ t('opencase', 'Mappesti') }}</th>
+							<th>{{ t('opencase', 'Filtyper') }}</th>
+							<th>{{ t('opencase', 'Aktiv') }}</th>
+							<th>{{ t('opencase', 'Handling') }}</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr v-for="loc in folderLocations" :key="loc.id">
+							<td>{{ loc.folderpath }}</td>
+							<td>{{ loc.file_extension_filter || '—' }}</td>
+							<td>
+								<NcCheckboxRadioSwitch :model-value="!isImportLocationExpired(loc)"
+									type="switch"
+									@update:model-value="setImportLocationExpired(loc, !$event)" />
+							</td>
+							<td>
+								<button @click="openImportLog(loc)">
+									{{ t('opencase', 'Vis log') }}
+								</button>
+								<button @click="deleteImportLocation(loc)">
+									{{ t('opencase', 'Slet') }}
+								</button>
+							</td>
+						</tr>
+					</tbody>
+				</table>
+
+				<h3 style="margin-top:24px;">{{ t('opencase', 'Tilføj mappe') }}</h3>
+				<table class="opencase-cert-table">
+					<tr>
+						<td class="opencase-cert-label">
+							<label for="import-folder-path">{{ t('opencase', 'Mappesti') }}</label>
+						</td>
+						<td>
+							<input id="import-folder-path"
+								v-model="newFolder.folderpath"
+								type="text"
+								:placeholder="t('opencase', 'F.eks. /var/www/nextcloud/data/opencase_storage/_imports')"
+								:style="{ width: '500px', maxWidth: '100%', boxSizing: 'border-box' }">
+						</td>
+					</tr>
+					<tr>
+						<td class="opencase-cert-label">
+							<label for="import-folder-filter">{{ t('opencase', 'Filtyper') }}</label>
+						</td>
+						<td>
+							<input id="import-folder-filter"
+								v-model="newFolder.file_extension_filter"
+								type="text"
+								:placeholder="t('opencase', 'F.eks. pdf,docx (tom = alle filtyper)')"
+								:style="{ width: '300px', maxWidth: '100%', boxSizing: 'border-box' }">
+						</td>
+					</tr>
+				</table>
+				<div class="opencase-button-row">
+					<button class="primary" :disabled="!newFolder.folderpath || addingFolder" @click="addFolderLocation">
+						{{ addingFolder ? t('opencase', 'Tilføjer...') : t('opencase', 'Tilføj mappe') }}
+					</button>
+				</div>
+
+				<div v-if="importLocationsError" class="certificate-error" style="margin-top:12px;">
+					{{ importLocationsError }}
+				</div>
+			</NcSettingsSection>
+
+			<NcSettingsSection :name="t('opencase', 'Mailbokse')">
+				<p v-if="mailboxLocations.length === 0" class="opencase-api-clients-empty">
+					{{ t('opencase', 'Ingen mailbokse er tilføjet endnu.') }}
+				</p>
+				<table v-else class="opencase-sync-log-table opencase-api-clients-table">
+					<thead>
+						<tr>
+							<th>{{ t('opencase', 'Server') }}</th>
+							<th>{{ t('opencase', 'Port') }}</th>
+							<th>{{ t('opencase', 'Bruger') }}</th>
+							<th>{{ t('opencase', 'SSL/TLS') }}</th>
+							<th>{{ t('opencase', 'Filtyper') }}</th>
+							<th>{{ t('opencase', 'Aktiv') }}</th>
+							<th>{{ t('opencase', 'Handling') }}</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr v-for="loc in mailboxLocations" :key="loc.id">
+							<td>{{ loc.mailbox_server }}</td>
+							<td>{{ loc.mailbox_port }}</td>
+							<td>{{ loc.mailbox_user }}</td>
+							<td>{{ isTruthyFlag(loc.mailbox_use_ssl) ? t('opencase', 'Ja') : t('opencase', 'Nej') }}</td>
+							<td>{{ loc.file_extension_filter || '—' }}</td>
+							<td>
+								<NcCheckboxRadioSwitch :model-value="!isImportLocationExpired(loc)"
+									type="switch"
+									@update:model-value="setImportLocationExpired(loc, !$event)" />
+							</td>
+							<td>
+								<button @click="openEditMailbox(loc)">
+									{{ t('opencase', 'Redigér') }}
+								</button>
+								<button @click="openImportLog(loc)">
+									{{ t('opencase', 'Vis log') }}
+								</button>
+								<button @click="deleteImportLocation(loc)">
+									{{ t('opencase', 'Slet') }}
+								</button>
+							</td>
+						</tr>
+					</tbody>
+				</table>
+
+				<h3 style="margin-top:24px;">{{ t('opencase', 'Tilføj mailboks') }}</h3>
+				<table class="opencase-cert-table">
+					<tr>
+						<td class="opencase-cert-label">
+							<label for="import-mb-server">{{ t('opencase', 'Server') }}</label>
+						</td>
+						<td>
+							<input id="import-mb-server"
+								v-model="newMailbox.mailbox_server"
+								type="text"
+								:placeholder="t('opencase', 'F.eks. mail.example.com')"
+								:style="{ width: '300px', maxWidth: '100%', boxSizing: 'border-box' }">
+						</td>
+					</tr>
+					<tr>
+						<td class="opencase-cert-label">
+							<label for="import-mb-port">{{ t('opencase', 'Port') }}</label>
+						</td>
+						<td>
+							<input id="import-mb-port"
+								v-model="newMailbox.mailbox_port"
+								type="text"
+								:style="{ width: '100px', maxWidth: '100%', boxSizing: 'border-box' }">
+						</td>
+					</tr>
+					<tr>
+						<td class="opencase-cert-label">
+							<label for="import-mb-user">{{ t('opencase', 'Bruger') }}</label>
+						</td>
+						<td>
+							<input id="import-mb-user"
+								v-model="newMailbox.mailbox_user"
+								type="text"
+								:style="{ width: '300px', maxWidth: '100%', boxSizing: 'border-box' }">
+						</td>
+					</tr>
+					<tr>
+						<td class="opencase-cert-label">
+							<label for="import-mb-password">{{ t('opencase', 'Adgangskode') }}</label>
+						</td>
+						<td>
+							<input id="import-mb-password"
+								v-model="newMailbox.mailbox_password"
+								type="password"
+								autocomplete="new-password"
+								:style="{ width: '300px', maxWidth: '100%', boxSizing: 'border-box' }">
+						</td>
+					</tr>
+					<tr>
+						<td class="opencase-cert-label">
+							<label for="import-mb-ssl">{{ t('opencase', 'SSL/TLS') }}</label>
+						</td>
+						<td>
+							<NcCheckboxRadioSwitch id="import-mb-ssl" v-model="newMailbox.mailbox_use_ssl" type="switch">
+								{{ t('opencase', 'Aktiveret') }}
+							</NcCheckboxRadioSwitch>
+						</td>
+					</tr>
+					<tr>
+						<td class="opencase-cert-label">
+							<label for="import-mb-filter">{{ t('opencase', 'Filtyper') }}</label>
+						</td>
+						<td>
+							<input id="import-mb-filter"
+								v-model="newMailbox.file_extension_filter"
+								type="text"
+								:placeholder="t('opencase', 'F.eks. pdf,docx (tom = alle filtyper)')"
+								:style="{ width: '300px', maxWidth: '100%', boxSizing: 'border-box' }">
+						</td>
+					</tr>
+				</table>
+				<div class="opencase-button-row">
+					<button class="primary"
+						:disabled="!newMailbox.mailbox_server || !newMailbox.mailbox_user || addingMailbox"
+						@click="addMailboxLocation">
+						{{ addingMailbox ? t('opencase', 'Tilføjer...') : t('opencase', 'Tilføj mailboks') }}
+					</button>
+				</div>
+			</NcSettingsSection>
+
+			<NcModal v-if="editMailboxDialog" size="normal" :name="t('opencase', 'Redigér mailboks')" @close="editMailboxDialog = null">
+				<div class="opencase-cert-dialog">
+					<table class="opencase-cert-table">
+						<tr>
+							<td class="opencase-cert-label">
+								<label for="edit-mb-server">{{ t('opencase', 'Server') }}</label>
+							</td>
+							<td>
+								<input id="edit-mb-server"
+									v-model="editMailboxDialog.mailbox_server"
+									type="text"
+									:style="{ width: '300px', maxWidth: '100%', boxSizing: 'border-box' }">
+							</td>
+						</tr>
+						<tr>
+							<td class="opencase-cert-label">
+								<label for="edit-mb-port">{{ t('opencase', 'Port') }}</label>
+							</td>
+							<td>
+								<input id="edit-mb-port"
+									v-model="editMailboxDialog.mailbox_port"
+									type="text"
+									:style="{ width: '100px', maxWidth: '100%', boxSizing: 'border-box' }">
+							</td>
+						</tr>
+						<tr>
+							<td class="opencase-cert-label">
+								<label for="edit-mb-user">{{ t('opencase', 'Bruger') }}</label>
+							</td>
+							<td>
+								<input id="edit-mb-user"
+									v-model="editMailboxDialog.mailbox_user"
+									type="text"
+									:style="{ width: '300px', maxWidth: '100%', boxSizing: 'border-box' }">
+							</td>
+						</tr>
+						<tr>
+							<td class="opencase-cert-label">
+								<label for="edit-mb-password">{{ t('opencase', 'Adgangskode') }}</label>
+							</td>
+							<td>
+								<input id="edit-mb-password"
+									v-model="editMailboxDialog.mailbox_password"
+									type="password"
+									autocomplete="new-password"
+									:placeholder="t('opencase', '(uændret — udfyld kun for at ændre)')"
+									:style="{ width: '300px', maxWidth: '100%', boxSizing: 'border-box' }">
+							</td>
+						</tr>
+						<tr>
+							<td class="opencase-cert-label">
+								<label for="edit-mb-ssl">{{ t('opencase', 'SSL/TLS') }}</label>
+							</td>
+							<td>
+								<NcCheckboxRadioSwitch id="edit-mb-ssl" v-model="editMailboxDialog.mailbox_use_ssl" type="switch">
+									{{ t('opencase', 'Aktiveret') }}
+								</NcCheckboxRadioSwitch>
+							</td>
+						</tr>
+						<tr>
+							<td class="opencase-cert-label">
+								<label for="edit-mb-filter">{{ t('opencase', 'Filtyper') }}</label>
+							</td>
+							<td>
+								<input id="edit-mb-filter"
+									v-model="editMailboxDialog.file_extension_filter"
+									type="text"
+									:style="{ width: '300px', maxWidth: '100%', boxSizing: 'border-box' }">
+							</td>
+						</tr>
+					</table>
+
+					<div class="opencase-button-row">
+						<button class="primary" :disabled="editMailboxSaving" @click="saveEditMailbox">
+							{{ editMailboxSaving ? t('opencase', 'Gemmer...') : t('opencase', 'Gem') }}
+						</button>
+					</div>
+
+					<div v-if="editMailboxError" class="certificate-error" style="margin-top:12px;">
+						{{ editMailboxError }}
+					</div>
+				</div>
+			</NcModal>
+
+			<NcModal v-if="importLogDialog"
+				size="large"
+				:name="t('opencase', 'Importlog') + ': ' + importLogLocationLabel"
+				@close="importLogDialog = null">
+				<div class="opencase-import-log">
+					<NcLoadingIcon v-if="importLogDialog.loading" :size="32" />
+
+					<div v-else-if="importLogDialog.error" class="certificate-error">
+						{{ importLogDialog.error }}
+					</div>
+
+					<p v-else-if="importLogDialog.items.length === 0">
+						{{ t('opencase', 'Ingen importelementer de sidste 30 dage.') }}
+					</p>
+
+					<table v-else class="opencase-sync-log-table opencase-api-clients-table">
+						<thead>
+							<tr>
+								<th>{{ t('opencase', 'Fil / e-mail') }}</th>
+								<th>{{ t('opencase', 'Status') }}</th>
+								<th>{{ t('opencase', 'Importeret') }}</th>
+								<th></th>
+							</tr>
+						</thead>
+						<tbody>
+							<template v-for="item in importLogDialog.items" :key="item.id">
+								<tr>
+									<td class="opencase-import-log-identification">{{ item.identification }}</td>
+									<td>{{ importStatusLabel(item.status) }}</td>
+									<td>{{ item.imported_at || '—' }}</td>
+									<td>
+										<button @click="toggleImportLogDetails(item.id)">
+											{{ expandedImportItemId === item.id ? t('opencase', 'Skjul detaljer') : t('opencase', 'Vis detaljer') }}
+										</button>
+									</td>
+								</tr>
+								<tr v-if="expandedImportItemId === item.id">
+									<td colspan="4" class="opencase-import-log-details">
+										<p v-if="!item.file_stats">
+											{{ t('opencase', 'Ingen detaljer tilgængelige for dette element.') }}
+										</p>
+										<template v-else>
+											<div v-if="parseFileStats(item.file_stats) === null" class="certificate-error">
+												{{ t('opencase', 'Kunne ikke læse detaljerne.') }}
+											</div>
+											<div v-for="doc in parseFileStats(item.file_stats)" v-else :key="doc.id" class="opencase-import-log-doc">
+												<p>
+													<strong>{{ t('opencase', 'Dokument') }} #{{ doc.id }}</strong>
+													— {{ t('opencase', 'Sag') }} #{{ doc.case_id }}
+													<span v-if="doc.separation_sheet">
+														· {{ separationSheetTypeLabel(doc.separation_sheet_type) }} ({{ doc.separation_sheet }})
+													</span>
+												</p>
+												<ul>
+													<li v-for="file in doc.files" :key="file.id">
+														{{ t('opencase', 'Fil') }} #{{ file.id }}
+														<span v-if="file.pages">— {{ file.pages }} {{ t('opencase', 'side(r)') }}</span>
+													</li>
+												</ul>
+											</div>
+										</template>
+									</td>
+								</tr>
+							</template>
+						</tbody>
+					</table>
+				</div>
+			</NcModal>
+		</div>
+
 		<div v-show="activeTab === 'export'">
 			<NcSettingsSection :name="t('opencase', 'Eksporter lukkede sager')">
 				<NcCheckboxRadioSwitch id="export-enable"
@@ -1424,6 +1811,7 @@ import { loadState } from '@nextcloud/initial-state'
 import { translate as t } from '@nextcloud/l10n'
 import { generateOcsUrl, generateUrl } from '@nextcloud/router'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
+import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcModal from '@nextcloud/vue/components/NcModal'
 import NcSettingsSection from '@nextcloud/vue/components/NcSettingsSection'
 import OverflowTabs from './components/OverflowTabs.vue'
@@ -1435,6 +1823,7 @@ export default {
 	name: 'AdminSettings',
 	components: {
 		NcCheckboxRadioSwitch,
+		NcLoadingIcon,
 		NcModal,
 		NcSettingsSection,
 		OverflowTabs,
@@ -1487,6 +1876,17 @@ export default {
 		apiClientsServiceplatformen() {
 			return this.apiClients.filter((client) => client.valid_for === 'Serviceplatformen callback')
 		},
+		folderLocations() {
+			return this.importLocations.filter((loc) => loc.type === 'folder')
+		},
+		mailboxLocations() {
+			return this.importLocations.filter((loc) => loc.type === 'mailbox')
+		},
+		importLogLocationLabel() {
+			const loc = this.importLogDialog?.location
+			if (!loc) return ''
+			return loc.type === 'folder' ? loc.folderpath : loc.mailbox_server
+		},
 		certificateDialogInfo() {
 			return this.certificateDialogClient?.certificate_info || {}
 		},
@@ -1498,6 +1898,7 @@ export default {
 				{ id: 'api', label: t('opencase', 'API') },
 				{ id: 'local_users', label: t('opencase', 'Lokale brugere') },
 				{ id: 'transaction_log', label: t('opencase', 'Transaktionslog') },
+				{ id: 'import', label: t('opencase', 'Import') },
 				{ id: 'export', label: t('opencase', 'Eksport') },
 			]
 		},
@@ -1556,6 +1957,7 @@ export default {
 		const certificateDatafordeler = loadState('opencase', 'certificateDatafordeler', { valid: false, error: 'not_found' })
 		const exportLog = loadState('opencase', 'exportLog', [])
 		const appVersion = loadState('opencase', 'appVersion', '')
+		const importLocations = loadState('opencase', 'importLocations', [])
 		return {
 			activeTab: 'serviceplatformen',
 			appVersion,
@@ -1609,6 +2011,8 @@ export default {
 			endpointPostforespoerg: config.endpoint_postforespoerg || '',
 			datafordelerEndpointCvr: config.datafordeler_endpoint_cvr || '',
 			datafordelerApikeyCvr: config.datafordeler_apikey_cvr || '',
+			datafordelerEndpointEstate: config.datafordeler_endpoint_estate || '',
+			datafordelerApikeyEstate: config.datafordeler_apikey_estate || '',
 			datafordelerEndpointCpr: config.datafordeler_endpoint_cpr || '',
 			certDatafordeler: certificateDatafordeler,
 			msofficeAddinName: config.msoffice_addin_name || 'OpenCase',
@@ -1667,6 +2071,24 @@ export default {
 			exportRunning: false,
 			exportRunResult: null,
 			exportRunError: '',
+			importLocations,
+			importLocationsError: '',
+			newFolder: { folderpath: '', file_extension_filter: '' },
+			addingFolder: false,
+			newMailbox: {
+				mailbox_server: '',
+				mailbox_port: '993',
+				mailbox_user: '',
+				mailbox_password: '',
+				mailbox_use_ssl: true,
+				file_extension_filter: '',
+			},
+			addingMailbox: false,
+			editMailboxDialog: null,
+			editMailboxSaving: false,
+			editMailboxError: '',
+			importLogDialog: null,
+			expandedImportItemId: null,
 		}
 	},
 	watch: {
@@ -1764,6 +2186,165 @@ export default {
 				console.error('Export failed', e)
 			} finally {
 				this.exportRunning = false
+			}
+		},
+		isImportLocationExpired(loc) {
+			return this.isTruthyFlag(loc.expired)
+		},
+		isTruthyFlag(value) {
+			return value === true || value === 1 || value === '1'
+		},
+		async addFolderLocation() {
+			this.importLocationsError = ''
+			this.addingFolder = true
+			try {
+				const response = await axios.post(
+					generateUrl('/apps/opencase/settings/import-locations/folder'),
+					{ ...this.newFolder },
+				)
+				this.importLocations = response.data.import_locations
+				this.newFolder = { folderpath: '', file_extension_filter: '' }
+			} catch (e) {
+				this.importLocationsError = t('opencase', 'Kunne ikke tilføje mappen')
+				console.error('Failed to add folder import location', e)
+			} finally {
+				this.addingFolder = false
+			}
+		},
+		async addMailboxLocation() {
+			this.importLocationsError = ''
+			this.addingMailbox = true
+			try {
+				const response = await axios.post(
+					generateUrl('/apps/opencase/settings/import-locations/mailbox'),
+					{ ...this.newMailbox },
+				)
+				this.importLocations = response.data.import_locations
+				this.newMailbox = {
+					mailbox_server: '',
+					mailbox_port: '993',
+					mailbox_user: '',
+					mailbox_password: '',
+					mailbox_use_ssl: true,
+					file_extension_filter: '',
+				}
+			} catch (e) {
+				this.importLocationsError = t('opencase', 'Kunne ikke tilføje mailboksen')
+				console.error('Failed to add mailbox import location', e)
+			} finally {
+				this.addingMailbox = false
+			}
+		},
+		async setImportLocationExpired(loc, expired) {
+			this.importLocationsError = ''
+			try {
+				const response = await axios.post(
+					generateUrl(`/apps/opencase/settings/import-locations/${loc.id}/expired`),
+					{ expired },
+				)
+				this.importLocations = response.data.import_locations
+			} catch (e) {
+				this.importLocationsError = t('opencase', 'Kunne ikke opdatere importstedet')
+				console.error('Failed to update import location expired flag', e)
+			}
+		},
+		async deleteImportLocation(loc) {
+			if (!window.confirm(t('opencase', 'Er du sikker på, at du vil slette dette importsted?'))) {
+				return
+			}
+			this.importLocationsError = ''
+			try {
+				const response = await axios.post(
+					generateUrl(`/apps/opencase/settings/import-locations/${loc.id}/delete`),
+				)
+				this.importLocations = response.data.import_locations
+			} catch (e) {
+				this.importLocationsError = t('opencase', 'Kunne ikke slette importstedet')
+				console.error('Failed to delete import location', e)
+			}
+		},
+		openEditMailbox(loc) {
+			this.editMailboxError = ''
+			this.editMailboxDialog = {
+				id: loc.id,
+				mailbox_server: loc.mailbox_server || '',
+				mailbox_port: loc.mailbox_port || '993',
+				mailbox_user: loc.mailbox_user || '',
+				mailbox_password: '',
+				mailbox_use_ssl: this.isTruthyFlag(loc.mailbox_use_ssl),
+				file_extension_filter: loc.file_extension_filter || '',
+			}
+		},
+		async saveEditMailbox() {
+			this.editMailboxError = ''
+			this.editMailboxSaving = true
+			try {
+				const { id, ...payload } = this.editMailboxDialog
+				const response = await axios.post(
+					generateUrl(`/apps/opencase/settings/import-locations/${id}/mailbox`),
+					payload,
+				)
+				this.importLocations = response.data.import_locations
+				this.editMailboxDialog = null
+			} catch (e) {
+				this.editMailboxError = t('opencase', 'Kunne ikke gemme mailboksen')
+				console.error('Failed to save mailbox import location', e)
+			} finally {
+				this.editMailboxSaving = false
+			}
+		},
+		async openImportLog(loc) {
+			this.expandedImportItemId = null
+			this.importLogDialog = { location: loc, items: [], loading: true, error: '' }
+			try {
+				const response = await axios.get(generateUrl(`/apps/opencase/settings/import-locations/${loc.id}/log`))
+				this.importLogDialog.items = response.data.items
+			} catch (e) {
+				this.importLogDialog.error = t('opencase', 'Kunne ikke hente importloggen')
+				console.error('Failed to load import location log', e)
+			} finally {
+				this.importLogDialog.loading = false
+			}
+		},
+		toggleImportLogDetails(itemId) {
+			this.expandedImportItemId = this.expandedImportItemId === itemId ? null : itemId
+		},
+		importStatusLabel(status) {
+			const labels = {
+				Processing: t('opencase', 'Under behandling'),
+				Processed: t('opencase', 'Behandlet'),
+				Failed: t('opencase', 'Fejlet'),
+			}
+			return labels[status] || status
+		},
+		separationSheetTypeLabel(type) {
+			const labels = {
+				'existing case': t('opencase', 'Eksisterende sag'),
+				'new case': t('opencase', 'Ny sag'),
+				'inbox case': t('opencase', 'Indbakkesag'),
+				attachment: t('opencase', 'Bilag'),
+			}
+			return labels[type] || type
+		},
+		parseFileStats(xml) {
+			try {
+				const doc = new DOMParser().parseFromString(xml, 'application/xml')
+				if (doc.querySelector('parsererror')) {
+					return null
+				}
+				return Array.from(doc.querySelectorAll('document')).map((docEl) => ({
+					id: docEl.getAttribute('id'),
+					case_id: docEl.getAttribute('case_id'),
+					separation_sheet: docEl.getAttribute('separation_sheet'),
+					separation_sheet_type: docEl.getAttribute('separation_sheet_type'),
+					files: Array.from(docEl.querySelectorAll('file')).map((fileEl) => ({
+						id: fileEl.getAttribute('id'),
+						pages: fileEl.getAttribute('pages'),
+					})),
+				}))
+			} catch (e) {
+				console.error('Failed to parse file_stats XML', e)
+				return null
 			}
 		},
 		async copyMsofficeRedirectUri() {
@@ -2470,5 +3051,36 @@ export default {
 
 .opencase-cert-dialog .opencase-cert-table td {
 	word-break: break-word;
+}
+
+.opencase-import-log {
+	padding: 12px 4px 4px;
+}
+
+.opencase-import-log-identification {
+	word-break: break-all;
+	max-width: 400px;
+}
+
+.opencase-import-log-details {
+	background-color: var(--color-background-hover);
+	padding: 12px 16px;
+}
+
+.opencase-import-log-doc {
+	margin-bottom: 12px;
+}
+
+.opencase-import-log-doc:last-child {
+	margin-bottom: 0;
+}
+
+.opencase-import-log-doc p {
+	margin: 0 0 4px;
+}
+
+.opencase-import-log-doc ul {
+	margin: 0;
+	padding-left: 20px;
 }
 </style>

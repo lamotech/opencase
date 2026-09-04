@@ -10,6 +10,7 @@ use OCP\IGroupManager;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCA\GroupFolders\Folder\FolderManager;
 use OCP\Constants;
+use OCP\IDBConnection;
 
 class OrganisationSyncService {
 
@@ -23,6 +24,7 @@ class OrganisationSyncService {
 		private IGroupManager $groups,
 		private FolderManager $folderManager,
 		private Configuration $configuration,
+		private IDBConnection $db,
 	) {
 		$this->teamfoldersEnabled = $this->configuration->getConfigValue('teamfolders_enable', '0') === '1';
 	}
@@ -67,20 +69,27 @@ class OrganisationSyncService {
 						}
 
 						if($folderId == 0) {
-							$groupId = 'org_' . strtolower($uuid);
+							[$legacyGroupId, $legacyFolderId] = $this->findLegacyGroupFolder($uuid);
+
+							$groupId = $legacyGroupId ?? ('org_' . strtolower($uuid));
 							if ($this->groups->get($groupId) === null) {
 								$group = $this->groups->createGroup($groupId);
 								$group->setDisplayName($name);
-							}		
-							$permissions = Constants::PERMISSION_READ | Constants::PERMISSION_UPDATE | Constants::PERMISSION_CREATE | Constants::PERMISSION_SHARE | Constants::PERMISSION_DELETE;
+							}
 
-							$folderId = $this->folderManager->createFolder($name);
+							if ($legacyFolderId !== null) {
+								$folderId = $legacyFolderId;
+							} else {
+								$permissions = Constants::PERMISSION_READ | Constants::PERMISSION_UPDATE | Constants::PERMISSION_CREATE | Constants::PERMISSION_SHARE | Constants::PERMISSION_DELETE;
 
-							$this->folderManager->addApplicableGroup($folderId, $groupId);
-							$this->folderManager->setGroupPermissions($folderId, $groupId, $permissions);
+								$folderId = $this->folderManager->createFolder($name);
+
+								$this->folderManager->addApplicableGroup($folderId, $groupId);
+								$this->folderManager->setGroupPermissions($folderId, $groupId, $permissions);
+							}
 
 							$this->repo->updateGroupFolder($uuid, $groupId, $folderId);
-						} 
+						}
 					}							
 				}
 
@@ -139,19 +148,50 @@ class OrganisationSyncService {
 		return [$email, $phone, $location];
 	}
 
+	private function findLegacyGroupFolder(string $uuid): array {
+		$legacyGroupId = null;
+		$legacyFolderId = null;
+
+		if ($this->db->tableExists('dkmunorg_org')) {
+			$qb = $this->db->getQueryBuilder();
+			$qb->select('nc_group_id', 'groupfolder_id')
+				->from('dkmunorg_org')
+				->where($qb->expr()->eq('org_uuid', $qb->createNamedParameter($uuid)));
+			$legacy = $qb->executeQuery()->fetch();
+
+			if ($legacy !== false) {
+				if (!empty($legacy['nc_group_id']) && $this->groups->groupExists($legacy['nc_group_id'])) {
+					$legacyGroupId = $legacy['nc_group_id'];
+				}
+				if (!empty($legacy['groupfolder_id']) && $this->folderManager->getFolder((int)$legacy['groupfolder_id']) !== null) {
+					$legacyFolderId = (int)$legacy['groupfolder_id'];
+				}
+			}
+		}
+
+		return [$legacyGroupId, $legacyFolderId];
+	}
+
 	public function createOrganisation(string $uuid, string $name, string $parentUuid): int {
 		if($this->teamfoldersEnabled) {
-			$groupId = 'org_' . strtolower($uuid);
+			[$legacyGroupId, $legacyFolderId] = $this->findLegacyGroupFolder($uuid);
+
+			$groupId = $legacyGroupId ?? ('org_' . strtolower($uuid));
 			if ($this->groups->get($groupId) === null) {
 				$group = $this->groups->createGroup($groupId);
 				$group->setDisplayName($name);
-			}		
-			$permissions = Constants::PERMISSION_READ | Constants::PERMISSION_UPDATE | Constants::PERMISSION_CREATE | Constants::PERMISSION_SHARE | Constants::PERMISSION_DELETE;
+			}
 
-			$folderId = $this->folderManager->createFolder($name);
+			if ($legacyFolderId !== null) {
+				$folderId = $legacyFolderId;
+			} else {
+				$permissions = Constants::PERMISSION_READ | Constants::PERMISSION_UPDATE | Constants::PERMISSION_CREATE | Constants::PERMISSION_SHARE | Constants::PERMISSION_DELETE;
 
-			$this->folderManager->addApplicableGroup($folderId, $groupId);
-			$this->folderManager->setGroupPermissions($folderId, $groupId, $permissions);
+				$folderId = $this->folderManager->createFolder($name);
+
+				$this->folderManager->addApplicableGroup($folderId, $groupId);
+				$this->folderManager->setGroupPermissions($folderId, $groupId, $permissions);
+			}
 		} else {
 			$folderId = 0;
 			$groupId = 0;

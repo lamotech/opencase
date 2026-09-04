@@ -4,6 +4,8 @@ Velkommen til **OpenCase**.
 
 OpenCase er et sags- og dokumenthåndteringssystem, der er udviklet som en app til Nextcloud. Systemet gør det nemt at samle sager, dokumenter og kommunikation ét sted, så information er let at finde og dele.
 
+![OpenCase](images/dashboard/opencase.png)
+
 Denne vejledning beskriver de funktioner, som almindelige brugere anvender i det daglige. Installation og konfiguration af OpenCase er beskrevet i **Administratorvejledningen**.
 
 ---

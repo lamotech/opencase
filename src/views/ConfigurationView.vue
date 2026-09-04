@@ -102,6 +102,75 @@
 			</div>
 		</div>
 
+		<!-- Separation sheets tab -->
+		<div v-if="activeTab === 'separationsheets'" class="opencase-configuration__content opencase-configuration__content--wide">
+			<div class="opencase-configuration__toolbar">
+				<NcButton type="primary" @click="openCreateSeparationSheet = true">
+					{{ t('opencase', 'Opret separationsark') }}
+				</NcButton>
+				<NcButton :disabled="creatingAttachmentSheet" @click="createAttachmentSheet">
+					<template v-if="creatingAttachmentSheet" #icon>
+						<NcLoadingIcon :size="20" />
+					</template>
+					{{ t('opencase', 'Generér og udskriv bilagsark (QR)') }}
+				</NcButton>
+			</div>
+
+			<NcLoadingIcon v-if="separationSheetsLoading" :size="32" />
+
+			<p v-else-if="separationSheets.length === 0" class="opencase-configuration__description">
+				{{ t('opencase', 'Ingen separationsark oprettet endnu.') }}
+			</p>
+
+			<table v-else class="opencase-configuration__table">
+				<thead>
+					<tr>
+						<th>{{ t('opencase', 'Navn') }}</th>
+						<th>{{ t('opencase', 'Type') }}</th>
+						<th>{{ t('opencase', 'Sag / titel') }}</th>
+						<th></th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr v-for="sheet in separationSheets" :key="sheet.id">
+						<td>{{ sheet.name }}</td>
+						<td>{{ separationSheetTypeLabel(sheet.type) }}</td>
+						<td>
+							<span v-if="sheet.case_number">{{ sheet.case_number }} – </span>{{ sheet.title }}
+						</td>
+						<td>
+							<div class="opencase-configuration__row-actions">
+								<NcButton :disabled="printingSheetId === sheet.id" @click="printSeparationSheet(sheet)">
+									<template v-if="printingSheetId === sheet.id" #icon>
+										<NcLoadingIcon :size="20" />
+									</template>
+									{{ t('opencase', 'Generér og udskriv PDF') }}
+								</NcButton>
+								<NcButton v-if="isEditableSeparationSheet(sheet)" @click="editSeparationSheet(sheet)">
+									{{ t('opencase', 'Rediger') }}
+								</NcButton>
+								<NcButton type="error"
+									:disabled="deletingSheetId === sheet.id"
+									@click="deleteSeparationSheet(sheet)">
+									<template v-if="deletingSheetId === sheet.id" #icon>
+										<NcLoadingIcon :size="20" />
+									</template>
+									{{ t('opencase', 'Slet') }}
+								</NcButton>
+							</div>
+						</td>
+					</tr>
+				</tbody>
+			</table>
+
+			<CreateSeparationSheetDialog v-if="openCreateSeparationSheet || editingSheet"
+				:key="editingSheet ? `edit-${editingSheet.id}` : 'create'"
+				:sheet="editingSheet"
+				@close="closeSeparationSheetDialog"
+				@created="onSeparationSheetCreated"
+				@updated="onSeparationSheetUpdated" />
+		</div>
+
 		<CodeListDialog v-if="openList"
 			:list="openList.list"
 			:title="openList.label"
@@ -118,14 +187,26 @@ import NcSelect from '@nextcloud/vue/components/NcSelect'
 import { showError, showSuccess } from '@nextcloud/dialogs'
 import OverflowTabs from '../components/OverflowTabs.vue'
 import CodeListDialog from '../components/CodeListDialog.vue'
+import CreateSeparationSheetDialog from '../components/CreateSeparationSheetDialog.vue'
+import { generateAndPrintSeparationSheetPdf } from '../utils/generateSeparationSheetPdf.js'
 import api from '../services/api.js'
+
+const SEPARATION_SHEET_TYPE_LABELS = {
+	'existing case': 'Eksisterende sag',
+	'new case': 'Ny sag',
+	'inbox case': 'Indbakkesag',
+	attachment: 'Bilag',
+}
+
+// "attachment" sheets carry no values, so there is nothing to edit after printing
+const EDITABLE_SEPARATION_SHEET_TYPES = ['existing case', 'new case', 'inbox case']
 
 const SETTINGS_KEYS = ['case_number_mask', 'search_max_result_count', 'search_page_size', 'history_count']
 
 export default {
 	name: 'ConfigurationView',
 
-	components: { NcButton, NcTextField, NcLoadingIcon, NcSelect, OverflowTabs, CodeListDialog },
+	components: { NcButton, NcTextField, NcLoadingIcon, NcSelect, OverflowTabs, CodeListDialog, CreateSeparationSheetDialog },
 
 	data() {
 		return {
@@ -134,6 +215,7 @@ export default {
 				{ id: 'settings', label: t('opencase', 'Indstillinger') },
 				{ id: 'codelists', label: t('opencase', 'Værdilister') },
 				{ id: 'incoming', label: t('opencase', 'Indkommende dokumenter') },
+				{ id: 'separationsheets', label: t('opencase', 'Separationsark') },
 			],
 
 			// Settings tab
@@ -165,6 +247,15 @@ export default {
 			selectedIncomingKle: null,
 			selectedIncomingFacet: null,
 			selectedIncomingInsightLevel: null,
+
+			// Separation sheets tab
+			separationSheetsLoading: true,
+			separationSheets: [],
+			openCreateSeparationSheet: false,
+			editingSheet: null,
+			printingSheetId: null,
+			deletingSheetId: null,
+			creatingAttachmentSheet: false,
 		}
 	},
 
@@ -237,9 +328,95 @@ export default {
 			this.loadingSettings = false
 			this.incomingLoading = false
 		}
+
+		this.fetchSeparationSheets()
 	},
 
 	methods: {
+		// ── Separation sheets tab ───────────────────────────────────────
+		async fetchSeparationSheets() {
+			this.separationSheetsLoading = true
+			try {
+				this.separationSheets = await api.getSeparationSheets()
+			} catch (e) {
+				showError(t('opencase', 'Kunne ikke hente separationsark'))
+			} finally {
+				this.separationSheetsLoading = false
+			}
+		},
+
+		separationSheetTypeLabel(type) {
+			return t('opencase', SEPARATION_SHEET_TYPE_LABELS[type] || type)
+		},
+
+		isEditableSeparationSheet(sheet) {
+			return EDITABLE_SEPARATION_SHEET_TYPES.includes(sheet.type)
+		},
+
+		editSeparationSheet(sheet) {
+			this.editingSheet = sheet
+		},
+
+		closeSeparationSheetDialog() {
+			this.openCreateSeparationSheet = false
+			this.editingSheet = null
+		},
+
+		onSeparationSheetCreated(sheet) {
+			this.separationSheets.unshift(sheet)
+			this.closeSeparationSheetDialog()
+		},
+
+		onSeparationSheetUpdated(sheet) {
+			const index = this.separationSheets.findIndex(s => s.id === sheet.id)
+			if (index !== -1) {
+				this.separationSheets.splice(index, 1, sheet)
+			}
+			this.closeSeparationSheetDialog()
+			showSuccess(t('opencase', 'Separationsark gemt'))
+		},
+
+		async deleteSeparationSheet(sheet) {
+			if (!window.confirm(t('opencase', 'Er du sikker på, at du vil slette separationsarket "{name}"?', { name: sheet.name }))) {
+				return
+			}
+
+			this.deletingSheetId = sheet.id
+			try {
+				await api.deleteSeparationSheet(sheet.id)
+				this.separationSheets = this.separationSheets.filter(s => s.id !== sheet.id)
+				showSuccess(t('opencase', 'Separationsark slettet'))
+			} catch (e) {
+				showError(t('opencase', 'Kunne ikke slette separationsark'))
+			} finally {
+				this.deletingSheetId = null
+			}
+		},
+
+		async printSeparationSheet(sheet) {
+			this.printingSheetId = sheet.id
+			try {
+				await generateAndPrintSeparationSheetPdf(sheet)
+			} catch (e) {
+				showError(t('opencase', 'Kunne ikke generere PDF'))
+			} finally {
+				this.printingSheetId = null
+			}
+		},
+
+		async createAttachmentSheet() {
+			this.creatingAttachmentSheet = true
+			try {
+				const sheet = await api.createSeparationSheet({ type: 'attachment' })
+				this.separationSheets.unshift(sheet)
+				await generateAndPrintSeparationSheetPdf(sheet)
+			} catch (e) {
+				showError(t('opencase', 'Kunne ikke oprette bilagsark'))
+			} finally {
+				this.creatingAttachmentSheet = false
+			}
+		},
+
 		// ── Settings tab ──────────────────────────────────────────────
 		async saveSettings() {
 			this.savingSettings = true
@@ -248,6 +425,15 @@ export default {
 				for (const entry of changed) {
 					await api.updateConfigValue(entry.key, this.settingsDraft[entry.key])
 					entry.value = this.settingsDraft[entry.key]
+
+					// searchPageSize/searchMaxResultCount are cached in the Vuex
+					// store from page-load initial state — apply a changed value
+					// live so already-open search views pick it up without a reload.
+					if (entry.key === 'search_page_size') {
+						this.$store.commit('SET_SEARCH_PAGE_SIZE', parseInt(entry.value, 10) || 50)
+					} else if (entry.key === 'search_max_result_count') {
+						this.$store.commit('SET_SEARCH_MAX_RESULT_COUNT', parseInt(entry.value, 10) || 500)
+					}
 				}
 				showSuccess(t('opencase', 'Konfiguration gemt'))
 			} catch (e) {
@@ -340,6 +526,34 @@ export default {
 
 .opencase-configuration__content {
 	max-width: 600px;
+}
+
+.opencase-configuration__content--wide {
+	max-width: 900px;
+}
+
+.opencase-configuration__toolbar {
+	display: flex;
+	gap: 8px;
+	margin-bottom: 16px;
+}
+
+.opencase-configuration__table {
+	width: 100%;
+	border-collapse: collapse;
+}
+
+.opencase-configuration__table th,
+.opencase-configuration__table td {
+	text-align: left;
+	padding: 8px 12px;
+	border-bottom: 1px solid var(--color-border);
+}
+
+.opencase-configuration__row-actions {
+	display: flex;
+	gap: 8px;
+	align-items: center;
 }
 
 .opencase-configuration__settings {

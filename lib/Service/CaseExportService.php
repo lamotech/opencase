@@ -10,6 +10,7 @@ use OCA\OpenCase\Db\AccessProfileMapper;
 use OCA\OpenCase\Db\AuditLogEntry;
 use OCA\OpenCase\Db\AuditLogMapper;
 use OCA\OpenCase\Db\CaseEntity;
+use OCA\OpenCase\Db\CaseEstateMapper;
 use OCA\OpenCase\Db\CaseMapper;
 use OCA\OpenCase\Db\CaseParticipantMapper;
 use OCA\OpenCase\Db\CaseStatusMapper;
@@ -26,6 +27,7 @@ use OCA\OpenCase\Db\DocumentNoteMapper;
 use OCA\OpenCase\Db\DocumentStatusMapper;
 use OCA\OpenCase\Db\DocWorkflowMapper;
 use OCA\OpenCase\Db\DocWorkflowStepMapper;
+use OCA\OpenCase\Db\EstateRoleMapper;
 use OCA\OpenCase\Db\ExportLogEntry;
 use OCA\OpenCase\Db\ExportLogMapper;
 use OCA\OpenCase\Db\FileMapper;
@@ -72,6 +74,8 @@ class CaseExportService {
     public function __construct(
         private CaseMapper $caseMapper,
         private CaseParticipantMapper $caseParticipantMapper,
+        private CaseEstateMapper $caseEstateMapper,
+        private EstateRoleMapper $estateRoleMapper,
         private JournalNoteMapper $journalNoteMapper,
         private CaseWorkerMapper $caseWorkerMapper,
         private DocumentMapper $documentMapper,
@@ -180,11 +184,13 @@ class CaseExportService {
         $contactRoleNames     = $this->contactRoleMapper->getNameMap(self::LOOKUP_LANGUAGE);
         $documentStatusNames  = $this->documentStatusMapper->getNameMap(self::LOOKUP_LANGUAGE);
         $documentCategoryNames = $this->documentCategoryMapper->getNameMap(self::LOOKUP_LANGUAGE);
+        $estateRoleNames      = $this->estateRoleMapper->getNameMap(self::LOOKUP_LANGUAGE);
 
         $this->appendFields($doc, $caseEl, $this->caseFields($case, $now));
         $this->appendParticipants($doc, $caseEl, $case->getId(), $participantRoleNames);
         $this->appendJournalNotes($doc, $caseEl, $case->getId());
         $this->appendCaseworkers($doc, $caseEl, $case->getId());
+        $this->appendEstates($doc, $caseEl, $case->getId(), $estateRoleNames);
 
         $documentsEl = $doc->createElementNS(self::NS, 'Documents');
         $caseEl->appendChild($documentsEl);
@@ -403,6 +409,43 @@ class CaseExportService {
                 'UserId'        => $cw->getUserId(),
                 'DisplayName'   => $this->displayName($cw->getUserId()),
                 'PriorCanWrite' => $this->intOrNull($cw->getPriorCanWrite()),
+            ];
+        }
+        return $result;
+    }
+
+    /** @param array<int, string> $roleNames */
+    private function appendEstates(DOMDocument $doc, DOMElement $caseEl, int $caseId, array $roleNames): void {
+        $wrapEl = $doc->createElementNS(self::NS, 'Estates');
+        $caseEl->appendChild($wrapEl);
+
+        foreach ($this->estateFields($caseId, $roleNames) as $fields) {
+            $el = $doc->createElementNS(self::NS, 'Estate');
+            $wrapEl->appendChild($el);
+            $this->appendFields($doc, $el, $fields);
+        }
+    }
+
+    /**
+     * Build the EstateType field maps for a case's linked estates, matching
+     * appinfo/schema/case-export.xsd. Shared by the closed-case export and
+     * the public data API's single-case lookup.
+     *
+     * @param array<int, string>|null $roleNames
+     * @return list<array<string, string|null>>
+     */
+    public function estateFields(int $caseId, ?array $roleNames = null): array {
+        $roleNames ??= $this->estateRoleMapper->getNameMap(self::LOOKUP_LANGUAGE);
+
+        $result = [];
+        foreach ($this->caseEstateMapper->findRawEstatesByCase($caseId) as $row) {
+            $roleId = $row['role_id'] !== null ? (int)$row['role_id'] : null;
+            $result[] = [
+                'RoleId'          => $this->intOrNull($roleId),
+                'RoleName'        => $roleId !== null ? ($roleNames[$roleId] ?? null) : null,
+                'Type'            => $row['type'],
+                'BfeNumber'       => $this->intOrNull($row['bfenummer'] !== null ? (int)$row['bfenummer'] : null),
+                'LocationAddress' => $row['apt_location_address'] ?: $row['bld_location_address'] ?: $row['agg_location_address'],
             ];
         }
         return $result;

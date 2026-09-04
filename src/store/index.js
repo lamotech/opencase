@@ -7,6 +7,8 @@ export default createStore({
 		// Search pagination settings (from server config)
 		searchPageSize: loadState('opencase', 'search_page_size', 50),
 		searchMaxResultCount: loadState('opencase', 'search_max_result_count', 500),
+		// Whether Enterprise features (Datafordeler access) are enabled on this instance
+		enterpriseVersionEnabled: loadState('opencase', 'enterprise_version_enabled', false),
 		// Enterprise Digital Post feature (from server config: enterprise_version)
 		digitalPostEnabled: loadState('opencase', 'digital_post_enabled', false),
 		// Enterprise Datafordeler CPR (citizen) search (from server config: enterprise_version)
@@ -73,6 +75,18 @@ export default createStore({
 	},
 
 	mutations: {
+		// The initial values come from loadState() (server-rendered at page
+		// load) — these mutations let ConfigurationView.vue apply a changed
+		// search_page_size/search_max_result_count immediately, without
+		// requiring a full page reload to pick up the new config value.
+		SET_SEARCH_PAGE_SIZE(state, value) {
+			state.searchPageSize = value
+		},
+
+		SET_SEARCH_MAX_RESULT_COUNT(state, value) {
+			state.searchMaxResultCount = value
+		},
+
 		SET_IS_ADMINISTRATOR(state, value) {
 			state.isAdministrator = value
 		},

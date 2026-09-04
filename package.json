@@ -24,6 +24,7 @@
     "@tiptap/starter-kit": "^3.27.1",
     "@tiptap/vue-3": "^3.27.1",
     "jspdf": "^4.2.1",
+    "qrcode": "^1.5.4",
     "vue": "^3.5.18",
     "vue-material-design-icons": "^5.3.0",
     "vue-router": "^5.1.0",

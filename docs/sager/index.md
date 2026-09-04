@@ -8,6 +8,7 @@ En sag kan eksempelvis omhandle:
 - En borger
 - En virksomhed
 - En medarbejder
+- En ejendom
 
 Når en sag er oprettet, kan du løbende tilføje dokumenter, registrere journalnotater, invitere andre sagsbehandlere og administrere adgangen til sagen.
 

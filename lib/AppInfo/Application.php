@@ -9,6 +9,7 @@ use OCA\OpenCase\BackgroundJob\DispatchDigitalPostJob;
 use OCA\OpenCase\BackgroundJob\ExportClosedCasesJob;
 use OCA\OpenCase\BackgroundJob\ProcessDigitalPostReceivementsJob;
 use OCA\OpenCase\BackgroundJob\ProcessDistributionReceivementsJob;
+use OCA\OpenCase\BackgroundJob\ProcessImportsJob;
 use OCA\OpenCase\BackgroundJob\ProcessMessageReceivementsJob;
 use OCA\OpenCase\BackgroundJob\IndexFileJob;
 use OCA\OpenCase\BackgroundJob\SyncFilecache;
@@ -237,6 +238,10 @@ class Application extends App implements IBootstrap {
 		}
 		if (!$jobList->has(ExportClosedCasesJob::class, null)) {
 			$jobList->add(ExportClosedCasesJob::class);
+		}
+		// ProcessImportsJob is a basic/community-edition job (not Enterprise-gated).
+		if (!$jobList->has(ProcessImportsJob::class, null)) {
+			$jobList->add(ProcessImportsJob::class);
 		}
 
         // Register the virtual mount provider so "Sager/" appears in every

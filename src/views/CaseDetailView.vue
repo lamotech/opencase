@@ -230,6 +230,11 @@
 				<AccessRequestListView :case-id="caseData.id" />
 			</div>
 
+			<!-- Ejendomme tab -->
+			<div v-if="activeTab === 'estates'" class="opencase-case-detail__content">
+				<CaseEstateList :case-id="caseData.id" @count-changed="estatesCount = $event" />
+			</div>
+
 			<!-- New document dialog -->
 			<NewDocumentDialog v-if="showNewDocDialog"
 				:case-id="caseData.id"
@@ -302,6 +307,7 @@ import SitemapOutlineIcon from 'vue-material-design-icons/SitemapOutline.vue'
 import AccountIcon from 'vue-material-design-icons/Account.vue'
 import OfficeBuildingIcon from 'vue-material-design-icons/OfficeBuilding.vue'
 import FileEyeOutlineIcon from 'vue-material-design-icons/FileEyeOutline.vue'
+import HomeCityIcon from 'vue-material-design-icons/HomeCity.vue'
 
 import CaseStatusBadge from '../components/CaseStatusBadge.vue'
 import DocumentList from '../components/DocumentList.vue'
@@ -326,6 +332,7 @@ import NewAccessRequestDialog from '../components/NewAccessRequestDialog.vue'
 import AccessRequestListView from './AccessRequestListView.vue'
 import ReminderDialog from '../components/ReminderDialog.vue'
 import ReminderList from '../components/ReminderList.vue'
+import CaseEstateList from '../components/CaseEstateList.vue'
 
 import api from '../services/api.js'
 import { showError, showSuccess } from '@nextcloud/dialogs'
@@ -380,6 +387,8 @@ export default {
 		FileEyeOutlineIcon,
 		NewAccessRequestDialog,
 		AccessRequestListView,
+		HomeCityIcon,
+		CaseEstateList,
 	},
 
 	props: {
@@ -391,7 +400,7 @@ export default {
 
 	data() {
 		const hashTab = window.location.hash.replace('#tab-', '')
-		const validCaseTabs = ['info', 'documents', 'files', 'participants', 'journalnotes', 'caseworkers', 'log', 'access', 'hierarchy', 'access_requests']
+		const validCaseTabs = ['info', 'documents', 'files', 'participants', 'journalnotes', 'caseworkers', 'log', 'access', 'hierarchy', 'access_requests', 'estates']
 		return {
 			loading: true,
 			activeTab: validCaseTabs.includes(hashTab) ? hashTab : 'info',
@@ -402,6 +411,7 @@ export default {
 			showAccessRequestDialog: false,
 			accessRequestsCount: null,
 			hasHierarchy: false,
+			estatesCount: null,
 			showReminderDialog: false,
 			journalNotes: [],
 			journalNotesLoading: false,
@@ -451,6 +461,9 @@ export default {
 			if (this.accessRequestsCount) {
 				tabs.push({ id: 'access_requests', label: t('opencase', 'Aktindsigt'), count: this.accessRequestsCount, icon: FileEyeOutlineIcon })
 			}
+			if (this.estatesCount) {
+				tabs.push({ id: 'estates', label: t('opencase', 'Ejendomme'), count: this.estatesCount, icon: HomeCityIcon })
+			}
 			return tabs
 		},
 	},
@@ -459,15 +472,26 @@ export default {
 		this._onAiJournalNotesChanged = () => { this.loadJournalNotes() }
 		this._onAiCaseworkersChanged = () => { this.$refs.caseworkerList?.load() }
 		this._onAiGrantsChanged = () => { this.$refs.accessPanel?.loadGrants() }
+		// add_estate_participant links the estate after this view has already
+		// loaded (and, for a freshly AI-created case, after the router push that
+		// mounted it) — without this, the Ejendomme tab (only shown when
+		// estatesCount is truthy) wouldn't appear until a manual page reload.
+		this._onAiParticipantsChanged = (caseId) => {
+			if (String(caseId) === String(this.id)) {
+				api.getCaseEstates(this.id).then(r => { this.estatesCount = r.length }).catch(() => {})
+			}
+		}
 		eventBus.on('ai:journal-notes-changed', this._onAiJournalNotesChanged)
 		eventBus.on('ai:caseworkers-changed', this._onAiCaseworkersChanged)
 		eventBus.on('ai:grants-changed', this._onAiGrantsChanged)
+		eventBus.on('ai:participants-changed', this._onAiParticipantsChanged)
 	},
 
 	beforeUnmount() {
 		eventBus.off('ai:journal-notes-changed', this._onAiJournalNotesChanged)
 		eventBus.off('ai:caseworkers-changed', this._onAiCaseworkersChanged)
 		eventBus.off('ai:grants-changed', this._onAiGrantsChanged)
+		eventBus.off('ai:participants-changed', this._onAiParticipantsChanged)
 	},
 
 	watch: {
@@ -518,6 +542,7 @@ export default {
 					api.getAccessRequests(this.id).then(r => { this.accessRequestsCount = r.access_requests?.length ?? null }).catch(() => {}),
 					api.getCaseReminders(this.id).then(r => { this.reminders = r }).catch(() => {}),
 					api.getCaseHierarchy(this.id).then(tree => { this.hasHierarchy = !!tree }).catch(() => {}),
+					api.getCaseEstates(this.id).then(r => { this.estatesCount = r.length }).catch(() => {}),
 				])
 			} catch (e) {
 				showError(t('opencase', 'Kunne ikke indlæse sagen'))

@@ -228,7 +228,22 @@ OC.L10N.register(
         "Graph app (client) ID": "Graph app-id (client ID)",
         "Graph tenant ID": "Graph tenant-id",
         "Lokale brugere": "Lokale Nextcloud-brugere",
-        "Both values are public identifiers (not secrets) for a browser-based app registration — safe to ship in client-side JS. Leave empty to disable Graph fallback; the desktop apps are unaffected either way.": "Begge værdier er offentlige identifikatorer (ikke hemmeligheder) for en browserbaseret app-registrering — det er trygt at inkludere dem i klient-side JS. Lad felterne stå tomme for at deaktivere Graph-fallback; skrivebordsapp'erne påvirkes ikke uanset hvad."
+        "Both values are public identifiers (not secrets) for a browser-based app registration — safe to ship in client-side JS. Leave empty to disable Graph fallback; the desktop apps are unaffected either way.": "Begge værdier er offentlige identifikatorer (ikke hemmeligheder) for en browserbaseret app-registrering — det er trygt at inkludere dem i klient-side JS. Lad felterne stå tomme for at deaktivere Graph-fallback; skrivebordsapp'erne påvirkes ikke uanset hvad.",
+        "API key for estate service": "API nøgle til ejendomsservice",
+        "Endpoint for adresse service": "Endpoint for adresseservice",
+        "Endpoint for bruger service": "Endpoint for brugerservice",
+        "Endpoint for CPR service": "Endpoint for CPR-service",
+        "Endpoint for estate service": "Endpoint for ejendomsservice",
+        "Endpoint for organisation enhed service": "Endpoint for organisationsenhedsservice",
+        "Endpoint for organisation function service": "Endpoint for organisationsfunktionsservice",
+        "Endpoint for person service": "Endpoint for personservice",
+        "not installed (recommended)": "ikke installeret (anbefalet)",
+        "Settings for estate (BFE) service integration.": "Indstillinger for integration med ejendomsservice (BFE).",
+        "Settings for fordelingskomponent integration.": "Indstillinger for integration med Fordelingskomponent.",
+        "Settings for Serviceplatformen integration.": "Indstillinger for integration med Serviceplatformen.",
+        "Syntax:": "Syntaks:",
+        "Upload failed": "Upload fejlede",
+        "Uploading...": "Uploader..."
     },
     "{}"
 );

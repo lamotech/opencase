@@ -11,6 +11,7 @@ class UserOrgMapper {
 
     public function __construct(
         private IDBConnection $db,
+        private UserInfoMapper $userInfoMapper,
     ) {}
 
     /**
@@ -79,13 +80,14 @@ class UserOrgMapper {
         }
 
         // Insert new or update changed rows
+        $userId = $this->userInfoMapper->findByUuid($userUuid)?->getUserId();
         foreach ($incoming as $orgUuid => $role) {
             if (!isset($existing[$orgUuid])) {
                 $qb = $this->db->getQueryBuilder();
                 $qb->insert('opencase_userorgs')
                     ->values([
                         'user_uuid' => $qb->createNamedParameter($userUuid),
-                        'user_id'   => $qb->createNamedParameter('opencase_' . $userUuid),
+                        'user_id'   => $qb->createNamedParameter($userId),
                         'org_uuid'  => $qb->createNamedParameter($orgUuid),
                         'role'      => $qb->createNamedParameter($role),
                     ]);

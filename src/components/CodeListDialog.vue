@@ -87,7 +87,7 @@ import { showError, showSuccess } from '@nextcloud/dialogs'
 import { getLanguage } from '@nextcloud/l10n'
 import api from '../services/api.js'
 
-const PRIMARY_PARTICIPANT_VALUES = ['None', 'Citizen', 'Company', 'Employee']
+const PRIMARY_PARTICIPANT_VALUES = ['None', 'Citizen', 'Company', 'Employee', 'Estate']
 
 function blankRow(hasPP) {
 	return { da: '', en: '', expired: false, ...(hasPP ? { primary_participant: 'None' } : {}) }
@@ -121,8 +121,8 @@ export default {
 		},
 		primaryParticipantOptions() {
 			const labels = this.danish
-				? { None: 'Ingen', Citizen: 'Borger', Company: 'Virksomhed', Employee: 'Medarbejder' }
-				: { None: 'None', Citizen: 'Citizen', Company: 'Company', Employee: 'Employee' }
+				? { None: 'Ingen', Citizen: 'Borger', Company: 'Virksomhed', Employee: 'Medarbejder', Estate: 'Ejendom' }
+				: { None: 'None', Citizen: 'Citizen', Company: 'Company', Employee: 'Employee', Estate: 'Estate' }
 			return PRIMARY_PARTICIPANT_VALUES.map(id => ({ id, label: labels[id] }))
 		},
 	},

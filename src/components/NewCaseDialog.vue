@@ -77,14 +77,39 @@
 			</div>
 		</div>
 
-		<!-- Required participant picker (case type dictates a primary citizen/company/employee) -->
-		<div v-else-if="requiresCitizen || requiresCompany || requiresEmployee" class="ncd-field">
-			<NcButton @click="requiresCitizen ? (showSelectCitizenDialog = true) : requiresCompany ? (showSelectCompanyDialog = true) : (showSelectEmployeeDialog = true)">
+		<!-- Estate context card -->
+		<div v-else-if="selectedEstate" class="ncd-citizen-card">
+			<div class="ncd-citizen-card__title">
+				<HomeGroupIcon v-if="selectedEstate.apartment" :size="22" />
+				<HomeVariantIcon v-else-if="selectedEstate.building_land_by_other" :size="22" />
+				<HomeCityIcon v-else :size="22" />
+				<span>{{ estateLocationAddress || t('opencase', 'Ejendom') }}</span>
+			</div>
+			<div class="ncd-citizen-card__fields">
+				<div class="ncd-citizen-card__field">
+					<span class="ncd-citizen-card__label">{{ t('opencase', 'Type') }}</span>
+					<span>{{ selectedEstate.type }}</span>
+				</div>
+				<div class="ncd-citizen-card__field">
+					<span class="ncd-citizen-card__label">{{ t('opencase', 'BFE Nummer') }}</span>
+					<span class="ncd-citizen-card__mono">{{ selectedEstate.bfenummer }}</span>
+				</div>
+				<div class="ncd-citizen-card__field">
+					<span class="ncd-citizen-card__label">{{ t('opencase', 'Beliggenhedsadresse') }}</span>
+					<span>{{ estateLocationAddress || '–' }}</span>
+				</div>
+			</div>
+		</div>
+
+		<!-- Required participant picker (case type dictates a primary citizen/company/employee/estate) -->
+		<div v-else-if="requiresCitizen || requiresCompany || requiresEmployee || requiresEstate" class="ncd-field">
+			<NcButton @click="requiresCitizen ? (showSelectCitizenDialog = true) : requiresCompany ? (showSelectCompanyDialog = true) : requiresEmployee ? (showSelectEmployeeDialog = true) : (showSelectEstateDialog = true)">
 				<template #icon>
 					<AccountIcon v-if="requiresCitizen || requiresEmployee" :size="20" />
+					<HomeCityIcon v-else-if="requiresEstate" :size="20" />
 					<OfficeBuildingIcon v-else :size="20" />
 				</template>
-				{{ requiresCitizen ? t('opencase', 'Vælg borger') : requiresCompany ? t('opencase', 'Vælg virksomhed') : t('opencase', 'Vælg medarbejder') }}
+				{{ requiresCitizen ? t('opencase', 'Vælg borger') : requiresCompany ? t('opencase', 'Vælg virksomhed') : requiresEmployee ? t('opencase', 'Vælg medarbejder') : t('opencase', 'Vælg ejendom') }}
 			</NcButton>
 			<span v-if="errors.participant" class="ncd-field__error">{{ errors.participant }}</span>
 		</div>
@@ -266,6 +291,10 @@
 	<SelectEmployeeDialog v-if="showSelectEmployeeDialog"
 		@selected="onEmployeeSelected"
 		@close="showSelectEmployeeDialog = false" />
+
+	<SelectEstateDialog v-if="showSelectEstateDialog"
+		@selected="onEstateSelected"
+		@close="showSelectEstateDialog = false" />
 </div>
 </template>
 
@@ -277,6 +306,9 @@ import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import AccountIcon from 'vue-material-design-icons/Account.vue'
 import OfficeBuildingIcon from 'vue-material-design-icons/OfficeBuilding.vue'
+import HomeCityIcon from 'vue-material-design-icons/HomeCity.vue'
+import HomeGroupIcon from 'vue-material-design-icons/HomeGroup.vue'
+import HomeVariantIcon from 'vue-material-design-icons/HomeVariant.vue'
 import InformationOutlineIcon from 'vue-material-design-icons/InformationOutline.vue'
 import AccountMultipleOutlineIcon from 'vue-material-design-icons/AccountMultipleOutline.vue'
 import AccountCogOutlineIcon from 'vue-material-design-icons/AccountCogOutline.vue'
@@ -303,6 +335,7 @@ import ManualCitizenDialog from './ManualCitizenDialog.vue'
 import SelectCompanyDialog from './SelectCompanyDialog.vue'
 import ManualCompanyDialog from './ManualCompanyDialog.vue'
 import SelectEmployeeDialog from './SelectEmployeeDialog.vue'
+import SelectEstateDialog from './SelectEstateDialog.vue'
 import OverflowTabs from './OverflowTabs.vue'
 import CaseParticipantList from './CaseParticipantList.vue'
 import CaseCaseworkerList from './CaseCaseworkerList.vue'
@@ -312,7 +345,8 @@ export default {
 
 	components: {
 		NcDialog, NcButton, NcTextField, NcSelect, NcLoadingIcon, AccountIcon, OfficeBuildingIcon, CprDisplay,
-		SelectCitizenDialog, ManualCitizenDialog, SelectCompanyDialog, ManualCompanyDialog, SelectEmployeeDialog,
+		HomeCityIcon, HomeGroupIcon, HomeVariantIcon,
+		SelectCitizenDialog, ManualCitizenDialog, SelectCompanyDialog, ManualCompanyDialog, SelectEmployeeDialog, SelectEstateDialog,
 		OverflowTabs, CaseParticipantList, CaseCaseworkerList,
 		EditorContent,
 		FormatBoldIcon, FormatItalicIcon, FormatUnderlineIcon,
@@ -324,6 +358,7 @@ export default {
 		citizen: { type: Object, default: null },
 		company: { type: Object, default: null },
 		employee: { type: Object, default: null },
+		estate: { type: Object, default: null },
 		caseType: { type: Object, default: null },
 	},
 
@@ -364,9 +399,11 @@ export default {
 			pickedParticipant: null,
 			pickedParticipantIsCompany: false,
 			pickedEmployee: null,
+			pickedEstate: null,
 			showSelectCitizenDialog: false,
 			showSelectCompanyDialog: false,
 			showSelectEmployeeDialog: false,
+			showSelectEstateDialog: false,
 			activeTab: 'info',
 			participantsCount: null,
 			caseworkersCount: null,
@@ -409,6 +446,18 @@ export default {
 		},
 		requiresEmployee() {
 			return this.caseType?.primary_participant === 'Employee' && !this.selectedEmployee
+		},
+		selectedEstate() {
+			return this.estate || this.pickedEstate
+		},
+		requiresEstate() {
+			return this.caseType?.primary_participant === 'Estate' && !this.selectedEstate
+		},
+		estateLocationAddress() {
+			return this.selectedEstate?.apartment?.location_address
+				|| this.selectedEstate?.building_land_by_other?.location_address
+				|| this.selectedEstate?.aggregated_estate?.location_address
+				|| null
 		},
 		dialogTitle() {
 			return this.caseType
@@ -526,6 +575,11 @@ export default {
 			if (this.errors.participant) delete this.errors.participant
 		},
 
+		onEstateSelected(estate) {
+			this.pickedEstate = estate
+			if (this.errors.participant) delete this.errors.participant
+		},
+
 		/**
 		 * Editor HTML, or '' when the user left the summary untouched —
 		 * TipTap serialises an empty document as '<p></p>'.
@@ -546,6 +600,7 @@ export default {
 			if (this.requiresCitizen) this.errors.participant = t('opencase', 'Vælg en borger')
 			if (this.requiresCompany) this.errors.participant = t('opencase', 'Vælg en virksomhed')
 			if (this.requiresEmployee) this.errors.participant = t('opencase', 'Vælg en medarbejder')
+			if (this.requiresEstate) this.errors.participant = t('opencase', 'Vælg en ejendom')
 			return Object.keys(this.errors).length === 0
 		},
 
@@ -593,6 +648,14 @@ export default {
 						})
 					} catch (e) {
 						showError(t('opencase', 'Sag oprettet, men parten kunne ikke tilføjes'))
+					}
+				}
+
+				if (this.selectedEstate) {
+					try {
+						await api.linkCaseEstate(created.id, this.selectedEstate, 1) // 1 = Primær ejendom
+					} catch (e) {
+						showError(t('opencase', 'Sag oprettet, men ejendommen kunne ikke tilknyttes'))
 					}
 				}
 

@@ -14,6 +14,7 @@ import CaseFieldSearchView from '../views/CaseFieldSearchView.vue'
 import DocumentFieldSearchView from '../views/DocumentFieldSearchView.vue'
 import CitizenSearchView from '../views/CitizenSearchView.vue'
 import CompanySearchView from '../views/CompanySearchView.vue'
+import EstateSearchView from '../views/EstateSearchView.vue'
 import EmployeeSearchView from '../views/EmployeeSearchView.vue'
 import OrganisationSearchView from '../views/OrganisationSearchView.vue'
 import RecentView from '../views/RecentView.vue'
@@ -88,6 +89,17 @@ export default createRouter({
 			path: '/search/company',
 			name: 'search-company',
 			component: CompanySearchView,
+		},
+		{
+			path: '/search/estate',
+			name: 'search-estate',
+			component: EstateSearchView,
+		},
+		{
+			path: '/estate/:estateId',
+			name: 'estate-detail',
+			component: EstateSearchView,
+			props: true,
 		},
 		{
 			path: '/search/employees',

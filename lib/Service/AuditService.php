@@ -227,6 +227,18 @@ class AuditService {
     }
 
     // ---------------------------------------------------------------
+    // Estate events
+    // ---------------------------------------------------------------
+
+    public function logEstateAdded(int $caseId, string $userId, string $roleName, string $type, ?int $bfenummer): void {
+        $this->write($caseId, null, null, $userId, 'case_estate_added', [
+            'role'      => $roleName,
+            'type'      => $type,
+            'bfenummer' => $bfenummer,
+        ]);
+    }
+
+    // ---------------------------------------------------------------
     // File-share events
     // ---------------------------------------------------------------
 

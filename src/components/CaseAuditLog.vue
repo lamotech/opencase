@@ -223,8 +223,8 @@ export default {
 				return parts.length ? parts.join('; ') : t('opencase', 'Metadata ændret')
 			}
 			case 'case_status_changed': {
-				const from = STATUS_NAMES[d.from_status_id] ?? d.from_status_id
-				const to   = STATUS_NAMES[d.to_status_id]   ?? d.to_status_id
+				const from = t('opencase', STATUS_NAMES[d.from_status_id] ?? String(d.from_status_id))
+				const to   = t('opencase', STATUS_NAMES[d.to_status_id]   ?? String(d.to_status_id))
 				return t('opencase', 'Status ændret fra "{from}" til "{to}"', { from, to })
 			}
 			case 'document_created':
@@ -274,18 +274,18 @@ export default {
 			case 'journal_note_receipt_failed':
 				return t('opencase', 'Forretningskvittering kunne ikke sendes til Fordelingskomponent for journalnotat {title}', { title: d.title || '' })
 			case 'access_request_created': {
-				const type = ACCESS_TYPE_LABELS[d.type] ?? d.type ?? ''
+				const type = t('opencase', ACCESS_TYPE_LABELS[d.type] ?? d.type ?? '')
 				return t('opencase', 'Aktindsigtsanmodning oprettet: {type}', { type })
 			}
 			case 'access_request_status_changed': {
-				const from = ACCESS_STATUS_LABELS[d.from] ?? d.from ?? ''
-				const to   = ACCESS_STATUS_LABELS[d.to]   ?? d.to   ?? ''
+				const from = t('opencase', ACCESS_STATUS_LABELS[d.from] ?? d.from ?? '')
+				const to   = t('opencase', ACCESS_STATUS_LABELS[d.to]   ?? d.to   ?? '')
 				return t('opencase', 'Aktindsigt status ændret fra "{from}" til "{to}"', { from, to })
 			}
 			case 'access_request_updated':
 				return t('opencase', 'Aktindsigtsanmodning opdateret')
 			case 'access_request_decision': {
-				const decision = ACCESS_DECISION_LABELS[d.decision] ?? d.decision ?? ''
+				const decision = t('opencase', ACCESS_DECISION_LABELS[d.decision] ?? d.decision ?? '')
 				return t('opencase', 'Afgørelse registreret: {decision}', { decision })
 			}
 			case 'access_request_sent': {

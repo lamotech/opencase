@@ -64,6 +64,12 @@
 							<OfficeBuildingIcon :size="20" />
 						</template>
 					</NcAppNavigationItem>
+					<NcAppNavigationItem :to="{ name: 'search-estate' }"
+						:name="t('opencase', 'Ejendom')">
+						<template #icon>
+							<HomeCityIcon :size="20" />
+						</template>
+					</NcAppNavigationItem>
 					<NcAppNavigationItem :to="{ name: 'search-employees' }"
 						:name="t('opencase', 'Medarbejder')">
 						<template #icon>
@@ -170,6 +176,7 @@
 		</NcAppNavigation>
 
 		<NewCaseDialog v-if="showNewCaseDialog" :case-type="selectedCaseType" @close="showNewCaseDialog = false" />
+		<CreateEstateDialog v-if="showCreateEstateDialog" @close="showCreateEstateDialog = false" @created="onEstateCreated" />
 		<NotificationsDialog v-if="showNotificationsDialog" @close="showNotificationsDialog = false" />
 
 		<NcAppContent>
@@ -180,15 +187,23 @@
 						class="opencase-topbar__create-btn"
 						:primary="true"
 						:force-menu="true"
-						:menu-name="t('opencase', 'Opret ny sag')">
+						:menu-name="t('opencase', 'Opret')">
 						<template #icon>
 							<PlusIcon :size="20" />
 						</template>
+						<NcActionCaption :name="t('opencase', 'Ny sag')" />
 						<NcActionButton v-for="type in caseTypes"
 							:key="type.id"
 							@click="openNewCaseDialog(type)">
 							{{ type.name }}
 						</NcActionButton>
+
+						<template v-if="!enterpriseVersionEnabled">
+							<NcActionCaption :name="t('opencase', 'Ny Ejendom')" />
+							<NcActionButton @click="openCreateEstateDialog">
+								{{ t('opencase', 'Ejendom') }}
+							</NcActionButton>
+						</template>
 					</NcActions>
 					<NcButton v-if="aiEnabled" @click="openPromptLibrary">
 						<template #icon>
@@ -224,6 +239,7 @@ import NcContent from '@nextcloud/vue/components/NcContent'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
+import NcActionCaption from '@nextcloud/vue/components/NcActionCaption'
 import NcAppNavigation from '@nextcloud/vue/components/NcAppNavigation'
 import NcAppNavigationItem from '@nextcloud/vue/components/NcAppNavigationItem'
 import NcAppNavigationSettings from '@nextcloud/vue/components/NcAppNavigationSettings'
@@ -243,6 +259,7 @@ import AutoFixIcon from 'vue-material-design-icons/AutoFix.vue'
 import AccountIcon from 'vue-material-design-icons/Account.vue'
 import AccountSearchIcon from 'vue-material-design-icons/AccountSearch.vue'
 import OfficeBuildingIcon from 'vue-material-design-icons/OfficeBuilding.vue'
+import HomeCityIcon from 'vue-material-design-icons/HomeCity.vue'
 import AccountGroupIcon from 'vue-material-design-icons/AccountGroup.vue'
 import SitemapIcon from 'vue-material-design-icons/Sitemap.vue'
 import PlusIcon from 'vue-material-design-icons/Plus.vue'
@@ -253,6 +270,7 @@ import { loadState } from '@nextcloud/initial-state'
 
 import AiSidePanel from './components/AiSidePanel.vue'
 import NewCaseDialog from './components/NewCaseDialog.vue'
+import CreateEstateDialog from './components/CreateEstateDialog.vue'
 import NotificationsDialog from './components/NotificationsDialog.vue'
 
 export default {
@@ -263,6 +281,7 @@ export default {
 		NcButton,
 		NcActions,
 		NcActionButton,
+		NcActionCaption,
 		NcAppNavigation,
 		NcAppNavigationItem,
 		NcAppNavigationSettings,
@@ -281,6 +300,7 @@ export default {
 		AccountIcon,
 		AccountSearchIcon,
 		OfficeBuildingIcon,
+		HomeCityIcon,
 		AccountGroupIcon,
 		SitemapIcon,
 		PlusIcon,
@@ -288,6 +308,7 @@ export default {
 		BellIcon,
 		AiSidePanel,
 		NewCaseDialog,
+		CreateEstateDialog,
 		NotificationsDialog,
 	},
 
@@ -295,6 +316,7 @@ export default {
 		return {
 			showAiPanel: false,
 			showNewCaseDialog: false,
+			showCreateEstateDialog: false,
 			newCaseMenuOpen: false,
 			selectedCaseType: null,
 			showNotificationsDialog: false,
@@ -318,13 +340,16 @@ export default {
 		caseTypes() {
 			return this.$store.state.caseTypes
 		},
+		enterpriseVersionEnabled() {
+			return this.$store.state.enterpriseVersionEnabled
+		},
 	},
 
 	watch: {
 		$route: {
 			immediate: true,
 			handler(route) {
-				const searchRoutes = ['search', 'search-cases', 'search-documents', 'search-citizen', 'search-company', 'search-employees', 'search-organisations']
+				const searchRoutes = ['search', 'search-cases', 'search-documents', 'search-citizen', 'search-company', 'search-estate', 'search-employees', 'search-organisations']
 				const casesRoutes = ['my-cases', 'favorites-cases', 'recent-cases']
 				const documentsRoutes = ['my-documents', 'favorites-documents', 'recent-documents']
 				if (searchRoutes.includes(route.name)) {
@@ -373,6 +398,17 @@ export default {
 		openPromptLibrary() {
 			emit('ai:open-prompt')
 		},
+
+		openCreateEstateDialog() {
+			this.newCaseMenuOpen = false
+			this.$nextTick(() => {
+				this.showCreateEstateDialog = true
+			})
+		},
+
+		onEstateCreated(estateId) {
+			this.$router.push({ name: 'estate-detail', params: { estateId } })
+		},
 	},
 }
 </script>
@@ -402,6 +438,7 @@ export default {
 #app-content-vue .opencase-doc-field-search,
 #app-content-vue .opencase-citizen-search,
 #app-content-vue .opencase-company-search,
+#app-content-vue .opencase-estate-search,
 #app-content-vue .opencase-employee-search,
 #app-content-vue .opencase-org-search,
 #app-content-vue .opencase-my-documents,

@@ -496,6 +496,8 @@ export default {
 					return await this.actionAddCitizenParticipant(action, ctx, runtimeCtx)
 				case 'add_company_participant':
 					return await this.actionAddCompanyParticipant(action, ctx, runtimeCtx)
+				case 'add_estate_participant':
+					return await this.actionAddEstateParticipant(action, ctx, runtimeCtx)
 				case 'add_employee_participant':
 					return await this.actionAddEmployeeParticipant(action, ctx, runtimeCtx)
 				case 'send_digital_post':
@@ -1048,6 +1050,18 @@ export default {
 				: { ok: true, label: t('opencase', 'Virksomhed tilføjet som part på sagen.') }
 		},
 
+		async actionAddEstateParticipant(action, ctx, runtimeCtx = {}) {
+			const caseId = runtimeCtx.currentCaseId ?? ctx?.case_id ?? this.currentCaseId
+			if (!caseId) {
+				return { ok: false, label: t('opencase', 'Ingen aktuel sag at tilføje ejendom på.') }
+			}
+			const warning = await this.addCaseEstate(caseId, action.bfe_nummer)
+			if (!warning) eventBus.emit('ai:participants-changed', caseId)
+			return warning
+				? { ok: false, label: warning }
+				: { ok: true, label: t('opencase', 'Ejendom tilføjet til sagen.') }
+		},
+
 		async actionAddEmployeeParticipant(action, ctx, runtimeCtx = {}) {
 			const caseId = runtimeCtx.currentCaseId ?? ctx?.case_id ?? this.currentCaseId
 			if (!caseId) {
@@ -1136,6 +1150,20 @@ export default {
 				}
 				throw err
 			}
+
+			return null
+		},
+
+		// role_id 1 = "Primær ejendom", matching NewCaseDialog.vue's estate-picker flow —
+		// there's no getEstateRoles() API exposed to the frontend to resolve a role by name.
+		async addCaseEstate(caseId, bfenummer) {
+			const bfe = (bfenummer ?? '').toString().trim()
+			if (!bfe) return t('opencase', 'BFE-nummer er påkrævet.')
+
+			const estate = await api.searchEstate(bfe)
+			if (!estate) return t('opencase', 'Ejendom med BFE-nummer {bfe} blev ikke fundet.', { bfe })
+
+			await api.linkCaseEstate(caseId, estate, 1)
 
 			return null
 		},

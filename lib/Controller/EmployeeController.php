@@ -9,7 +9,9 @@ use OCA\OpenCase\Db\CaseStatusMapper;
 use OCA\OpenCase\Db\CaseUserMapper;
 use OCA\OpenCase\Db\OrganisationMapper;
 use OCA\OpenCase\Db\ParticipantRoleMapper;
+use OCA\OpenCase\Db\UserInfoMapper;
 use OCP\AppFramework\ApiController;
+use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\ApiRoute;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\DataResponse;
@@ -30,6 +32,7 @@ class EmployeeController extends ApiController {
         private CaseParticipantMapper $caseParticipantMapper,
         private CaseStatusMapper $caseStatusMapper,
         private ParticipantRoleMapper $participantRoleMapper,
+        private UserInfoMapper $userInfoMapper,
         private IUserManager $userManager,
         private IFactory $l10nFactory,
         private ?string $userId,
@@ -78,7 +81,11 @@ class EmployeeController extends ApiController {
     #[NoAdminRequired]
     #[ApiRoute(verb: 'GET', url: '/api/v1/employees/{uuid}/privileges')]
     public function userPrivileges(string $uuid): DataResponse {
-        $userId = 'opencase_' . $uuid;
+        $userInfo = $this->userInfoMapper->findByUuid($uuid);
+        $userId = $userInfo?->getUserId();
+        if ($userId === null) {
+            return new DataResponse(['error' => 'User not found'], Http::STATUS_NOT_FOUND);
+        }
         $qb = $this->db->getQueryBuilder();
         $qb->select(['id', 'privilege_type', 'foelsomhed_raw', 'kle_raw', 'orgenhed_raw'])
             ->from('opencase_user_priv_groups')
@@ -153,7 +160,11 @@ class EmployeeController extends ApiController {
     #[NoAdminRequired]
     #[ApiRoute(verb: 'GET', url: '/api/v1/employees/{uuid}/grants')]
     public function userGrants(string $uuid): DataResponse {
-        $userId = 'opencase_' . $uuid;
+        $userInfo = $this->userInfoMapper->findByUuid($uuid);
+        $userId = $userInfo?->getUserId();
+        if ($userId === null) {
+            return new DataResponse(['error' => 'User not found'], Http::STATUS_NOT_FOUND);
+        }
         $rows   = $this->caseUserMapper->findGrantedCasesByUserId($userId);
         $grants = array_map(fn($r) => [
             'case_id'     => (int)$r['case_id'],

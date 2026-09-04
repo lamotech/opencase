@@ -348,6 +348,44 @@ export default {
 		return ocsData(await axios.get(`${baseUrl}/citizen/documents`, { params: { cpr } })).documents
 	},
 
+	// Estate search (Datafordeler)
+	// ---------------------------------------------------------------
+
+	async searchEstate(bfenumber) {
+		return ocsData(await axios.get(`${baseUrl}/estate/search`, { params: { bfenumber } })).estate
+	},
+
+	async searchEstateByAddress(streetname, housenumber = '', limit = 50, offset = 0) {
+		const params = { streetname, limit, offset }
+		if (housenumber) params.housenumber = housenumber
+		return ocsData(await axios.get(`${baseUrl}/estate/search-address`, { params }))
+	},
+
+	async getEstateCases(bfenumber) {
+		return ocsData(await axios.get(`${baseUrl}/estate/cases`, { params: { bfenumber } })).cases
+	},
+
+	async linkCaseEstate(caseId, estate, roleId = null) {
+		const payload = roleId != null ? { estate, role_id: roleId } : { estate }
+		return ocsData(await axios.post(`${baseUrl}/cases/${caseId}/estate`, payload)).estate_id
+	},
+
+	async getCaseEstates(caseId) {
+		return ocsData(await axios.get(`${baseUrl}/cases/${caseId}/estates`)).estates
+	},
+
+	async getEstateById(estateId) {
+		return ocsData(await axios.get(`${baseUrl}/estate/${estateId}`)).estate
+	},
+
+	async createEstate(estate) {
+		return ocsData(await axios.post(`${baseUrl}/estate`, { estate })).estate_id
+	},
+
+	async updateEstate(estateId, estate) {
+		return ocsData(await axios.put(`${baseUrl}/estate/${estateId}`, { estate })).estate_id
+	},
+
 	// ---------------------------------------------------------------
 	// Caseworkers
 	// ---------------------------------------------------------------
@@ -661,6 +699,26 @@ export default {
 
 	async updateConfigValue(key, value) {
 		return ocsData(await axios.put(`${baseUrl}/config/${encodeURIComponent(key)}`, { value })).entries
+	},
+
+	// ---------------------------------------------------------------
+	// Separation sheets
+	// ---------------------------------------------------------------
+
+	async getSeparationSheets() {
+		return ocsData(await axios.get(`${baseUrl}/separation-sheets`)).separation_sheets
+	},
+
+	async createSeparationSheet(payload) {
+		return ocsData(await axios.post(`${baseUrl}/separation-sheets`, payload)).separation_sheet
+	},
+
+	async updateSeparationSheet(id, payload) {
+		return ocsData(await axios.put(`${baseUrl}/separation-sheets/${id}`, payload)).separation_sheet
+	},
+
+	async deleteSeparationSheet(id) {
+		await axios.delete(`${baseUrl}/separation-sheets/${id}`)
 	},
 
 	// ---------------------------------------------------------------

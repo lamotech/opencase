@@ -26,7 +26,7 @@ class UserSyncService {
         private IPhoneNumberUtil $phoneNumberUtil,
     ) {}
 
-    public function updateUser(string $UserUUIDIdentifikator): void {
+    public function updateUser(string $UserUUIDIdentifikator, string $userId): void {
         $user = $this->userClient->fetchUser($UserUUIDIdentifikator);
 
         $email = '';
@@ -42,8 +42,6 @@ class UserSyncService {
                 $location = $address->text;
             }
         }
-
-        $userId = 'opencase_' . $user->uuid;
 
         $this->userInfoMapper->upsert(
             $user->uuid,

@@ -140,6 +140,24 @@ Dette sikrer, at alle modtagne dokumenter registreres ensartet og kan behandles 
 
 ---
 
+# Separationsark
+
+På fanen **Separationsark** kan man oprette separationsark, som anvendes ved import af filer. Filer kan importeres fra et fileshare eller en mailboks.
+
+![Separationsark](../images/konfiguration/separationsark.png)
+
+Separationsark kan anvendes ved scanning af dokumenter til en pdf fil for at opdelede den samlede pdf i flere separate filer eller bilag.
+
+Separationsark kan definere en ny sag, en eksisterende sag, en indbakke sag eller et bilag.
+
+![Separationsark filer](../images/konfiguration/separationsark-filer.png)
+
+For oprettelse af en sag kan sagens metadata defineres.
+
+![Separationsark ny sag](../images/konfiguration/separationsark-ny-sag.png)
+
+---
+
 # God praksis
 
 Det anbefales at:

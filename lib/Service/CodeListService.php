@@ -33,7 +33,7 @@ class CodeListService {
     private const PRIMARY_PARTICIPANT_LISTS = ['casetype'];
 
     /** Allowed values for the `primary_participant` column. */
-    public const PRIMARY_PARTICIPANT_VALUES = ['None', 'Citizen', 'Company', 'Employee'];
+    public const PRIMARY_PARTICIPANT_VALUES = ['None', 'Citizen', 'Company', 'Employee', 'Estate'];
 
     public function __construct(
         private IDBConnection $db,

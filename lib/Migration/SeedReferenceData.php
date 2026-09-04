@@ -39,6 +39,7 @@ class SeedReferenceData implements IRepairStep {
         $this->seedAdminUserAccess($output);
         $this->seedContactRoles($output);
         $this->seedParticipantRoles($output);
+        $this->seedEstateRoles($output);
         $this->seedContactTypes($output);
         $this->seedConfig($output);
         $this->seedCprEvents($output);
@@ -184,10 +185,12 @@ class SeedReferenceData implements IRepairStep {
             [2, 'da', 'Borgersag',     'Citizen'],
             [3, 'da', 'Virksomhedssag', 'Company'],
             [4, 'da', 'Personalesag',  'Employee'],
+            [5, 'da', 'Ejendomssag',  'Estate'],
             [1, 'en', 'Standard',      'None'],
             [2, 'en', 'Citizen case',  'Citizen'],
             [3, 'en', 'Company case',  'Company'],
             [4, 'en', 'Employee case', 'Employee'],
+            [5, 'en', 'Estate case',  'Estate'],
         ];
         $inserted = 0;
         foreach ($rows as [$id, $lang, $name, $primaryParticipant]) {
@@ -379,6 +382,24 @@ class SeedReferenceData implements IRepairStep {
         $output->info("Seeded {$inserted} participant role rows.");
     }
 
+    private function seedEstateRoles(IOutput $output): void {
+        $rows = [
+            [1, 'da', 'Primær ejendom'],
+            [2, 'da', 'Anden ejendom'],
+            [1, 'en', 'Primary estate'],
+            [2, 'en', 'Other estate'],
+        ];
+        $inserted = 0;
+        foreach ($rows as [$id, $lang, $name]) {
+            $this->db->executeStatement(
+                'INSERT IGNORE INTO `*PREFIX*opencase_estateroles` (`id`, `language`, `name`) VALUES (?, ?, ?)',
+                [$id, $lang, $name]
+            );
+            $inserted++;
+        }
+        $output->info("Seeded {$inserted} estate role rows.");
+    }
+
     private function seedContactTypes(IOutput $output): void {
         $rows = [
             [0, 'da', 'Ukendt'],
@@ -493,15 +514,15 @@ class SeedReferenceData implements IRepairStep {
         $now = (new \DateTime())->format('Y-m-d H:i:s');
         $rows = [
             [2, 'Opret borgersag', 'all', <<<'EOT'
-                Opret en ny sag med sagstype Borgersag og titel '[Titel]', organisation #MinAfdeling, KLE nummer [KLE Nummer], handlingsfacet [Handlingsfacet ], følsomhed 'Følsomme personoplysninger eller følsomme forretningsdata' og indsigtsgrad Begrænset.
+                Opret en ny sag med sagstype Borgersag og titel '[Titel]', organisation #MinAfdeling, KLE nummer [KLE Nummer:kle], handlingsfacet [Handlingsfacet:handlingsfacet], følsomhed '[Følsomhed:følsomhed]'
                 Tilføj borgeren med cpr [CPR Nummer] som part med rollen "Primær part"
                 EOT],
             [3, 'Opret virksomhedssag', 'all', <<<'EOT'
-                Opret en ny sag med sagstype Virksomhedssag og titel '[Titel]', organisation #MinAfdeling, KLE nummer [KLE Nummer], handlingsfacet [Handlingsfacet ], følsomhed 'Ikke-fortrolige data' og indsigtsgrad Åben (Offentlig).
+                Opret en ny sag med sagstype Virksomhedssag og titel '[Titel]', organisation #MinAfdeling, KLE nummer [KLE Nummer:kle], handlingsfacet [Handlingsfacet:handlingsfacet ], følsomhed 'Ikke-fortrolige data' og indsigtsgrad Åben (Offentlig).
                 Tilføj virksomheden med cvr [CVR Nummer] som part med rollen "Primær part"
                 EOT],
             [4, 'Opret personalesag', 'all', <<<'EOT'
-                Opret en ny sag med sagstype Personalesag og titel '[Titel]', organisation #MinAfdeling, KLE nummer [KLE Nummer], handlingsfacet [Handlingsfacet ], følsomhed 'Følsomme personoplysninger eller følsomme forretningsdata' og indsigtsgrad Begrænset.
+                Opret en ny sag med sagstype Personalesag og titel '[Titel]', organisation #MinAfdeling, KLE nummer [KLE Nummer:kle], handlingsfacet [Handlingsfacet:handlingsfacet], følsomhed 'Følsomme personoplysninger eller følsomme forretningsdata' og indsigtsgrad Begrænset.
                 Tilføj medarbejderen med [Brugernavn] som part med rollen "Primær part"
                 EOT],
             [5, 'Opret personalesagshierarki', 'all', <<<'EOT'
@@ -513,45 +534,49 @@ class SeedReferenceData implements IRepairStep {
                 - Titel "Sygdom og fravær" og KLE nummer 81.28.00 og tilføj medarbejderen med [Brugernavn] som part med rollen "Primær part".
                 EOT],
             [6, 'Opret brev til borger', 'case', <<<'EOT'
-                Opret et dokument med titlen '[Titel]' og kategori 'Udgående' og en fil med skabelonen '[Skabelon]' og tilføj borger med cpr nummer [CPR nummer] som modtager.
+                Opret et dokument med titlen '[Titel]' og kategori 'Udgående' og en fil med skabelonen '[Skabelon:skabelon]' og tilføj borger med cpr nummer [CPR nummer] som modtager.
                 Åben filen for redigering i Office.
                 EOT],
             [7, 'Opret brev til virksomhed', 'case', <<<'EOT'
-                Opret et dokument med titlen '[Titel]' og kategori 'Udgående' og en fil med skabelonen '[Skabelon]' og tilføj virksomhed med cvr nummer [CVR nummer] som modtager.
+                Opret et dokument med titlen '[Titel]' og kategori 'Udgående' og en fil med skabelonen '[Skabelon:skabelon]' og tilføj virksomhed med cvr nummer [CVR nummer] som modtager.
                 Åben filen for redigering i Office.
                 EOT],
             [8, 'Send kvittering til borger', 'case', <<<'EOT'
-                Opret et dokument med titlen '[Titel]' og kategori 'Udgående' og en fil med skabelonen '[Kvitteringsskabelon]' og tilføj borger med cpr nummer [CPR nummer] som modtager.
+                Opret et dokument med titlen '[Titel]' og kategori 'Udgående' og en fil med skabelonen '[Kvitteringsskabelon:skabelon]' og tilføj borger med cpr nummer [CPR nummer] som modtager.
                 Send dokumentet med digital post.
                 EOT],
             [9, 'Send kvittering til virksomhed', 'case', <<<'EOT'
-                Opret et dokument med titlen '[Titel]' og kategori 'Udgående' og en fil med skabelonen '[Kvitteringsskabelon]' og tilføj virksomhed med cvr nummer [CVR nummer] som modtager.
+                Opret et dokument med titlen '[Titel]' og kategori 'Udgående' og en fil med skabelonen '[Kvitteringsskabelon:skabelon]' og tilføj virksomhed med cvr nummer [CVR nummer] som modtager.
                 Send dokumentet med digital post.
                 EOT],
             [10, 'Journaliser indkommet brev', 'inbox_document', <<<'EOT'
-                Opret en ny sag med sagstype Borgersag og titel '[Titel]', organisation #MinAfdeling, KLE nummer [KLE Nummer], handlingsfacet [Handlingsfacet], følsomhed 'Følsomme personoplysninger eller følsomme forretningsdata' og indsigtsgrad Begrænset.
+                Opret en ny sag med sagstype Borgersag og titel '[Titel]', organisation #MinAfdeling, KLE nummer [KLE Nummer:kle], handlingsfacet [Handlingsfacet:handlingsfacet], følsomhed 'Følsomme personoplysninger eller følsomme forretningsdata' og indsigtsgrad Begrænset.
                 Journaliser dokumentet på sagen.
                 Tilføj afsender fra indkommet dokument som part med rollen "Primær part".
                 EOT],
             [11, 'Journaliser og kvitter', 'inbox_document', <<<'EOT'
-                Opret en ny sag med sagstype Borgersag og titel '[Titel]', organisation #MinAfdeling, KLE nummer [KLE Nummer], handlingsfacet [Handlingsfacet], følsomhed 'Følsomme personoplysninger eller følsomme forretningsdata' og indsigtsgrad Begrænset.
+                Opret en ny sag med sagstype Borgersag og titel '[Titel]', organisation #MinAfdeling, KLE nummer [KLE Nummer:kle], handlingsfacet [Handlingsfacet:handlingsfacet ], følsomhed 'Følsomme personoplysninger eller følsomme forretningsdata' og indsigtsgrad Begrænset.
                 Journaliser dokumentet på sagen.
                 Tilføj afsender fra indkommet dokument som part med rollen "Primær part".
-                Opret et nyt dokument med titlen 'Kvittering for modtagelse' og kategori 'Udgående' og en fil med skabelonen '[Kvitteringsskabelon].
+                Opret et nyt dokument med titlen 'Kvittering for modtagelse' og kategori 'Udgående' og en fil med skabelonen '[Kvitteringsskabelon:skabelon].
                 Tilføj afsender fra indkommende dokument som modtager.
                 Send dokumentet med digital post.
                 EOT],
             [12, 'Tilføj fil', 'document', <<<'EOT'
-                Tilføj en fil med skabelonen '[Skabelon]'.
+                Tilføj en fil med skabelonen '[Skabelon:skabelon]'.
                 Åben filen for redigering i Office.
                 EOT],
             [13, 'Gennemse workflow', 'document', <<<'EOT'
                 Opret Gennemse workflow med frist i dag plus [Frist: Antal dage] dage
-                med disse brugere [Brugere]
+                med disse brugere [Brugere:bruger]
                 EOT],
             [14, 'Godkendelse workflow', 'document', <<<'EOT'
                 Opret Godkendelse workflow med frist i dag plus [Frist: Antal dage] dage
-                med disse brugere [Brugere]
+                med disse brugere [Brugere:bruger]
+                EOT],
+            [15, 'Opret ejendomssag', 'all', <<<'EOT'
+                Opret en ny sag med sagstype Ejendomssag og titel '[Titel]', organisation #MinAfdeling, KLE nummer [KLE Nummer:kle], handlingsfacet [Handlingsfacet:handlingsfacet ], følsomhed '[Følsomhed:følsomhed]'.
+                Tilføj ejendommen med BFE nummer [BFE nummer] til sagen.
                 EOT],
         ];
         $inserted = 0;
@@ -587,40 +612,44 @@ class SeedReferenceData implements IRepairStep {
     private function seedAiActions(IOutput $output): void {
         $now = (new \DateTime())->format('Y-m-d H:i:s');
         $rows = [
-            [9,  2,  0, 'create_case', ['title' => '[Titel]', 'kle_number' => '[KLE Nummer]', 'action_facet' => '[Handlingsfacet ]', 'organisation' => '#MinAfdeling', 'casetype' => 'Borgersag', 'sensitivity' => 'Følsomme personoplysninger eller følsomme forretningsdata', 'access_level' => 'Begrænset']],
-            [10, 2,  1, 'add_citizen_participant', ['citizen_cpr' => '[CPR Nummer]', 'participant_role' => 'Primær part']],
-            [13, 3,  0, 'create_case', ['title' => '[Titel]', 'kle_number' => '[KLE Nummer]', 'action_facet' => '[Handlingsfacet ]', 'organisation' => '#MinAfdeling', 'casetype' => 'Virksomhedssag', 'sensitivity' => 'Ikke-fortrolige data', 'access_level' => 'Åben (Offentlig)']],
-            [14, 3,  1, 'add_company_participant', ['company_cvr' => '[CVR Nummer]', 'participant_role' => 'Primær part']],
-            [17, 4,  0, 'create_case', ['title' => '[Titel]', 'kle_number' => '[KLE Nummer]', 'action_facet' => '[Handlingsfacet ]', 'organisation' => '#MinAfdeling', 'casetype' => 'Personalesag', 'sensitivity' => 'Følsomme personoplysninger eller følsomme forretningsdata', 'access_level' => 'Begrænset']],
-            [18, 4,  1, 'add_employee_participant', ['employee' => '[Brugernavn]', 'participant_role' => 'Primær part']],
+            [75, 2,  0, 'create_case', ['title' => '[Titel]', 'kle_number' => '[KLE Nummer:kle]', 'action_facet' => '[Handlingsfacet:handlingsfacet]', 'organisation' => '#MinAfdeling', 'casetype' => 'Borgersag', 'sensitivity' => '[Følsomhed:følsomhed]']],
+            [76, 2,  1, 'add_citizen_participant', ['citizen_cpr' => '[CPR Nummer]', 'participant_role' => 'Primær part']],
+            [81, 3,  0, 'create_case', ['title' => '[Titel]', 'kle_number' => '[KLE Nummer:kle]', 'action_facet' => '[Handlingsfacet:handlingsfacet ]', 'organisation' => '#MinAfdeling', 'casetype' => 'Virksomhedssag', 'sensitivity' => 'Ikke-fortrolige data', 'access_level' => 'Åben (Offentlig)']],
+            [82, 3,  1, 'add_company_participant', ['company_cvr' => '[CVR Nummer]', 'participant_role' => 'Primær part']],
+            [79, 4,  0, 'create_case', ['title' => '[Titel]', 'kle_number' => '[KLE Nummer:kle]', 'action_facet' => '[Handlingsfacet:handlingsfacet]', 'organisation' => '#MinAfdeling', 'casetype' => 'Personalesag', 'sensitivity' => 'Følsomme personoplysninger eller følsomme forretningsdata', 'access_level' => 'Begrænset']],
+            [80, 4,  1, 'add_employee_participant', ['employee' => '[Brugernavn]', 'participant_role' => 'Primær part']],
             [29, 5,  0, 'create_case', ['title' => '[Titel]', 'kle_number' => '81.00.00', 'action_facet' => 'A00', 'organisation' => '#MinAfdeling', 'casetype' => 'Personalesag', 'sensitivity' => 'Følsomme personoplysninger eller følsomme forretningsdata', 'access_level' => 'Begrænset']],
             [30, 5,  1, 'add_employee_participant', ['employee' => '[Brugernavn]', 'participant_role' => 'Primær part']],
             [31, 5,  2, 'create_sub_case', ['title' => 'Ferie', 'kle_number' => '81.27.01', 'employee' => '[Brugernavn]', 'participant_role' => 'Primær part']],
             [32, 5,  3, 'create_sub_case', ['title' => 'Pension', 'kle_number' => '81.22.00', 'employee' => '[Brugernavn]', 'participant_role' => 'Primær part']],
             [33, 5,  4, 'create_sub_case', ['title' => 'Sygdom og fravær', 'kle_number' => '81.28.00', 'employee' => '[Brugernavn]', 'participant_role' => 'Primær part']],
-            [37, 6,  0, 'create_document', ['title' => '[Titel]', 'category' => 'Udgående', 'template' => '[Skabelon]', 'open_in_office' => true]],
-            [38, 6,  1, 'add_citizen_contact', ['citizen_cpr' => '[CPR nummer]', 'citizen_role' => 'Modtager']],
-            [39, 7,  0, 'create_document', ['title' => '[Titel]', 'category' => 'Udgående', 'template' => '[Skabelon]', 'open_in_office' => true]],
-            [40, 7,  1, 'add_company_contact', ['company_cvr' => '[CVR nummer]', 'company_role' => 'Modtager']],
-            [41, 8,  0, 'create_document', ['title' => '[Titel]', 'category' => 'Udgående']],
-            [42, 8,  1, 'add_file_from_template', ['template' => '[Kvitteringsskabelon]']],
-            [43, 8,  2, 'add_citizen_contact', ['citizen_cpr' => '[CPR nummer]', 'citizen_role' => 'Modtager']],
-            [44, 8,  3, 'send_digital_post', ['can_be_replied' => true]],
-            [45, 9,  0, 'create_document', ['title' => '[Titel]', 'category' => 'Udgående']],
-            [46, 9,  1, 'add_file_from_template', ['template' => '[Kvitteringsskabelon]']],
-            [47, 9,  2, 'add_company_contact', ['company_cvr' => '[CVR nummer]', 'company_role' => 'Modtager']],
-            [48, 9,  3, 'send_digital_post', ['can_be_replied' => true]],
-            [54, 10, 0, 'create_case_and_move_document', ['title' => '[Titel]', 'kle_number' => '[KLE Nummer]', 'action_facet' => '[Handlingsfacet]', 'organisation' => '#MinAfdeling', 'casetype' => 'Borgersag', 'sensitivity' => 'Følsomme personoplysninger eller følsomme forretningsdata', 'access_level' => 'Begrænset']],
-            [55, 10, 1, 'add_sender_as_participant', ['participant_role' => 'Primær part']],
-            [56, 11, 0, 'create_case_and_move_document', ['title' => '[Titel]', 'kle_number' => '[KLE Nummer]', 'action_facet' => '[Handlingsfacet]', 'organisation' => '#MinAfdeling', 'casetype' => 'Borgersag', 'sensitivity' => 'Følsomme personoplysninger eller følsomme forretningsdata', 'access_level' => 'Begrænset']],
-            [57, 11, 1, 'add_sender_as_participant', ['participant_role' => 'Primær part']],
-            [58, 11, 2, 'create_document', ['title' => 'Kvittering for modtagelse', 'category' => 'Udgående']],
-            [59, 11, 3, 'add_file_from_template', ['template' => '[Kvitteringsskabelon]']],
-            [60, 11, 4, 'add_sender_as_receiver', []],
-            [61, 11, 5, 'send_digital_post', ['can_be_replied' => true]],
-            [70, 12, 0, 'add_file_from_template', ['template' => '[Skabelon]', 'open_in_office' => true]],
-            [71, 13, 0, 'create_workflow', ['workflow_type' => 'Gennemse', 'users' => '[Brugere]', 'deadline_days' => '[Frist: Antal dage]']],
-            [72, 14, 0, 'create_workflow', ['workflow_type' => 'Godkendelse', 'users' => '[Brugere]', 'deadline_days' => '[Frist: Antal dage]']],
+            [83, 6,  0, 'create_document', ['title' => '[Titel]', 'category' => 'Udgående']],
+            [84, 6,  1, 'add_file_from_template', ['template' => '[Skabelon:skabelon]', 'open_in_office' => true]],
+            [85, 6,  2, 'add_citizen_contact', ['citizen_cpr' => '[CPR nummer]', 'citizen_role' => 'Modtager']],
+            [86, 7,  0, 'create_document', ['title' => '[Titel]', 'category' => 'Udgående']],
+            [87, 7,  1, 'add_file_from_template', ['template' => '[Skabelon:skabelon]', 'open_in_office' => true]],
+            [88, 7,  2, 'add_company_contact', ['company_cvr' => '[CVR nummer]', 'company_role' => 'Modtager']],
+            [89, 8,  0, 'create_document', ['title' => '[Titel]', 'category' => 'Udgående']],
+            [90, 8,  1, 'add_file_from_template', ['template' => '[Kvitteringsskabelon:skabelon]']],
+            [91, 8,  2, 'add_citizen_contact', ['citizen_cpr' => '[CPR nummer]', 'citizen_role' => 'Modtager']],
+            [92, 8,  3, 'send_digital_post', ['can_be_replied' => true]],
+            [93, 9,  0, 'create_document', ['title' => '[Titel]', 'category' => 'Udgående']],
+            [94, 9,  1, 'add_file_from_template', ['template' => '[Kvitteringsskabelon:skabelon]']],
+            [95, 9,  2, 'add_company_contact', ['company_cvr' => '[CVR nummer]', 'company_role' => 'Modtager']],
+            [96, 9,  3, 'send_digital_post', ['can_be_replied' => true]],
+            [97, 10, 0, 'create_case_and_move_document', ['title' => '[Titel]', 'kle_number' => '[KLE Nummer:kle]', 'action_facet' => '[Handlingsfacet:handlingsfacet]', 'organisation' => '#MinAfdeling', 'casetype' => 'Borgersag', 'sensitivity' => 'Følsomme personoplysninger eller følsomme forretningsdata', 'access_level' => 'Begrænset']],
+            [98, 10, 1, 'add_sender_as_participant', ['participant_role' => 'Primær part']],
+            [99, 11, 0, 'create_case_and_move_document', ['title' => '[Titel]', 'kle_number' => '[KLE Nummer:kle]', 'action_facet' => '[Handlingsfacet:handlingsfacet ]', 'organisation' => '#MinAfdeling', 'casetype' => 'Borgersag', 'sensitivity' => 'Følsomme personoplysninger eller følsomme forretningsdata', 'access_level' => 'Begrænset']],
+            [100, 11, 1, 'add_sender_as_participant', ['participant_role' => 'Primær part']],
+            [101, 11, 2, 'create_document', ['title' => 'Kvittering for modtagelse', 'category' => 'Udgående']],
+            [102, 11, 3, 'add_file_from_template', ['template' => '[Kvitteringsskabelon:skabelon]']],
+            [103, 11, 4, 'add_sender_as_receiver', []],
+            [104, 11, 5, 'send_digital_post', ['can_be_replied' => true]],
+            [107, 12, 0, 'add_file_from_template', ['template' => '[Skabelon:skabelon]', 'open_in_office' => true]],
+            [105, 13, 0, 'create_workflow', ['workflow_type' => 'Gennemse', 'users' => '[Brugere:bruger]', 'deadline_days' => '[Frist: Antal dage]']],
+            [106, 14, 0, 'create_workflow', ['workflow_type' => 'Godkendelse', 'users' => '[Brugere:bruger]', 'deadline_days' => '[Frist: Antal dage]']],
+            [77, 15, 0, 'create_case', ['title' => '[Titel]', 'kle_number' => '[KLE Nummer:kle]', 'action_facet' => '[Handlingsfacet:handlingsfacet ]', 'organisation' => '#MinAfdeling', 'casetype' => 'Ejendomssag', 'sensitivity' => '[Følsomhed:følsomhed]']],
+            [78, 15, 1, 'add_estate_participant', ['bfe_nummer' => '[BFE nummer]']],
         ];
         $inserted = 0;
         foreach ($rows as [$id, $promptId, $sequenceIndex, $actionType, $actionParams]) {

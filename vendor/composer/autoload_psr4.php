@@ -6,6 +6,15 @@ $vendorDir = dirname(__DIR__);
 $baseDir = dirname($vendorDir);
 
 return array(
+    'setasign\\Fpdi\\' => array($vendorDir . '/setasign/fpdi/src'),
+    'Zxing\\' => array($vendorDir . '/khanamiryan/qrcode-detector-decoder/lib'),
+    'Webklex\\PHPIMAP\\' => array($vendorDir . '/webklex/php-imap/src'),
+    'Symfony\\Polyfill\\Php83\\' => array($vendorDir . '/symfony/polyfill-php83'),
+    'Symfony\\Polyfill\\Mbstring\\' => array($vendorDir . '/symfony/polyfill-mbstring'),
+    'Symfony\\Contracts\\Translation\\' => array($vendorDir . '/symfony/translation-contracts'),
+    'Symfony\\Component\\Translation\\' => array($vendorDir . '/symfony/translation'),
+    'Symfony\\Component\\HttpFoundation\\' => array($vendorDir . '/symfony/http-foundation'),
+    'Symfony\\Component\\Clock\\' => array($vendorDir . '/symfony/clock'),
     'RobRichards\\XMLSecLibs\\' => array($vendorDir . '/robrichards/xmlseclibs/src'),
     'Psr\\Log\\' => array($vendorDir . '/psr/log/src'),
     'Psr\\EventDispatcher\\' => array($vendorDir . '/psr/event-dispatcher/src'),
@@ -13,5 +22,12 @@ return array(
     'Psr\\Clock\\' => array($vendorDir . '/psr/clock/src'),
     'OneLogin\\' => array($vendorDir . '/onelogin/php-saml/src'),
     'OCA\\OpenCase\\' => array($baseDir . '/lib'),
+    'Illuminate\\Support\\' => array($vendorDir . '/illuminate/support'),
+    'Illuminate\\Pagination\\' => array($vendorDir . '/illuminate/pagination'),
+    'Illuminate\\Contracts\\' => array($vendorDir . '/illuminate/contracts'),
+    'Doctrine\\Inflector\\' => array($vendorDir . '/doctrine/inflector/lib/Doctrine/Inflector'),
+    'Doctrine\\Common\\Inflector\\' => array($vendorDir . '/doctrine/inflector/lib/Doctrine/Common/Inflector'),
+    'Carbon\\Doctrine\\' => array($vendorDir . '/carbonphp/carbon-doctrine-types/src/Carbon/Doctrine'),
+    'Carbon\\' => array($vendorDir . '/nesbot/carbon/src/Carbon'),
     'Bamarni\\Composer\\Bin\\' => array($vendorDir . '/bamarni/composer-bin-plugin/src'),
 );

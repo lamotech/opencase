@@ -70,10 +70,27 @@
 					<div class="ai-prompt-dialog__tab-content">
 						<template v-if="activeTab === 'prompt'">
 							<div class="ai-prompt-dialog__field ai-prompt-dialog__field--grow">
-								<label>{{ t('opencase', 'Prompt') }}</label>
-								<textarea v-model="form.prompt"
+								<div class="ai-prompt-dialog__prompt-header">
+									<label>{{ t('opencase', 'Prompt') }}</label>
+									<NcActions :force-menu="true"
+										:menu-name="t('opencase', 'Indsæt parameter')">
+										<template #icon>
+											<PlusIcon :size="18" />
+										</template>
+										<NcActionButton v-for="param in insertableParameters"
+											:key="param.token"
+											@click="insertParameter(param.token)">
+											{{ param.label }}
+										</NcActionButton>
+									</NcActions>
+								</div>
+								<textarea ref="promptTextarea"
+									v-model="form.prompt"
 									class="ai-prompt-dialog__textarea"
 									:placeholder="t('opencase', 'Skriv din prompt her…')" />
+								<p class="ai-prompt-dialog__ph-hint">
+									{{ t('opencase', '[Navn] giver et tekstfelt. [Navn:type] giver en vælger — typer: {types}', { types: placeholderTypeHint }) }}
+								</p>
 							</div>
 
 							<!-- Placeholder inputs rendered when prompt contains [Name] tokens -->
@@ -82,11 +99,53 @@
 									{{ t('opencase', 'Udfyld felter') }}
 								</label>
 								<div v-for="ph in placeholders"
-									:key="ph"
+									:key="ph.token"
 									class="ai-prompt-dialog__field">
-									<label>{{ ph }}</label>
-									<NcTextField v-model="placeholderValues[ph]"
-										:placeholder="ph" />
+									<label>{{ ph.label }}</label>
+
+									<!-- Document template picker (opens its own dialog) -->
+									<NcButton v-if="ph.type === 'template'"
+										class="ai-prompt-dialog__picker-btn"
+										@click="templatePickerToken = ph.token">
+										<template #icon>
+											<FileDocumentOutlineIcon :size="18" />
+										</template>
+										{{ placeholderValues[ph.token] || t('opencase', 'Vælg skabelon') }}
+									</NcButton>
+
+									<!-- Date picker -->
+									<input v-else-if="ph.type === 'date'"
+										v-model="placeholderValues[ph.token]"
+										type="date"
+										class="ai-prompt-dialog__date-input">
+
+									<!-- Remote search field (organisation, user) -->
+									<NcSelect v-else-if="isSearchType(ph.type)"
+										:model-value="placeholderSelections[ph.token] ?? null"
+										:options="searchOptions[ph.token] ?? []"
+										:loading="searchLoading[ph.token] === true"
+										:filterable="false"
+										:placeholder="typePlaceholder(ph.type)"
+										@search="query => onPlaceholderSearch(ph, query)"
+										@update:model-value="option => onPlaceholderSelect(ph, option)" />
+
+									<!-- Dropdown backed by a code list -->
+									<NcSelect v-else-if="ph.type !== 'text'"
+										:model-value="placeholderSelections[ph.token] ?? null"
+										:options="listOptions[ph.type] ?? []"
+										:loading="listLoading[ph.type] === true"
+										:placeholder="typePlaceholder(ph.type)"
+										@update:model-value="option => onPlaceholderSelect(ph, option)" />
+
+									<!-- Plain textbox (default) -->
+									<NcTextField v-else
+										v-model="placeholderValues[ph.token]"
+										:placeholder="ph.label" />
+
+									<SelectTemplateDialog v-if="templatePickerToken === ph.token"
+										select-on-click
+										@selected="tpl => onTemplateSelected(ph, tpl)"
+										@close="templatePickerToken = null" />
 								</div>
 							</div>
 						</template>
@@ -144,7 +203,7 @@
 						{{ scopeHint }}
 					</p>
 					<p v-else-if="!allPlaceholdersFilled" class="ai-prompt-dialog__scope-hint">
-						{{ t('opencase', 'Udfyld alle felter for at kunne udføre prompten.') }}
+						{{ t('opencase', 'Udfyld disse felter for at kunne udføre prompten: {fields}', { fields: missingPlaceholders.map(ph => ph.label).join(', ') }) }}
 					</p>
 				</template>
 				<div v-else class="ai-prompt-dialog__placeholder">
@@ -163,30 +222,97 @@ import NcTextField from '@nextcloud/vue/components/NcTextField'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
+import NcActions from '@nextcloud/vue/components/NcActions'
+import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import PlusIcon from 'vue-material-design-icons/Plus.vue'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import AutoFixIcon from 'vue-material-design-icons/AutoFix.vue'
+import FileDocumentOutlineIcon from 'vue-material-design-icons/FileDocumentOutline.vue'
 import OverflowTabs from './OverflowTabs.vue'
 import FavoriteButton from './FavoriteButton.vue'
+import SelectTemplateDialog from './SelectTemplateDialog.vue'
 
 import api from '../services/api.js'
 
 const SCOPE_OPTIONS = [
-	{ id: 'all',             label: 'Alle' },
-	{ id: 'case',            label: 'Sag' },
-	{ id: 'document',        label: 'Dokument' },
-	{ id: 'inbox_document',  label: 'Indkommet dokument' },
+	{ id: 'all',             label: t('opencase', 'Alle') },
+	{ id: 'case',            label: t('opencase', 'Sag') },
+	{ id: 'document',        label: t('opencase', 'Dokument') },
+	{ id: 'inbox_document',  label: t('opencase', 'Indkommet dokument') },
 ]
 
 const FILTER_OPTIONS = [
-	{ id: null, label: 'Alle scopes' },
+	{ id: null, label: t('opencase', 'Alle scopes') },
 	...SCOPE_OPTIONS,
 ]
+
+/**
+ * Field types that can be attached to a prompt placeholder as `[Name:type]`.
+ *
+ * `search: true` means the options are fetched per keystroke from the server,
+ * `picker: true` means the value is chosen in a dialog of its own; everything
+ * else (except `date` and `text`) is a code list loaded once.
+ * The first alias is the canonical name shown in the syntax hint.
+ */
+const PLACEHOLDER_TYPES = {
+	org:         { aliases: ['organisation', 'org'],                    search: true },
+	kle:         { aliases: ['kle', 'klenummer', 'kle-nummer'] },
+	sensitivity: { aliases: ['følsomhed', 'foelsomhed', 'sensitivity'] },
+	facet:       { aliases: ['handlingsfacet', 'facet'] },
+	insight:     { aliases: ['indsigtsgrad', 'insight'] },
+	user:        { aliases: ['bruger', 'user', 'ansvarlig'],            search: true },
+	doccategory: { aliases: ['dokumentkategori', 'doccategory'] },
+	doctype:     { aliases: ['dokumenttype', 'doctype'] },
+	template:    { aliases: ['skabelon', 'template'],                   picker: true },
+	date:        { aliases: ['dato', 'date'] },
+}
+
+/**
+ * Ready-made tokens offered by the "Indsæt parameter" menu. The type suffix of
+ * each one is an alias in PLACEHOLDER_TYPES above, so an inserted token renders
+ * its picker straight away.
+ */
+const INSERTABLE_PARAMETERS = [
+	{ label: t('opencase', 'Min organisation'), token: '#MinAfdeling' },
+	{ label: t('opencase', 'Organisation'),     token: '[Organisation:organisation]' },
+	{ label: t('opencase', 'KLE Nummer'),       token: '[KLE Nummer:kle]' },
+	{ label: t('opencase', 'Følsomhed'),        token: '[Følsomhed:følsomhed]' },
+	{ label: t('opencase', 'Handlingsfacet'),   token: '[Handlingsfacet:handlingsfacet]' },
+	{ label: t('opencase', 'Indsigtsgrad'),     token: '[Indsigtsgrad:indsigtsgrad]' },
+	{ label: t('opencase', 'Ansvarlig'),        token: '[Ansvarlig:ansvarlig]' },
+	{ label: t('opencase', 'Dokumentkategori'), token: '[Dokumentkategori:dokumentkategori]' },
+	{ label: t('opencase', 'Dokumenttype'),     token: '[Dokumenttype:dokumenttype]' },
+	{ label: t('opencase', 'Skabelon'),         token: '[Skabelon:skabelon]' },
+]
+
+// alias (lowercase) -> canonical type key
+const TYPE_ALIASES = Object.fromEntries(
+	Object.entries(PLACEHOLDER_TYPES).flatMap(([type, def]) => def.aliases.map(a => [a, type])),
+)
+
+/**
+ * Split a `[…]` token into its label and field type.
+ *
+ * Everything after the last colon is treated as a type only when it names a
+ * known type — so pre-existing placeholders that merely contain a colon
+ * (`[Note: kort]`) keep working as plain textboxes.
+ *
+ * @param {string} raw the text between the brackets
+ * @return {{token: string, label: string, type: string}}
+ */
+function parsePlaceholder(raw) {
+	const idx = raw.lastIndexOf(':')
+	if (idx > 0) {
+		const type = TYPE_ALIASES[raw.slice(idx + 1).trim().toLowerCase()]
+		if (type) return { token: raw, label: raw.slice(0, idx).trim(), type }
+	}
+	return { token: raw, label: raw, type: 'text' }
+}
 
 export default {
 	name: 'AiPromptDialog',
 
-	components: { NcDialog, NcButton, NcTextField, NcSelect, NcCheckboxRadioSwitch, NcLoadingIcon, PlusIcon, DeleteIcon, AutoFixIcon, OverflowTabs, FavoriteButton },
+	components: { NcDialog, NcButton, NcTextField, NcSelect, NcCheckboxRadioSwitch, NcLoadingIcon, NcActions, NcActionButton, PlusIcon, DeleteIcon, AutoFixIcon, FileDocumentOutlineIcon, OverflowTabs, FavoriteButton, SelectTemplateDialog },
 
 	props: {
 		currentScope:    { type: String, default: 'all' },
@@ -212,6 +338,13 @@ export default {
 			filterText: '',
 			favoritesOnly: false,
 			placeholderValues: {},
+			placeholderSelections: {},
+			listOptions: {},
+			listLoading: {},
+			searchOptions: {},
+			searchLoading: {},
+			searchTimeouts: {},
+			templatePickerToken: null,
 			activeTab: 'prompt',
 			promptActions: [],
 			loadingActions: false,
@@ -250,11 +383,26 @@ export default {
 
 		placeholders() {
 			const matches = [...this.form.prompt.matchAll(/\[([^\]]+)\]/g)]
-			return [...new Set(matches.map(m => m[1]))]
+			const seen = new Set()
+			return matches
+				.map(m => parsePlaceholder(m[1]))
+				.filter(ph => !seen.has(ph.token) && seen.add(ph.token))
+		},
+
+		insertableParameters() {
+			return INSERTABLE_PARAMETERS
+		},
+
+		placeholderTypeHint() {
+			return Object.values(PLACEHOLDER_TYPES).map(def => def.aliases[0]).join(', ')
+		},
+
+		missingPlaceholders() {
+			return this.placeholders.filter(ph => (this.placeholderValues[ph.token] ?? '').trim() === '')
 		},
 
 		allPlaceholdersFilled() {
-			return this.placeholders.every(ph => (this.placeholderValues[ph] ?? '').trim() !== '')
+			return this.missingPlaceholders.length === 0
 		},
 
 		scopeMatches() {
@@ -282,13 +430,22 @@ export default {
 	},
 
 	watch: {
-		placeholders(newPhs) {
-			// Keep existing values for placeholders that are still present; drop removed ones
-			const fresh = {}
-			for (const ph of newPhs) {
-				fresh[ph] = this.placeholderValues[ph] ?? ''
-			}
-			this.placeholderValues = fresh
+		placeholders: {
+			immediate: true,
+			handler(newPhs) {
+				// Keep existing values for placeholders that are still present; drop removed ones
+				const values = {}
+				const selections = {}
+				for (const ph of newPhs) {
+					values[ph.token] = this.placeholderValues[ph.token] ?? ''
+					if (this.placeholderSelections[ph.token]) {
+						selections[ph.token] = this.placeholderSelections[ph.token]
+					}
+					this.ensureOptions(ph)
+				}
+				this.placeholderValues = values
+				this.placeholderSelections = selections
+			},
 		},
 	},
 
@@ -305,6 +462,158 @@ export default {
 			return SCOPE_OPTIONS.find(o => o.id === scope)?.label ?? scope
 		},
 
+		// Drop the token in at the caret (replacing any selection) and leave the
+		// cursor just after it so the user can keep typing.
+		insertParameter(token) {
+			const el = this.$refs.promptTextarea
+			const text = this.form.prompt ?? ''
+			const start = el?.selectionStart ?? text.length
+			const end = el?.selectionEnd ?? text.length
+
+			this.form.prompt = text.slice(0, start) + token + text.slice(end)
+
+			this.$nextTick(() => {
+				if (!el) return
+				el.focus()
+				const caret = start + token.length
+				el.setSelectionRange(caret, caret)
+			})
+		},
+
+		isSearchType(type) {
+			return PLACEHOLDER_TYPES[type]?.search === true
+		},
+
+		isPickerType(type) {
+			return PLACEHOLDER_TYPES[type]?.picker === true
+		},
+
+		typePlaceholder(type) {
+			const map = {
+				org:         t('opencase', 'Søg efter organisation'),
+				kle:         t('opencase', 'Vælg KLE-emneord'),
+				sensitivity: t('opencase', 'Vælg følsomhed'),
+				facet:       t('opencase', 'Vælg handlingsfacet'),
+				insight:     t('opencase', 'Vælg indsigtsgrad'),
+				user:        t('opencase', 'Søg efter bruger'),
+				doccategory: t('opencase', 'Vælg kategori'),
+				doctype:     t('opencase', 'Vælg dokumenttype'),
+			}
+			return map[type] ?? t('opencase', 'Vælg…')
+		},
+
+		// Kick off whatever data a placeholder needs before it can be rendered
+		ensureOptions(ph) {
+			if (ph.type === 'org' && this.searchOptions[ph.token] === undefined) {
+				this.runPlaceholderSearch(ph, '')
+			} else if (!this.isSearchType(ph.type) && !this.isPickerType(ph.type)
+				&& ph.type !== 'text' && ph.type !== 'date') {
+				this.loadListOptions(ph.type)
+			}
+		},
+
+		/**
+		 * Load a code list once per type. Each option carries a `value`, which is the
+		 * string substituted into the prompt — deliberately the KLE/facet code or the
+		 * name rather than the internal id, since that is what the AI action executor
+		 * matches on.
+		 *
+		 * @param {string} type canonical placeholder type
+		 */
+		async loadListOptions(type) {
+			if (this.listOptions[type] !== undefined || this.listLoading[type]) return
+			this.listLoading = { ...this.listLoading, [type]: true }
+			let options = []
+			try {
+				switch (type) {
+				case 'kle':
+					await this.$store.dispatch('fetchClassificationSubjects')
+					options = this.$store.state.classificationSubjects
+						.filter(s => /^\d{2}\.\d{2}\.\d{2}$/.test(s.code))
+						.map(s => ({ id: s.code, label: `${s.code} – ${s.title}`, value: s.code }))
+					break
+				case 'sensitivity':
+					await this.$store.dispatch('fetchSensitivities')
+					options = this.$store.state.sensitivities
+						.map(s => ({ id: s.key, label: s.title, value: s.title }))
+					break
+				case 'facet':
+					await this.$store.dispatch('fetchClassificationFacets')
+					options = this.$store.state.classificationFacets
+						.filter(f => /^[A-Za-z]\d{2}$/.test(f.code))
+						.map(f => ({ id: f.uuid, label: `${f.code} – ${f.title}`, value: f.code }))
+					break
+				case 'insight':
+					await this.$store.dispatch('fetchInsightLevels')
+					options = this.$store.state.insightLevels
+						.map(l => ({ id: l.id, label: l.name, value: l.name }))
+					break
+				case 'doccategory':
+					options = (await api.getDocumentCategories())
+						.map(c => ({ id: c.id, label: c.name, value: c.name }))
+					break
+				case 'doctype':
+					options = (await api.getDocumentTypes())
+						.map(ty => ({ id: ty.name, label: ty.name, value: ty.name }))
+					break
+				}
+			} catch (e) {
+				options = []
+			} finally {
+				this.listOptions = { ...this.listOptions, [type]: options }
+				this.listLoading = { ...this.listLoading, [type]: false }
+			}
+		},
+
+		onPlaceholderSearch(ph, query) {
+			clearTimeout(this.searchTimeouts[ph.token])
+			if (ph.type === 'user' && (!query || query.length < 2)) return
+			this.searchLoading = { ...this.searchLoading, [ph.token]: true }
+			this.searchTimeouts[ph.token] = setTimeout(() => this.runPlaceholderSearch(ph, query), 300)
+		},
+
+		async runPlaceholderSearch(ph, query) {
+			this.searchLoading = { ...this.searchLoading, [ph.token]: true }
+			let options = []
+			try {
+				options = ph.type === 'user'
+					? (await api.searchUsers(query)).map(u => ({ ...u, value: u.id }))
+					: (await api.searchOrganisations(query)).map(o => ({ ...o, value: o.id }))
+			} catch (e) {
+				options = []
+			} finally {
+				this.searchOptions = { ...this.searchOptions, [ph.token]: options }
+				this.searchLoading = { ...this.searchLoading, [ph.token]: false }
+			}
+		},
+
+		onPlaceholderSelect(ph, option) {
+			this.placeholderSelections = { ...this.placeholderSelections, [ph.token]: option }
+			this.placeholderValues = {
+				...this.placeholderValues,
+				[ph.token]: option ? String(option.value ?? option.label ?? '') : '',
+			}
+		},
+
+		// Templates are matched by name when the AI actions are executed, so that
+		// — not the numeric id — is what goes into the prompt.
+		onTemplateSelected(ph, template) {
+			if (template) {
+				this.placeholderValues = { ...this.placeholderValues, [ph.token]: template.name ?? '' }
+			}
+			this.templatePickerToken = null
+		},
+
+		resetPlaceholders() {
+			for (const timeout of Object.values(this.searchTimeouts)) clearTimeout(timeout)
+			this.searchTimeouts = {}
+			this.placeholderValues = {}
+			this.placeholderSelections = {}
+			this.searchOptions = {}
+			this.searchLoading = {}
+			this.templatePickerToken = null
+		},
+
 		async load() {
 			this.loading = true
 			try {
@@ -318,7 +627,7 @@ export default {
 			this.selected = p
 			this.form = { title: p.title, scope: p.scope, prompt: p.prompt }
 			this.selectedScope = SCOPE_OPTIONS.find(o => o.id === p.scope) ?? SCOPE_OPTIONS[0]
-			this.placeholderValues = {}
+			this.resetPlaceholders()
 			this.activeTab = 'prompt'
 			this.promptActions = []
 		},
@@ -328,7 +637,7 @@ export default {
 			this.selected = { title: '', scope: defaultScope.id, prompt: '' }
 			this.form = { title: '', scope: defaultScope.id, prompt: '' }
 			this.selectedScope = defaultScope
-			this.placeholderValues = {}
+			this.resetPlaceholders()
 			this.activeTab = 'prompt'
 			this.promptActions = []
 		},
@@ -386,8 +695,13 @@ export default {
 			const substitute = (text) => {
 				let result = text
 				for (const ph of this.placeholders) {
-					const value = (this.placeholderValues[ph] ?? '').trim()
-					result = result.split(`[${ph}]`).join(value)
+					const value = (this.placeholderValues[ph.token] ?? '').trim()
+					result = result.split(`[${ph.token}]`).join(value)
+					// The action generator is asked to copy tokens verbatim, but it sometimes
+					// drops the `:type` suffix — substitute the bare label too.
+					if (ph.label !== ph.token) {
+						result = result.split(`[${ph.label}]`).join(value)
+					}
 				}
 				return result
 			}
@@ -610,6 +924,30 @@ export default {
 	border-radius: var(--border-radius-large);
 	background: var(--color-background-dark);
 	border: 1px solid var(--color-border);
+}
+
+.ai-prompt-dialog__prompt-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	min-height: 34px;
+}
+
+.ai-prompt-dialog__ph-hint {
+	margin: 4px 0 0;
+	font-size: 0.78em;
+	color: var(--color-text-maxcontrast);
+}
+
+.ai-prompt-dialog__picker-btn {
+	width: 100%;
+}
+
+.ai-prompt-dialog__date-input {
+	width: 100%;
+	box-sizing: border-box;
+	margin: 0;
 }
 
 .ai-prompt-dialog__ph-section-label {

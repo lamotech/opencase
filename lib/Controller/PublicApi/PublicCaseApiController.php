@@ -11,6 +11,7 @@ use OCA\OpenCase\Db\CaseWorker;
 use OCA\OpenCase\Db\CaseWorkerMapper;
 use OCA\OpenCase\Db\ClassificationSubjectMapper;
 use OCA\OpenCase\Db\ContactTypeMapper;
+use OCA\OpenCase\Db\EstateRoleMapper;
 use OCA\OpenCase\Db\JournalNote;
 use OCA\OpenCase\Db\JournalNoteMapper;
 use OCA\OpenCase\Db\OrganisationMapper;
@@ -21,6 +22,7 @@ use OCA\OpenCase\Service\CaseExportService;
 use OCA\OpenCase\Service\CaseService;
 use OCA\OpenCase\Service\CprCvrLookupService;
 use OCA\OpenCase\Service\DocumentService;
+use OCA\OpenCase\Service\EstateLinkService;
 use OCA\OpenCase\Service\NotFoundException;
 use OCA\OpenCase\Service\PermissionService;
 use OCP\AppFramework\Http;
@@ -79,6 +81,17 @@ use OCP\IUserSession;
  *       Caseworkers: list of {UserId}
  *     Each caseworker is resolved independently — one bad entry (unknown
  *     user, already a caseworker) doesn't fail the others.
+ * POST /index.php/apps/opencase/public/v1/api/cases/estates
+ *   — link one or more estates to a case. Body:
+ *       Uuid or CaseNumber (required, one of)
+ *       Estates: list of {Bfenummer, RoleId?}
+ *     Bfenummer is looked up via a live Datafordeler call, same as the
+ *     internal estate search — the estate (and its aggregated
+ *     estate/apartment/building data) is created locally on first use, or
+ *     reused if a matching BFE-nummer + type already exists. RoleId
+ *     defaults to 1 (Primær ejendom, opencase_estateroles) when omitted.
+ *     Each estate is resolved independently — one bad entry doesn't fail
+ *     the others.
  * POST /index.php/apps/opencase/public/v1/api/cases/documents
  *   — create a new document on a case. Body:
  *       Uuid or CaseNumber (required, one of)
@@ -110,6 +123,8 @@ class PublicCaseApiController extends AbstractPublicDataApiController {
         private IUserManager $userManager,
         private AuditService $auditService,
         private CprCvrLookupService $cprCvrLookupService,
+        private EstateLinkService $estateLinkService,
+        private EstateRoleMapper $estateRoleMapper,
         IUserSession $userSession,
     ) {
         parent::__construct($appName, $request, $userSession);
@@ -206,10 +221,12 @@ class PublicCaseApiController extends AbstractPublicDataApiController {
         $fields       = $this->caseExportService->caseFields($entity, $entity->getExportedAt());
         $participants = $this->caseExportService->participantFields($entity->getId());
         $caseworkers  = $this->caseExportService->caseworkerFields($entity->getId());
+        $estates      = $this->caseExportService->estateFields($entity->getId());
 
         $payload = $fields + [
             'Participants' => $participants,
             'Caseworkers'  => $caseworkers,
+            'Estates'      => $estates,
         ];
 
         return $this->respond('Case', $payload, Http::STATUS_CREATED);
@@ -309,10 +326,12 @@ class PublicCaseApiController extends AbstractPublicDataApiController {
         $fields       = $this->caseExportService->caseFields($entity, $entity->getExportedAt());
         $participants = $this->caseExportService->participantFields($entity->getId());
         $caseworkers  = $this->caseExportService->caseworkerFields($entity->getId());
+        $estates      = $this->caseExportService->estateFields($entity->getId());
 
         $payload = $fields + [
             'Participants' => $participants,
             'Caseworkers'  => $caseworkers,
+            'Estates'      => $estates,
         ];
 
         return $this->respond('Case', $payload);
@@ -547,6 +566,96 @@ class PublicCaseApiController extends AbstractPublicDataApiController {
     }
 
     /**
+     * Link one or more estates to a case, each resolved independently by
+     * BFE-nummer via a live Datafordeler lookup (find-or-create locally).
+     */
+    #[PublicPage]
+    #[NoAdminRequired]
+    #[NoCSRFRequired]
+    public function addEstates(): Response {
+        ['fields' => $fields, 'items' => $estatesInput] = $this->requestBodyWithList('Estates', 'Estate');
+
+        $uuid       = $this->bodyValue($fields, 'Uuid', 'uuid');
+        $caseNumber = $this->bodyValue($fields, 'CaseNumber', 'case_number');
+
+        try {
+            $caseEntity = $this->resolveCase($uuid, $caseNumber);
+        } catch (PublicCaseApiError $e) {
+            return $this->errorResponse($e->getMessage(), $e->getStatusCode());
+        }
+
+        $userId = $this->actingUserId();
+        if ($userId === null) {
+            return $this->errorResponse('No acting user resolved', Http::STATUS_FORBIDDEN);
+        }
+
+        if (!$this->caseService->canWriteCase($caseEntity->getId(), $userId)) {
+            return $this->errorResponse('User does not have write access to this case', Http::STATUS_FORBIDDEN);
+        }
+
+        if (empty($estatesInput)) {
+            return $this->errorResponse('At least one estate is required', Http::STATUS_BAD_REQUEST);
+        }
+
+        $roleNames = $this->estateRoleMapper->getNameMap('da');
+        if (empty($roleNames)) {
+            $roleNames = $this->estateRoleMapper->getNameMap('en');
+        }
+
+        $results      = [];
+        $anySucceeded = false;
+
+        foreach ($estatesInput as $item) {
+            $result = $this->addOneEstate($caseEntity->getId(), $userId, $roleNames, $item);
+            if (!isset($result['Error'])) {
+                $anySucceeded = true;
+            }
+            $results[] = $result;
+        }
+
+        $status = $anySucceeded ? Http::STATUS_CREATED : Http::STATUS_BAD_REQUEST;
+
+        return $this->respondList('Estates', 'Estate', $results, $status);
+    }
+
+    /** @param array<int, string> $roleNames */
+    private function addOneEstate(int $caseId, string $userId, array $roleNames, array $item): array {
+        $bfenummerRaw = $this->bodyValue($item, 'Bfenummer', 'bfenummer');
+        if (empty($bfenummerRaw)) {
+            return ['Error' => "'bfenummer' is required"];
+        }
+
+        $bfenummer = preg_replace('/\D/', '', (string)$bfenummerRaw) ?? '';
+        if ($bfenummer === '') {
+            return ['Bfenummer' => $bfenummerRaw, 'Error' => "'bfenummer' must be numeric"];
+        }
+
+        $roleIdRaw = $this->bodyValue($item, 'RoleId', 'role_id');
+        $roleId    = $roleIdRaw !== null && $roleIdRaw !== '' ? (int)$roleIdRaw : 1; // default: Primær ejendom
+
+        try {
+            $result = $this->estateLinkService->linkByBfenummer($caseId, $bfenummer, $roleId);
+        } catch (\Throwable $e) {
+            return ['Bfenummer' => $bfenummer, 'Error' => $e->getMessage()];
+        }
+
+        if ($result === null) {
+            return ['Bfenummer' => $bfenummer, 'Error' => "No estate found for BFE {$bfenummer}"];
+        }
+
+        $this->auditService->logEstateAdded($caseId, $userId, $roleNames[$roleId] ?? '', $result['type'], $result['bfenummer']);
+
+        return [
+            'EstateId'        => (string)$result['estate_id'],
+            'RoleId'          => (string)$roleId,
+            'RoleName'        => $roleNames[$roleId] ?? '',
+            'Type'            => $result['type'],
+            'Bfenummer'       => $result['bfenummer'] !== null ? (string)$result['bfenummer'] : null,
+            'LocationAddress' => $result['location_address'],
+        ];
+    }
+
+    /**
      * Search cases by metadata (query parameters, all optional except at
      * least one filter is recommended): search, organisation, year,
      * status_id, classification_code, sensitivity_key,
@@ -625,10 +734,12 @@ class PublicCaseApiController extends AbstractPublicDataApiController {
         $fields       = $this->caseExportService->caseFields($entity, $entity->getExportedAt());
         $participants = $this->caseExportService->participantFields($entity->getId());
         $caseworkers  = $this->caseExportService->caseworkerFields($entity->getId());
+        $estates      = $this->caseExportService->estateFields($entity->getId());
 
         $payload = $fields + [
             'Participants' => $participants,
             'Caseworkers'  => $caseworkers,
+            'Estates'      => $estates,
         ];
 
         return $this->respond('Case', $payload);

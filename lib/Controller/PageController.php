@@ -63,6 +63,11 @@ class PageController extends Controller {
 
         $this->initialState->provideInitialState(
             'opencase',
+            'enterprise_version_enabled',
+            $enterpriseVersionEnabled,
+        );
+        $this->initialState->provideInitialState(
+            'opencase',
             'ai_enabled',
             $enterpriseVersionEnabled && $this->appManager->isEnabledForUser('integration_openai'),
         );

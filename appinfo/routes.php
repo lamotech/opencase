@@ -37,6 +37,7 @@ return [
         ['name' => 'public_case_api#journal_notes', 'url' => '/public/v1/api/cases/journal-notes', 'verb' => 'GET'],
         ['name' => 'public_case_api#add_participants', 'url' => '/public/v1/api/cases/participants', 'verb' => 'POST'],
         ['name' => 'public_case_api#add_caseworkers', 'url' => '/public/v1/api/cases/caseworkers', 'verb' => 'POST'],
+        ['name' => 'public_case_api#add_estates',     'url' => '/public/v1/api/cases/estates',     'verb' => 'POST'],
         ['name' => 'public_case_api#add_journal_note', 'url' => '/public/v1/api/cases/journal-notes', 'verb' => 'POST'],
         ['name' => 'public_document_api#show',      'url' => '/public/v1/api/documents',           'verb' => 'GET'],
         ['name' => 'public_document_api#search',    'url' => '/public/v1/api/documents/search',    'verb' => 'GET'],
@@ -101,6 +102,12 @@ return [
         ['name' => 'settings#get_local_user_privileges',    'url' => '/settings/local-users/{userId}/privileges',      'verb' => 'GET'],
         ['name' => 'settings#add_local_user_privilege',     'url' => '/settings/local-users/{userId}/privileges',      'verb' => 'POST'],
         ['name' => 'settings#delete_local_user_privilege',  'url' => '/settings/local-users/{userId}/privileges/{id}', 'verb' => 'DELETE'],
+        ['name' => 'settings#add_import_location_folder',   'url' => '/settings/import-locations/folder',           'verb' => 'POST'],
+        ['name' => 'settings#add_import_location_mailbox',  'url' => '/settings/import-locations/mailbox',          'verb' => 'POST'],
+        ['name' => 'settings#edit_import_location_mailbox', 'url' => '/settings/import-locations/{id}/mailbox',     'verb' => 'POST'],
+        ['name' => 'settings#set_import_location_expired',  'url' => '/settings/import-locations/{id}/expired',     'verb' => 'POST'],
+        ['name' => 'settings#delete_import_location',       'url' => '/settings/import-locations/{id}/delete',      'verb' => 'POST'],
+        ['name' => 'settings#import_location_log',          'url' => '/settings/import-locations/{id}/log',         'verb' => 'GET'],
 
         // Catch-all for client-side routing — must be last
         ['name' => 'page#catch_all', 'url' => '/{path}', 'verb' => 'GET', 'requirements' => ['path' => '.+']],
@@ -221,6 +228,16 @@ return [
         ['name' => 'citizen#documents', 'url' => '/api/v1/citizen/documents', 'verb' => 'GET'],
 
         // ---------------------------------------------------------
+        // Estate search (Datafordeler)
+        // ---------------------------------------------------------
+        ['name' => 'estate#search',            'url' => '/api/v1/estate/search',         'verb' => 'GET'],
+        ['name' => 'estate#search_by_address', 'url' => '/api/v1/estate/search-address', 'verb' => 'GET'],
+        ['name' => 'estate#cases',             'url' => '/api/v1/estate/cases',          'verb' => 'GET'],
+        ['name' => 'estate#link_to_case',      'url' => '/api/v1/cases/{caseId}/estate', 'verb' => 'POST'],
+        ['name' => 'estate#case_estates',      'url' => '/api/v1/cases/{caseId}/estates', 'verb' => 'GET'],
+        ['name' => 'estate#show',              'url' => '/api/v1/estate/{estateId}',     'verb' => 'GET'],
+
+        // ---------------------------------------------------------
         // Organisation search (full data for the search page)
         // ---------------------------------------------------------
         ['name' => 'organisation#search',  'url' => '/api/v1/org/search',             'verb' => 'GET'],
@@ -276,6 +293,14 @@ return [
         // ---------------------------------------------------------
         ['name' => 'config#index',  'url' => '/api/v1/config',       'verb' => 'GET'],
         ['name' => 'config#update', 'url' => '/api/v1/config/{key}', 'verb' => 'PUT'],
+
+        // ---------------------------------------------------------
+        // Separation sheets
+        // ---------------------------------------------------------
+        ['name' => 'separation_sheet#index',  'url' => '/api/v1/separation-sheets', 'verb' => 'GET'],
+        ['name' => 'separation_sheet#create', 'url' => '/api/v1/separation-sheets', 'verb' => 'POST'],
+        ['name' => 'separation_sheet#update',  'url' => '/api/v1/separation-sheets/{id}', 'verb' => 'PUT'],
+        ['name' => 'separation_sheet#destroy', 'url' => '/api/v1/separation-sheets/{id}', 'verb' => 'DELETE'],
 
         // ---------------------------------------------------------
         // Code lists (requires OpenCase Administrator role)

@@ -219,6 +219,18 @@ class SamlController extends Controller {
 		$user = $this->userManager->get($userId);
 		$userExists = ($user !== null);
 
+		// Fall back to the legacy "dkmo_" prefix for users created before the
+		// opencase_ prefix was introduced, so they don't get a duplicate account.
+		if (!$userExists) {
+			$legacyUserId = 'dkmo_' . $uuid;
+			$legacyUser = $this->userManager->get($legacyUserId);
+			if ($legacyUser !== null) {
+				$userId = $legacyUserId;
+				$user = $legacyUser;
+				$userExists = true;
+			}
+		}
+
 		// Log privilege check
 		$this->traceLogger->trace('privilege_check', [
 			'userId' => $userId,
@@ -279,8 +291,15 @@ class SamlController extends Controller {
 			]);
 		}
 
-		// Update user info
-		$this->userSyncService->updateUser($uuid);
+		// Update user info. Don't let a Serviceplatformen lookup failure (e.g. a
+		// legacy dkmo_ account whose uuid Serviceplatformen no longer recognizes)
+		// block an otherwise-successful login.
+		try {
+			$this->userSyncService->updateUser($uuid, $userId);
+		} catch (\Throwable $e) {
+			$this->traceLogger->error('user_sync_failed', $e);
+			$this->logger->warning('OpenCase: failed to sync user info for ' . $userId, ['exception' => $e]);
+		}
 
 		// Sync administrator group membership
 		$adminGroup = $this->groupManager->get('admin');

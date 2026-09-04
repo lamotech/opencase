@@ -18,6 +18,7 @@ OpenCase understøtter flere forskellige sagstyper, som er tilpasset forskellige
 | **Borgersag** | Anvendes til sager vedrørende en borger. |
 | **Virksomhedssag** | Anvendes til sager vedrørende en virksomhed. |
 | **Personalesag** | Anvendes til sager vedrørende en medarbejder. |
+| **Ejendomssag** | Anvendes til sager vedrørende en ejendom. |
 
 !!! warning "Sagstypen kan ikke ændres"
 
@@ -131,6 +132,29 @@ Du kan registrere:
 En personalesag skal have en **primær part**, som er den medarbejder sagen vedrører.
 
 Afhængigt af organisationens opsætning kan medarbejderen vælges blandt organisationens brugere.
+
+---
+
+## Ejendomssag
+
+En ejendomssag skal have en **Primær ejendom** tilknyttet, som er den ejendom sagen vedrører.
+
+Du kan oprette en ny ejendom i OpenCase ved at vælge Opret -> Ejendom
+
+![Menu Opret ejendom](../images/sager/opret-ejendom.png)
+
+Her kan kan registrere:
+
+- Ejendomstype
+- BFE Nummer
+- Adresse
+
+![Dialogen Opret ejendom](../images/sager/opret-ejendom-dialog.png)
+
+
+!!! info "Enterprise"
+
+    I Enterprise-versionen kan ejendomme fremsøges direkte i det centrale ejendomsregister.
 
 ---
 

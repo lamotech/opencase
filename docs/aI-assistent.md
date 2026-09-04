@@ -1,163 +1,198 @@
 # AI-assistent
 
-OpenCase AI-assistent hjælper dig med at automatisere tilbagevendende arbejdsopgaver.
+!!! info "Enterprise"
+    OpenCase AI-assistent hjælper dig med at automatisere tilbagevendende arbejdsopgaver.
 
-Ved hjælp af **prompts** kan AI-assistenten udføre en eller flere handlinger i OpenCase, så du slipper for manuelt at gennemføre de samme arbejdsgange igen og igen.
+    Ved hjælp af **prompts** kan AI-assistenten udføre en eller flere handlinger i OpenCase, så du slipper for manuelt at gennemføre de samme arbejdsgange igen og igen.
 
-AI-assistenten kan eksempelvis:
+    AI-assistenten kan eksempelvis:
 
-- oprette en sag
-- oprette et dokument
-- oprette en fil fra en skabelon
-- registrere parter eller kontakter
-- sende Digital Post
-- oprette påmindelser
-- udføre flere handlinger i én arbejdsgang
+    - oprette en sag
+    - oprette et dokument
+    - oprette en fil fra en skabelon
+    - registrere parter eller kontakter
+    - sende Digital Post
+    - oprette påmindelser
+    - udføre flere handlinger i én arbejdsgang
 
-![AI-assistent](images/ai/ai-assistent.png)
+    ![AI-assistent](images/ai/ai-assistent.png)
 
----
+    ---
 
-## Udfør en prompt
+    ## Udfør en prompt
 
-Klik på **AI-assistent** og vælg **Prompts** for at åbne **Promptbiblioteket**.
+    Klik på **AI-assistent** og vælg **Prompts** for at åbne **Promptbiblioteket**.
 
-![Knappen Prompts](images/ai/prompts-knap.png)
+    ![Knappen Prompts](images/ai/prompts-knap.png)
 
-Her vises de prompts, du har adgang til.
+    Her vises de prompts, du har adgang til.
 
-Vælg den ønskede prompt og klik **Udfør**.
+    Vælg den ønskede prompt og klik **Udfør**.
 
-Hvis prompten indeholder parametre, bliver du bedt om at udfylde de nødvendige oplysninger, inden udførelsen starter.
+    Hvis prompten indeholder parametre, bliver du bedt om at udfylde de nødvendige oplysninger, inden udførelsen starter.
 
----
+    ---
 
-## Promptbibliotek
+    ## Promptbibliotek
 
-Promptbiblioteket indeholder alle de prompts, du har adgang til.
+    Promptbiblioteket indeholder alle de prompts, du har adgang til.
 
-Et prompt beskriver en arbejdsgang, som AI-assistenten kan udføre.
+    Et prompt beskriver en arbejdsgang, som AI-assistenten kan udføre.
 
-Et prompt kan bestå af én enkelt handling eller en længere sekvens af handlinger.
+    Et prompt kan bestå af én enkelt handling eller en længere sekvens af handlinger.
 
-Eksempel:
+    Eksempel:
 
-```text
-Opret en ny sag med sagstype Borgersag og titel '[Titel]', organisation #MinAfdeling, KLE nummer [KLE Nummer], handlingsfacet [Handlingsfacet], følsomhed 'Følsomme personoplysninger eller følsomme forretningsdata' og indsigtsgrad Begrænset.
+    ```text
+    Opret en ny sag med sagstype Borgersag og titel '[Titel]', organisation #MinAfdeling, KLE nummer [KLE Nummer], handlingsfacet [Handlingsfacet], følsomhed 'Følsomme personoplysninger eller følsomme forretningsdata' og indsigtsgrad Begrænset.
 
-Tilføj borgeren med CPR [CPR Nummer] som part med rollen "Primær part".
-```
+    Tilføj borgeren med CPR [CPR Nummer] som part med rollen "Primær part".
+    ```
 
-Ved at gemme arbejdsgangen som et prompt kan den udføres igen og igen uden at skulle skrives på ny.
+    Ved at gemme arbejdsgangen som et prompt kan den udføres igen og igen uden at skulle skrives på ny.
 
-![Promptbibliotek](images/ai/prompts-bibliotek.png)
+    ![Promptbibliotek](images/ai/prompts-bibliotek.png)
 
 
----
+    ---
 
-## Parametre
+    ## Parametre
 
-Et prompt kan indeholde **parametre**, som udfyldes, når prompten udføres.
+    Et prompt kan indeholde **parametre**, som udfyldes, når prompten udføres.
 
-Parametre skrives i firkantede parenteser.
+    Parametre skrives i firkantede parenteser.
 
-Eksempler:
+    Eksempler:
 
-- `[Titel]`
-- `[CPR Nummer]`
-- `[KLE Nummer]`
-- `[Handlingsfacet]`
+    - `[Titel]`
+    - `[CPR Nummer]`
+    - `[KLE Nummer]`
+    - `[Handlingsfacet]`
 
-Når prompten startes, vises en dialog, hvor du indtaster værdierne.
+    Når prompten startes, vises en dialog, hvor du indtaster værdierne.
 
-Det gør det muligt at genbruge det samme prompt til mange forskellige sager og dokumenter.
+    Det gør det muligt at genbruge det samme prompt til mange forskellige sager og dokumenter.
 
-![Dialog Udfyld parametre](images/ai/prompt-parametre.png)
+    ![Dialog Udfyld parametre](images/ai/prompt-parametre.png)
 
----
+    ---
 
-## Automatisk handlingssekvens
+    ## Indsæt parameter
 
-Når et prompt oprettes eller ændres, analyserer AI-assistenten prompten og beregner den nødvendige handlingssekvens.
+    Når du redigerer en prompt, kan du bruge knappen **Indsæt parameter** til at indsætte foruddefinerede, typede parametre i prompten, i stedet for selv at skrive dem.
 
-Den beregnede handlingssekvens gemmes sammen med prompten.
+    Typede parametre er koblet til en bestemt type data i OpenCase, fx organisation, KLE-nummer eller skabelon. Det gør det muligt for AI-assistenten at vise en relevant vælger med gyldige værdier, når prompten udføres, i stedet for et frit tekstfelt.
 
-Det betyder, at OpenCase normalt ikke behøver at anvende AI hver gang prompten udføres.
+    ### Sådan indsættes en parameter
 
-!!! info
+    1. Placér markøren det sted i prompten, hvor parameteren skal indsættes.
+    2. Klik på knappen **Indsæt parameter**.
+    3. Vælg den ønskede parameter på listen.
 
-    AI anvendes ved oprettelse eller ændring af et prompt. Ved senere udførelse benyttes den allerede beregnede handlingssekvens, hvilket giver en hurtigere udførelse og reducerer forbruget af AI-tokens.
+    Parameteren indsættes herefter i prompten i det korrekte format.
 
----
+    ### Tilgængelige parametre
 
-## Anvendelsesområde (Scope)
+    | Navn              | Parameter                             |
+    | ----------------- | -------------------------------------- |
+    | Min organisation   | `#MinAfdeling`                         |
+    | Organisation        | `[Organisation:organisation]`          |
+    | KLE Nummer            | `[KLE Nummer:kle]`                     |
+    | Følsomhed              | `[Følsomhed:følsomhed]`                |
+    | Handlingsfacet          | `[Handlingsfacet:handlingsfacet]`      |
+    | Ansvarlig                 | `[Ansvarlig:ansvarlig]`                |
+    | Dokumentkategori            | `[Dokumentkategori:dokumentkategori]`  |
+    | Dokumenttype                  | `[Dokumenttype:dokumenttype]`          |
+    | Skabelon                        | `[Skabelon:skabelon]`                  |
 
-Hvert prompt har et **anvendelsesområde (scope)**, som angiver, hvor det kan anvendes.
+    **Min organisation** (`#MinAfdeling`) er et særligt parameter, der automatisk udfyldes med organisationen/afdelingen for den bruger, som udfører prompten. Denne værdi skal derfor ikke udfyldes manuelt, når prompten køres.
 
-Eksempler på scope:
+    De øvrige parametre er typede parametre, skrevet i formatet `[Navn:type]`. Typen efter kolonet (fx `organisation`, `kle`, `følsomhed`, `handlingsfacet`, `ansvarlig`, `dokumentkategori`, `dokumenttype` eller `skabelon`) fortæller AI-assistenten, hvilken slags data der er tale om, så der ved udførelse af prompten vises en relevant vælger med gyldige værdier for netop den type.
 
-- **Globalt** – prompten kan udføres uanset hvor du befinder dig i OpenCase.
-- **Sag** – prompten kræver, at en sag er åben.
-- **Dokument** – prompten kræver, at et dokument er åbent.
+    ---
 
-Kun de prompts, der er relevante for den aktuelle situation, vises i Promptbiblioteket.
+    ## Automatisk handlingssekvens
 
-Dette gør det lettere at finde det rigtige prompt og reducerer risikoen for fejl.
+    Når et prompt oprettes eller ændres, analyserer AI-assistenten prompten og beregner den nødvendige handlingssekvens.
 
----
+    Den beregnede handlingssekvens gemmes sammen med prompten.
 
-## Favoritprompts
+    Det betyder, at OpenCase normalt ikke behøver at anvende AI hver gang prompten udføres.
 
-Prompts, som anvendes ofte, kan markeres som **favoritter**.
+    !!! info
 
-Favoritprompts vises øverst i Promptbiblioteket, så de er hurtige at finde.
+        AI anvendes ved oprettelse eller ændring af et prompt. Ved senere udførelse benyttes den allerede beregnede handlingssekvens, hvilket giver en hurtigere udførelse og reducerer forbruget af AI-tokens.
 
-Dette er især nyttigt for arbejdsgange, som udføres mange gange i løbet af en arbejdsdag.
+    ---
 
----
+    ## Anvendelsesområde (Scope)
 
-## Eksempler på prompts
+    Hvert prompt har et **anvendelsesområde (scope)**, som angiver, hvor det kan anvendes.
 
-AI-assistenten kan anvendes til mange forskellige arbejdsgange.
+    Eksempler på scope:
 
-Eksempler:
+    - **Globalt** – prompten kan udføres uanset hvor du befinder dig i OpenCase.
+    - **Sag** – prompten kræver, at en sag er åben.
+    - **Dokument** – prompten kræver, at et dokument er åbent.
 
-- Opret en borgersag med en primær part.
-- Opret et dokument fra en bestemt skabelon.
-- Registrér en virksomhed som part.
-- Send et dokument med Digital Post.
-- Opret en påmindelse på en sag.
-- Del et dokument med en kollega.
-- Opret en standardsag med de mest anvendte oplysninger.
+    Kun de prompts, der er relevante for den aktuelle situation, vises i Promptbiblioteket.
 
-Flere handlinger kan kombineres i ét prompt, så en hel arbejdsgang udføres automatisk.
+    Dette gør det lettere at finde det rigtige prompt og reducerer risikoen for fejl.
 
----
+    ---
 
-## Fordele ved AI-assistenten
+    ## Favoritprompts
 
-Ved at anvende AI-assistenten kan du:
+    Prompts, som anvendes ofte, kan markeres som **favoritter**.
 
-- automatisere tilbagevendende opgaver
-- spare tid
-- sikre ensartede arbejdsgange
-- reducere risikoen for fejl
-- standardisere sagsbehandlingen
+    Favoritprompts vises øverst i Promptbiblioteket, så de er hurtige at finde.
 
-Jo oftere en arbejdsgang udføres, desto større gevinst kan der være ved at oprette et prompt.
+    Dette er især nyttigt for arbejdsgange, som udføres mange gange i løbet af en arbejdsdag.
 
----
+    ---
 
-## God praksis
+    ## Eksempler på prompts
 
-Det anbefales at:
+    AI-assistenten kan anvendes til mange forskellige arbejdsgange.
 
-- oprette prompts til tilbagevendende arbejdsopgaver
-- anvende parametre, så prompts kan genbruges
-- markere de mest anvendte prompts som favoritter
-- give prompts beskrivende navne, så de er lette at finde
+    Eksempler:
 
----
+    - Opret en borgersag med en primær part.
+    - Opret et dokument fra en bestemt skabelon.
+    - Registrér en virksomhed som part.
+    - Send et dokument med Digital Post.
+    - Opret en påmindelse på en sag.
+    - Del et dokument med en kollega.
+    - Opret en standardsag med de mest anvendte oplysninger.
+
+    Flere handlinger kan kombineres i ét prompt, så en hel arbejdsgang udføres automatisk.
+
+    ---
+
+    ## Fordele ved AI-assistenten
+
+    Ved at anvende AI-assistenten kan du:
+
+    - automatisere tilbagevendende opgaver
+    - spare tid
+    - sikre ensartede arbejdsgange
+    - reducere risikoen for fejl
+    - standardisere sagsbehandlingen
+
+    Jo oftere en arbejdsgang udføres, desto større gevinst kan der være ved at oprette et prompt.
+
+    ---
+
+    ## God praksis
+
+    Det anbefales at:
+
+    - oprette prompts til tilbagevendende arbejdsopgaver
+    - anvende parametre, så prompts kan genbruges
+    - markere de mest anvendte prompts som favoritter
+    - give prompts beskrivende navne, så de er lette at finde
+
+    ---
 
 ## Se også
 

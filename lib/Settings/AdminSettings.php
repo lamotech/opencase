@@ -8,6 +8,7 @@ use OCA\OpenCase\AppInfo\Application;
 use OCA\OpenCase\Db\ApiClientRepository;
 use OCA\OpenCase\Db\CertificateRepository;
 use OCA\OpenCase\Db\ExportLogMapper;
+use OCA\OpenCase\Db\ImportLocationRepository;
 use OCA\OpenCase\Db\KlassSyncLogRepository;
 use OCA\OpenCase\Db\OrgSyncLogRepository;
 use OCA\OpenCase\Enum\CertificateType;
@@ -27,6 +28,7 @@ class AdminSettings implements ISettings {
 		private OrgSyncLogRepository $orgSyncLogRepository,
 		private KlassSyncLogRepository $klassSyncLogRepository,
 		private ApiClientRepository $apiClientRepository,
+		private ImportLocationRepository $importLocationRepository,
 		private ExportLogMapper $exportLogMapper,
 		private IInitialState $initialState,
 		private IAppManager $appManager,
@@ -64,6 +66,17 @@ class AdminSettings implements ISettings {
 		$this->initialState->provideInitialState('syncLog', $this->orgSyncLogRepository->findLatest(5));
 		$this->initialState->provideInitialState('syncLogKlassifikation', $this->klassSyncLogRepository->findLatest(5));
 		$this->initialState->provideInitialState('apiClients', $this->apiClientPresenterService->enrich($this->apiClientRepository->findAll()));
+
+		$importLocations = array_merge(
+			$this->importLocationRepository->findAllByType('folder'),
+			$this->importLocationRepository->findAllByType('mailbox'),
+		);
+		// Never send the mailbox password to the browser.
+		$importLocations = array_map(static function (array $row): array {
+			unset($row['mailbox_password']);
+			return $row;
+		}, $importLocations);
+		$this->initialState->provideInitialState('importLocations', $importLocations);
 
 		$exportLog = array_map(static fn ($e) => [
 			'sync_time' => $e->getSyncTime()?->format('Y-m-d H:i:s') ?? '',

@@ -128,6 +128,7 @@ class Configuration {
 			'entity_id_postforespoerg' => 'http://entityid.kombit.dk/service/postforespoerg/1',
 			'endpoint_postforespoerg' => 'https://exttest.serviceplatformen.dk/service/PostForespoerg_1',
 			'datafordeler_endpoint_cvr' => 'https://graphql.datafordeler.dk/flexibleCurrent/v1',
+			'datafordeler_endpoint_estate' => 'https://graphql.datafordeler.dk/flexibleCurrent/v1',
 			'sftp_host' => 'sftpexttest.serviceplatformen.dk',
 			'sftp_user_name' => 'opencase',
 			'sftp_ssh_private_key_full_fileName' => '/var/certificates/sshkeyfile.ssh',

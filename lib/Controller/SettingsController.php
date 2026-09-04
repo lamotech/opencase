@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace OCA\OpenCase\Controller;
 
 use OCA\OpenCase\Db\ApiClientRepository;
+use OCA\OpenCase\Db\ImportItemRepository;
+use OCA\OpenCase\Db\ImportLocationRepository;
 use OCA\OpenCase\Db\UserInfoMapper;
 use OCA\OpenCase\Db\UserOrgMapper;
 use OCA\OpenCase\Service\AddinOriginService;
@@ -58,6 +60,12 @@ use OCP\IUserManager;
  *   GET    /settings/local-users/{userId}/privileges          — fetch a local user's privilege groups
  *   POST   /settings/local-users/{userId}/privileges          — add a privilege group and recompute access
  *   DELETE /settings/local-users/{userId}/privileges/{id}     — remove a privilege group and recompute access
+ *   POST   /settings/import-locations/folder                  — add a folder import location
+ *   POST   /settings/import-locations/mailbox                 — add a mailbox import location
+ *   POST   /settings/import-locations/{id}/mailbox             — edit a mailbox import location
+ *   POST   /settings/import-locations/{id}/expired             — expire/re-enable an import location
+ *   POST   /settings/import-locations/{id}/delete               — delete an import location
+ *   GET    /settings/import-locations/{id}/log                  — import items for a location (last 30 days)
  */
 class SettingsController extends Controller {
 
@@ -82,6 +90,8 @@ class SettingsController extends Controller {
         private TransactionLogService $transactionLogService,
         private ApiClientRepository $apiClientRepository,
         private ApiClientPresenterService $apiClientPresenterService,
+        private ImportLocationRepository $importLocationRepository,
+        private ImportItemRepository $importItemRepository,
         private UserInfoMapper $userInfoMapper,
         private UserOrgMapper $userOrgMapper,
         private PrivilegeService $privilegeService,
@@ -757,6 +767,136 @@ class SettingsController extends Controller {
         $result->closeCursor();
 
         return $groups;
+    }
+
+    /**
+     * Add a folder import location.
+     *
+     * Request body: { "folderpath": "...", "file_extension_filter": "pdf,docx" }
+     * Response: { "import_locations": [...] }
+     */
+    public function addImportLocationFolder(): JSONResponse {
+        $folderPath = trim((string)$this->request->getParam('folderpath', ''));
+        if ($folderPath === '') {
+            return new JSONResponse(['error' => 'folderpath is required'], Http::STATUS_BAD_REQUEST);
+        }
+        $extensionFilter = (string)$this->request->getParam('file_extension_filter', '');
+
+        $this->importLocationRepository->insertFolder($folderPath, $extensionFilter);
+
+        return new JSONResponse(['import_locations' => $this->listImportLocations()]);
+    }
+
+    /**
+     * Add a mailbox import location.
+     *
+     * Request body: { "mailbox_server", "mailbox_port", "mailbox_user",
+     *                  "mailbox_password", "mailbox_use_ssl", "file_extension_filter" }
+     * Response: { "import_locations": [...] }
+     */
+    public function addImportLocationMailbox(): JSONResponse {
+        $server = trim((string)$this->request->getParam('mailbox_server', ''));
+        $user   = trim((string)$this->request->getParam('mailbox_user', ''));
+        if ($server === '' || $user === '') {
+            return new JSONResponse(['error' => 'mailbox_server and mailbox_user are required'], Http::STATUS_BAD_REQUEST);
+        }
+
+        $this->importLocationRepository->insertMailbox(
+            $server,
+            (string)$this->request->getParam('mailbox_port', '993'),
+            $user,
+            (string)$this->request->getParam('mailbox_password', ''),
+            (bool)$this->request->getParam('mailbox_use_ssl', true),
+            (string)$this->request->getParam('file_extension_filter', ''),
+        );
+
+        return new JSONResponse(['import_locations' => $this->listImportLocations()]);
+    }
+
+    /**
+     * Edit a mailbox import location. The password field is optional — an
+     * empty/missing value leaves the currently stored password unchanged.
+     *
+     * Response: { "import_locations": [...] }
+     */
+    public function editImportLocationMailbox(int $id): JSONResponse {
+        $server = trim((string)$this->request->getParam('mailbox_server', ''));
+        $user   = trim((string)$this->request->getParam('mailbox_user', ''));
+        if ($server === '' || $user === '') {
+            return new JSONResponse(['error' => 'mailbox_server and mailbox_user are required'], Http::STATUS_BAD_REQUEST);
+        }
+
+        $password = (string)$this->request->getParam('mailbox_password', '');
+
+        $this->importLocationRepository->updateMailbox(
+            $id,
+            $server,
+            (string)$this->request->getParam('mailbox_port', '993'),
+            $user,
+            $password !== '' ? $password : null,
+            (bool)$this->request->getParam('mailbox_use_ssl', true),
+            (string)$this->request->getParam('file_extension_filter', ''),
+        );
+
+        return new JSONResponse(['import_locations' => $this->listImportLocations()]);
+    }
+
+    /**
+     * Expire or re-enable an import location (folder or mailbox).
+     *
+     * Request body: { "expired": true|false }
+     * Response: { "import_locations": [...] }
+     */
+    public function setImportLocationExpired(int $id): JSONResponse {
+        $expired = (bool)$this->request->getParam('expired', true);
+        $this->importLocationRepository->setExpired($id, $expired);
+
+        return new JSONResponse(['import_locations' => $this->listImportLocations()]);
+    }
+
+    /**
+     * Delete an import location (folder or mailbox).
+     *
+     * Response: { "import_locations": [...] }
+     */
+    public function deleteImportLocation(int $id): JSONResponse {
+        $this->importLocationRepository->delete($id);
+
+        return new JSONResponse(['import_locations' => $this->listImportLocations()]);
+    }
+
+    /**
+     * Import items for one location from the last 30 days, newest first.
+     *
+     * Response: { "items": [{ id, identification, status, document_id, imported_at, file_stats }] }
+     */
+    public function importLocationLog(int $id): JSONResponse {
+        $items = array_map(static fn(array $row): array => [
+            'id'             => (int)$row['id'],
+            'identification' => $row['identification'],
+            'status'         => $row['status'],
+            'document_id'    => $row['document_id'] !== null ? (int)$row['document_id'] : null,
+            'imported_at'    => $row['imported_at'],
+            'file_stats'     => $row['file_stats'],
+        ], $this->importItemRepository->findRecentByLocation($id, 30));
+
+        return new JSONResponse(['items' => $items]);
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function listImportLocations(): array {
+        $rows = array_merge(
+            $this->importLocationRepository->findAllByType('folder'),
+            $this->importLocationRepository->findAllByType('mailbox'),
+        );
+
+        // Never send the mailbox password back to the browser.
+        return array_map(static function (array $row): array {
+            unset($row['mailbox_password']);
+            return $row;
+        }, $rows);
     }
 
     /**

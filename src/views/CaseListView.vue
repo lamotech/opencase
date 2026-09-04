@@ -3,12 +3,6 @@
 		<!-- Header bar -->
 		<div class="opencase-case-list__header">
 			<h2>{{ pageTitle }}</h2>
-			<NcButton type="primary" @click="showNewCaseDialog = true">
-				<template #icon>
-					<PlusIcon :size="20" />
-				</template>
-				{{ t('opencase', 'Opret sag') }}
-			</NcButton>
 		</div>
 
 		<!-- Filter bar -->
@@ -47,11 +41,6 @@
 			:description="t('opencase', 'Prøv at ændre dine filtre eller opret en ny sag.')">
 			<template #icon>
 				<FolderIcon :size="64" />
-			</template>
-			<template #action>
-				<NcButton type="primary" @click="showNewCaseDialog = true">
-					{{ t('opencase', 'Opret sag') }}
-				</NcButton>
 			</template>
 		</NcEmptyContent>
 

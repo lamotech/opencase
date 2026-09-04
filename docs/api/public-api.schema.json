@@ -103,6 +103,21 @@
       "required": ["UserId"]
     },
 
+    "EstateType": {
+      "$anchor": "EstateType",
+      "title": "Case-linked estate (fast ejendom)",
+      "description": "Shared shape for CaseType.Estates[]. Populated from the local opencase_estate/opencase_caseestates tables — see EstateController/EstateLinkService.",
+      "type": "object",
+      "properties": {
+        "RoleId": { "$ref": "#NumericString", "description": "opencase_estateroles.id — not currently exposed via a dedicated lookup endpoint (unlike ParticipantRoleId/ContactRoleId)." },
+        "RoleName": { "type": ["string", "null"] },
+        "Type": { "type": "string", "description": "\"Samlet fast ejendom\", \"Ejerlejlighed\", or \"Bygning på fremmed grund\"." },
+        "BfeNumber": { "$ref": "#NumericString" },
+        "LocationAddress": { "type": ["string", "null"] }
+      },
+      "required": ["Type"]
+    },
+
     "FileType": {
       "$anchor": "FileType",
       "title": "Document file",
@@ -203,7 +218,7 @@
     "CaseFields": {
       "$anchor": "CaseFields",
       "title": "Case, scalar fields only",
-      "description": "The flat field set shared by every case shape. Used standalone (no Participants/Caseworkers/Documents) as each item of CaseSearchResult.Cases.",
+      "description": "The flat field set shared by every case shape. Used standalone (no Participants/Caseworkers/Estates/Documents) as each item of CaseSearchResult.Cases.",
       "type": "object",
       "properties": {
         "Id": { "$ref": "#NumericString" },
@@ -238,16 +253,17 @@
     "CaseDetail": {
       "$anchor": "CaseDetail",
       "title": "Case, full detail",
-      "description": "Response shape of GET/POST/PUT /cases: CaseFields plus Participants and Caseworkers (but NOT Documents/JournalNotes — fetch those via the dedicated /cases/documents and /cases/journal-notes endpoints).",
+      "description": "Response shape of GET/POST/PUT /cases: CaseFields plus Participants, Caseworkers and Estates (but NOT Documents/JournalNotes — fetch those via the dedicated /cases/documents and /cases/journal-notes endpoints).",
       "allOf": [
         { "$ref": "#CaseFields" },
         {
           "type": "object",
           "properties": {
             "Participants": { "type": "array", "items": { "$ref": "#PartyType" } },
-            "Caseworkers": { "type": "array", "items": { "$ref": "#CaseworkerType" } }
+            "Caseworkers": { "type": "array", "items": { "$ref": "#CaseworkerType" } },
+            "Estates": { "type": "array", "items": { "$ref": "#EstateType" } }
           },
-          "required": ["Participants", "Caseworkers"]
+          "required": ["Participants", "Caseworkers", "Estates"]
         }
       ]
     },
