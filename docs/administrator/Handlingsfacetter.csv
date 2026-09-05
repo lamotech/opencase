@@ -1,0 +1,718 @@
+"uuid";"code";"title";"description";"active"
+"02bf0cb5-f17c-484c-aec7-d4fbca54a03f";"Ø07";"Afskrivninger";"Med afskrivninger menes såvel afskrivninger på kommunale driftsmidler, som køretøjer, materiel o.l., samt afskrivninger af uerholdelige beløb.";1
+"033ba65f-5b9b-4f69-9b1d-ef4d3e832d0a";"Ø50";"Økonomiske udlån";"Sager om kommunale økonomiske udlån journaliseres med handlingsfacet Ø50. Der kan eksempelvis være tale om borgere, der i henhold til lovgivningen kan låne til beboerindskud og ejendomsskatter. Facetten anvendes også, når de kommunale institutioner låner af  ""kommunekassen"". Tinglysning i forbindelse med lån til betaling af ejendomsskatter journaliseres ligeledes med handlingsfacet Ø50.
+
+Ikke-økonomiske udlån, dvs. udlån uden betaling, journaliseres med handlingsfacet G07.";1
+"05af4416-f610-4360-98a8-d62bdcc62321";"G10";"Salg af ejendom, tjenesteydelser, varer mv.";"G10 anvendes til sager, hvor kommunen sælger varer, tjenesteydelser, ejendom mv.
+
+Fx salg af
+
+
+    
+        kommunal ejendom / grunde
+         knowhow
+        overskudsproduktion";1
+"0bd70476-7f6d-4e54-b884-bf2b761f3fbc";"Ø60";"Garantier (kommunegarantistillelse)";"Ø60 anvendes til sager, hvor det er kommunen, der stiller en garanti. Dette kan ske i forbindelse med opførelse og drift af almene boliger eller eksempelvis i forhold til naturgasselskaber. Endelig kan kommunen stille garantier i forbindelse med forskellige kulturelle arrangementer arrangeret af foreninger, underskudsgaranti for flaske- og avisindsamlinger o.l.";1
+"0c9c2bef-3b24-45bc-ac6e-2b1228d6706e";"P28";"Kendelser";"Kendelser, der udstedes i sager, hvor kommunen er part, journaliseres med handlingsfacet P28. Der kan eksempelvis være tale om kendelser i vandløbsspørgsmål og personaleforhold. Kendelser i sager, hvor kommunen ikke er part, men kan have en interesse i at kende kendelsen, journaliseres under I-handlingsfacetterne, såfremt kommunen ønsker at journalisere materialet.
+
+Desuden anvendes handlingsfacetten til sager hvor kommunen lægger sag an mod en borger eller anden juridisk enhed, hvor kommunen således er part.";1
+"128cbb76-05b0-4120-a4a6-86033239b7b6";"P17";"Andre myndigheders planer og planforslag, som kommunen behandler";"P17 facetten dækker sager om planforslag og planer fra andre myndigheder. Med myndigheder tænkes på diverse ministerier, styrelser og regioner. Som eksempler kan nævnes regional udviklingsstrategi, plan for beskyttelse af grundvand, ambulanceberedskab, postbetjening, stationsbetjening, kasernenedlæggelser, placering af statsinstitutioner osv. Forudsætningen for oprettelse af en P17-sag er, at kommunen skal sagsbehandle/udtale sig om den pågældende plan. Fremsendes andre myndigheders planer til orientering for kommunen, uden der skal ske en egentlig sagsbehandling, anvendes facet I02, såfremt kommunen vil journalisere materialet. P17 bruges ofte i forbindelse med hovedgruppe 30.";1
+"163cbc7d-879d-42de-a2ec-79f4c27b90b6";"S29";"Fastsættelse og afregning af afgifter (takster, bidrag o.l.) for ydelser";"S29 dækker populært sagt fastsættelsen af kommunal ""egenbetaling"" i de tilfælde, hvor kommunen kan eller skal opkræve en betaling/afgift, fx sager om:
+
+
+    
+        fastsættelse af forældrebetaling til daginstitutioner/klubber
+        renovationsafgifter
+        vandafledningsafgifter
+        betaling for fotokopier til foreninger
+        betaling for ældres servicepakke
+        betaling for kommunal forsyningsvirksomhed
+        
+    
+
+
+Takster o.l. fra andre, som kommunen skal godkende, journaliseres med handlingsfacet S55.";1
+"19bb80f2-d7cc-4f6c-aa08-809e35710a2f";"P21";"Regler og principielle afgørelser";"P21-sagerne indeholder regler, principper mv., der kan anvendes ved efterfølgende sagsafgørelser. 
+Dette betyder, at træffer eksempelvis et politisk udvalg en principbeslutning om, at man konsekvent vil sige nej til bestemte typer af ansøgninger, vil den sag, der har dannet grundlag for principbeslutningen, få handlingsfacet P21. 
+Alle efterfølgende ansøgninger vil få handlingsfacet G01, hvor kommunen med udgangspunkt i den principielle P21-sag afgør sagen administrativt og besvarer ansøgninger med ja eller nej. Hver gang der modtages en lignende ansøgning, kan kommunen således i P21-sagen se, hvilke principper der er fastlagt for det pågældende område.
+
+P21 anvendes desuden til egentlige regler og bestemmelser, eksempelvis om åbningstid og optagelseskrav på institutioner.
+
+Endvidere bruges handlingsfacetten til fastlæggelse af kommunale forskrifter vedr. forhold for borgere eller virksomheder, fx vedr. indretning af drift af andre virksomheder end listevirksomheder.";1
+"19c94422-d7b1-42a0-a438-e5a030bf768e";"Ø";"Økonomi efter fastlagte rammer";"Ø kategorien dækker sager om økonomi efter fastlagte rammer, enten indenfor lovgivningen, af økonomiudvalget eller kommunalbestyrelsen. Til sager om overordnet økonomi behandlet af økonomiudvalget anvendes S facetterne. Bemærk at mange sager om økonomi fremover placeres under emneplanens GR 00.30 til 00.36";1
+"1a75831b-4efa-485a-93dc-e6942f3cc062";"P05";"Egne statistikker, undersøgelser, analyser";"P05 anvendes ved alle former for statistikker, undersøgelser o.l., som kommunen/institutionen igangsætter, fx:
+
+
+    
+        trafiktællinger
+        ledelsesinformation, (tværgående, se emnenr. 00.15.20)
+        børnemiljøvurderinger
+        diverse personalestatistikker
+        borger-/brugerundersøgelser
+        dataindsamlinger til internt brug
+        brugerevaluering
+        
+    
+
+
+Facetten kombineres med det emne undersøgelsen vedrører.";1
+"250b0266-3b0b-44a6-9c9d-89d957df46c0";"P16";"Kommunale planer, planforslag og virksomhedsplaner omfattende dele af kommunen";"P16 anvendes ved planforslag og planer, der udelukkende dækker en del af kommunen, eksempelvis lokalplaner og planer i forbindelse med de forskellige distriktsinddelinger af kommunen som skoledistrikter, hjemmeplejedistrikter, ældreområder o.l.
+        Ligeledes kan der være forsyningsplaner for enkelte dele af kommunen, eksempelvis vandforsyningsplaner pr. vandværk.
+    
+
+
+Henvisning til andre relevante facetter/emner:
+
+
+    
+        Høringer i forbindelse med udarbejdelsen af planerne tilføjes handlingsfacet K04.
+        Planer, handleplaner o. lign. for den enkelte borger eller medarbejder journaliseres med handlingsfacet G01, såfremt den journaliseres som en selvstændig enkeltsag. Fx handleplaner i forbindelse med særlig støtte til børn og unge, planer for sygdomsforløb, aktivitetsplaner for lærere.
+        Ved ændring af fysiske grænser mellem kommuner, se 01.00.10 'Kommunens arealmæssige afgrænsning'";1
+"295b3cde-b689-4ac7-849f-f4dae6d3e599";"K00";"Kontrol og klager i almindelighed";"K00 anvendes når en sag går på tværs af flere K handlingsfacetter eller når K facetkategorien ikke rummer en specifik facet til sagen.";1
+"2ad3343b-b867-4ad6-a1ef-df14c5cf424b";"A00";"Organisering mv. i almindelighed";"A00 anvendes når en sag går på tværs af flere A handlingsfacetter eller når A facetkategorien ikke rummer en specifik facet til sagen.";1
+"2ee492b5-2d71-4489-ad2b-e88d18d4d149";"S00";"Overordnet økonomi i almindelighed";"S00 anvendes når en sag går på tværs af flere S handlingsfacetter eller når S facetkategorien ikke rummer en specifik facet til sagen.";1
+"2feafb9a-1363-4d05-b66e-9a2143d55e81";"Ø59";"Garantistillelse til kommunen";"I forbindelse med udførsel af opgaver/anlæg for kommunen kræves der i nogle tilfælde indbetaling af et beløb på en spærret bankkonto. Garantien indløses i tilfælde af misligholdelse af kontrakten eller virksomhedens betalingsstandsning. Sådanne bankgarantier skal journaliseres med handlingsfacet Ø59, der således dækker garantistillelser til kommunen, modsat Ø60, hvor det er kommunen, der stiller garanti.";1
+"30e15221-75f2-4cb7-bc4e-6d8070730b25";"P20";"Projekter";"P20 anvendes ved alle former for projekter og projektforslag inden for samtlige kommunale områder. Det er kommunen selv, der afgør, hvornår noget er et projekt, men et projekt vil typisk adskille sig fra den daglige »driftssituation« ved at være tidsbestemt i en kortere eller længere periode. P20 anvendes også selv om projektet ikke gennemføres. Eksempler er:
+
+
+    
+        byggeprojekter
+        vejprojekter
+        anlægsprojekter
+        erhvervsprojekter
+        socialprojekter
+        sundhedsprojekter
+        kulturprojekter
+        borgerprojekter
+        skoleprojekter
+        medarbejderprojekter
+        IT-projekter";1
+"3751b433-201c-4d87-8b6c-60cda4219712";"P08";"Forsøgsordninger";"P08 facetten anvendes når kommunen enten alene, eller sammen med diverse ministerier og organisationer, gennemfører forskellige forsøgsordninger. Inden for nogle sektorområder åbner lovgivningen tillige for muligheden for forsøgsordninger, eksempelvis på folkeskoleområdet og det sociale område.";1
+"388de92f-fe48-43f0-abd7-fcd7967ec987";"Ø61";"Erstatninger til og fra kommunen";"Ø61 dækker både de tilfælde, hvor kommunen modtager erstatning og hvor kommunen udbetaler erstatning.
+
+Selvforsikrede kommuner anvender Ø61 til alle sager om udbetaling af erstatninger.";1
+"3c69d2e8-560d-4964-857e-b43756a95bb2";"Ø48";"Henstand/eftergivelse";"Ø48 dækker sager om henstand og/eller eftergivelse af en skyldig betaling til kommunen.
+
+Det er restanceinddrivelsesmyndigheden, der er myndighed på opgaven. Ø48 anvendes i de tilfælde, hvor kommunen ønsker at oprette sag til opbevaring af egen og borgers korrespondance med Restanceinddrivelsesmyndigheden i forbindelse med en ansøgning om eftergivelse af gæld.
+
+I forbindelse med henstand/eftergivelse af lån ved støtte til bil efter SEL § 114 er kommunen myndighed. Her anvendes 25.45.10 med Ø48.";1
+"3d2b5652-c1fc-4d38-b445-503dd6942391";"P15";"Kommunale planer og planforslag omfattende hele kommunen";"P15 dækker planer, der omfatter hele kommunen fysisk, eksempelvis kommuneplanen, affaldsplanen, sundhedsplanen, spildevandsplanen, erhvervsudviklingsplaner, beredskabsplaner osv.
+        Endvidere anvendes handlingsfacet P15 også til planer af mere intern karakter, eksempelvis uddannelsesplan for det samlede kommunale personale, plan for vedligeholdelse af de samlede kommunale ejendomme mv.
+        P15 dækker såvel planforslag som de vedtagne gældende planer.
+        P15 anvendes også til kommunale strategier.
+        
+    
+
+
+Henvisning til andre relevante facetter
+
+
+    
+        Høringer i forbindelse med udarbejdelsen af planerne tilføjes K04.
+        Dispensationer til gældende planer tilføjes P25.
+        Virksomhedsplaner og årsplaner, se P16.";1
+"3d38cac3-5021-4074-bdb9-d464ac94765a";"A08";"Foreningers og ikke-officielle råds organisering";"A08 dækker sager om organiseringen af ikke-kommunale foreninger og ikke-officielle råd i kommunen, fx:
+
+
+    
+        grundejerforeninger
+        idrætsforeninger
+        lokalhistoriske foreninger
+        boligforeninger
+        ungdomsråd
+        børneråd
+        
+    
+
+
+Facetten bruges til sager, hvor kommunen er myndighed ift. foreninger og ikke-officielle råd.";1
+"4388343a-c98a-4efc-a1a3-f827439ac66d";"Ø39";"Tilskud - medfinansierede projekter";"Ø39 anvendes når kommuner administrerer tilskud (fx indstiller til eller yder), hvor tilskuddene er finansieret eller medfinansieret af EU og staten, og kommunen indstiller eller administrerer de pågældende tilskud. Eksempler er tilskud til miljøvenlige jordbrugsforanstaltninger (MVJ), socialfonden MÅL 3 til udvikling af de menneskelige ressourcer, Mål 2 og udfasningsprogrammet om erhvervsudvikling i landbrugsprægede kommuner. Kommuner der modtager tilskud journaliseres under Ø34.";1
+"43a5c108-3fb2-4a9e-9760-14477368a416";"Ø42";"Regnskabsmæssig opfølgning på tilskud";"Ø42 dækker sager om regnskab for driftstilskud til projekter, der helt eller delvist finansieres af midler fra eksterne parter. Det kan være samarbejdskommuner og ikke-kommunale parter, eks. ministerier/styrelser. Formålet er at kunne adskille projektregnskaber, hvor kommunen sammen med andre parter yder tilskud. Kommune såvel som eksterne kan være leder af pågældende projekt. Regnskabsopfølgningen kan være i form af årsregnskaber fra modtagere af tilskud, indeholdende årsberetning, revisionspåtegning, resultatopgørelse mv.
+
+Brugen af begrebet projektregnskab er ikke entydig. Projektregnskab bruges også ifm anlægsarbejder. Ligeledes kan forskellige udviklingsprojekter indenfor kommunen - effektivisering, bedre arbejdsmiljø mv. - have et projektregnskab. Disse aktiviteter ligger inden for kommunens virksomhed, og her anvendes emne nr. 00.32.04 ""Anlægsregnskaber"".
+
+Puljer som kommunen afsætter midler til, journaliseres med handlingsfacet S49 'Rammer for kommunale tilskud', og sager om ydelse af tilskud fra puljerne, journaliseres med handlingsfacet Ø40 'Tilskud fra kommunen'.";1
+"45fd7605-dc4c-4dac-9d3f-8c52f2ea098d";"P";"Planlægning, regler og principper";"P kategorien dækker sager om forskellige former for »lov- og regelgrundlag« besluttet af kommunen selv inden for kommunens eget kompetenceområder. Denne type af »lov- og regelgrundlag« kaldes mange ting, eksempelvis regler, politikker, regulativer, vedtægter og aftaler. Som »lov- og regelgrundlag« betragtes tillige »planer«, idet disse i et eller andet omfang udtrykker målsætninger og visioner ud over at afstikke konkrete forbud og muligheder. Det kan siges, at P-sagerne typisk vil være beslutninger, der skaber præcedens eller indeholder principper, der kan anvendes i konkrete afgørelsessager (fx person- eller byggesager), der journaliseres som rutinemæssig afgørelse med handlingsfacet G01.
+
+Da P-sagerne netop udtrykker »lov- og regelgrundlag«, skal papirsager bevares i henhold til bevarings- og kassationsbestemmelserne.";1
+"478700f9-209a-4d50-8ac1-0ae9ddc5ccd9";"Ø35";"Afregninger af afgifter til og fra borgere, myndigheder m.fl.";"Når kommunen/institutionen afregner afgifter, der er opkrævet på andre myndigheders vegne, anvendes handlingsfacet Ø35. Som eksempler kan nævnes affaldsafgifter og andre miljøafgifter, samt afgifter på forsyningsområdet og beskatning af elforsyning.";1
+"47e06970-fe91-479d-86ad-0812ebc70f1b";"K08";"Tilsyn og håndhævelse, overholdelse af regler";"K08 dækker sager, hvor kommunalbestyrelsen fører tilsyn med:
+
+
+    
+        at reglerne i love og bekendtgørelser overholdes
+        at påbud og forbud efterkommes
+        at vilkår fastsat i forbindelse med godkendelser og tilladelser overholdes
+        
+    
+    
+
+
+Håndhævelse, hvor kommunalbestyrelsen:
+
+
+    
+        giver påbud
+        nedlægger forbud
+        giver henstilling
+        
+    
+    
+
+
+K08 dækker ligeledes sager om andre myndigheders tilsyn med kommunen og evt. håndhævelse.
+
+Tilsyn med udøvende virksomhed (institutioner o.l.), se facet K09.";1
+"484e5147-7a81-4609-82f4-86fafcf2a158";"A";"Organisering mv.";"A kategorien dækker sager om myndighedens organisering og tilrettelæggelse, fx:
+
+
+    
+        organisationsopbygning
+        tilrettelæggelse
+        kompetence og delegation
+        procedurefastlæggelse
+        
+    
+
+
+Facetterne bruges til søgning efter bestemte sagstyper, ledelsesinformation eller søgning på tværs, i forhold til emner.";1
+"4adb101d-1359-4646-97c7-03d7207737d1";"P30";"Risikovurdering og -styring";"Kommunal risikovurdering er en kortlægning af relevante risici i forskellige sammenhænge.
+
+Kommunal risikostyring er aktiv og bevidst styring af kommunens risici, med henblik på at formindske de totale omkostninger.
+
+Der kan foretages risikostyring på mange områder, fx i forbindelse med skadeforebyggelse på bygninger, anlæg, motorkøretøjer og arbejdsskader.
+
+
+    
+        Sager om risikovurdering journaliseres under det relevante emne med handlingsfacet P30.
+        Sager om risikostyring journaliseres ligeledes under det relevante emne med handlingsfacet P30.
+        Ønsker man at adskille undersøgelser/analyser som enkeltsager anvendes handlingsfacet P05.
+        Sager om beredskabets forebyggende brandforanstaltninger journaliseres i emnegruppe 14.12.";1
+"4b8c62da-4872-40fa-b403-59f00faf8bca";"I02";"Informativt materiale fra andre myndigheder";"I02 facetten anvendes til informativt materiale som ikke kræver sagsbehandling, modtaget fra andre myndigheder, fx:
+
+
+    
+        rapporter
+        statistikker
+        love, bekendtgørelser og cirkulærer mv.
+        publikationer";1
+"544c465f-d110-4223-b21d-1150de457fba";"A30";"Konstituering, nedsættelse, oprettelse eller udpegning";"A30 dækker sager om:
+
+
+    
+        konstituering - fx af kommunalbestyrelsen (emnenr. 00.22.02)
+        nedsættelse - fx af økonomiudvalg og stående udvalg (emnenr. 00.22.04) eller integrationsråd (emnenr. 15.40.00)
+        oprettelse - fx af kommunale fællesskaber/samarbejder
+        udpegning/indstilling af kommunale repræsentanter til bestyrelser, råd, nævn - fx skatteankenævn og vurderingsankenævn (emnenr. 25.00.01)
+        
+    
+
+
+A30 kombineres med det emne, konstitueringen, nedsættelsen, oprettelsen, udpegningen vedrører. Eksempler nævnt i parentes.";1
+"56846dc3-37d7-46bd-9682-688469a2a5b2";"K";"Kontrol og klager";"K kategorien dækker sager om forskellige former for kontrol og klager, fx: 
+
+
+    
+        klager over kommunens afgørelse, herunder til højere instans
+        klager over sagsbehandlingen til højere instans
+        klager til kommunen over andre borgere/virksomheder
+        tilsyn og håndhævelse
+        tilsyn med udøvende virksomhed
+        revision
+    
+    
+
+
+Facetterne bruges til søgning efter bestemte sagstyper, ledelsesinformation eller søgning på tværs, i forhold til emner.";1
+"5ab851ea-f083-4ceb-9136-ec4a93f3a0e5";"G01";"Generelle sager";"G01 anvendes til almindeligt forekommende sager, fx:
+
+
+    
+        afgørelser efter faste regler, principper eller instrukser
+        beslutninger ud fra faste regler, principper eller instrukser
+        generelle henvendelser
+        generel vejledning
+        generel rådgivning
+        videresendelse af henvendelser til rette myndighed
+        
+    
+
+
+G01 bruges til at skelne generelle sager fra de specielle, dvs. sager hvor facetten bruges til søgning efter bestemte sagstyper, ledelsesinformation eller søgning på tværs af emner.";1
+"5f1c410a-f38c-4a5c-a537-b30e9b2fc340";"P24";"Vedtægter og regulativer";"P24 anvendes i forbindelse med vedtægter eller regulativer, som kommunen fastlægger over for borgere, virksomheder m.fl.
+
+P24 omfatter dels de vedtægter eller regulativer kommunen selv kan udarbejde og godkende. Fx
+
+
+    
+        Regulativ for benyttelse af kommunale ejendomme
+        Affaldsregulativ
+        Spildevandsregulativ
+        Betalingsvedtægt for kloakforsyningen
+        Snerydningsregulativ
+        
+    
+
+
+P24 anvendes også i forbindelse med vedtægter og regulativer udarbejdet af andre, som kommunen skal behandle og godkende i henhold til lovgivningen. Fx vedtægter for:
+
+
+    
+        Boligselskaber
+        Grundejerforeninger
+        Selvejende institutioner
+        Private vandværker
+        Havne
+        
+    
+
+
+P24 anvendes desuden i forbindelse med regulativer, som er rettet mod kommunens interne virksomhed. Fx regulativer for kommunens it-sikkerhed.
+
+Henvisning til andre relevante facetter og emner:
+
+
+    
+        Vedrørende deklarationer, se handlingsfacet G14.
+        Vedrørende den kommunale styrelsesvedtægt, se 00.22.00 P24.
+        Vedtægter og regulativer mv., som kommunen blot får til orientering uden at skulle behandle eller godkende dem, se handlingsfacet A08, hvis der er tale om en ikke-kommunal forening, alternativt under relevante I-handlingsfacet.";1
+"6119cb26-32c3-47fc-a948-34f811402f43";"K09";"Tilsyn med udøvende virksomhed (institutioner o.l.)";"K09 dækker sager hvor kommunen fører tilsyn, herunder ledelsestilsyn, med udøvende virksomhed inden for det kommunale arbejdsområde. Det gælder i sager, hvor kommunalbestyrelsen fører tilsyn med:
+
+
+    
+        egen virksomhed
+        andre aktører der løser opgaven for kommunen
+        andre kommuner i egenskab af tilsynsmyndighed (socialtilsyn)
+        
+    
+
+
+Eksempler er tilsyn med:
+
+
+    
+        dagplejehjem
+        børn anbragt uden for eget hjem
+        friskoler
+        selvejende institutioner inden for børnepasning
+        ældreområdet
+        andre aktørers opgavevaretagelse efter integrationsloven
+        
+    
+
+
+K09 dækker ligeledes sager om andre myndigheders tilsyn med kommunens udøvende virksomhed, institutioner o.l., fx Styrelsen for Patientsikkerheds tilsyn.
+
+Henvisning til andre facetter:
+
+
+    
+        Sager om tilsyn med overholdelse af regler i love og bekendtgørelser og håndhævelse journaliseres med facet K08";1
+"62dd8f97-fe52-483f-be09-fa1a495da98b";"Ø30";"Tilbagebetaling til kommunen og opkrævning";"Ø30 dækker sager om:
+
+
+    
+        afgørelser om tilbagebetaling til kommunen
+        opkrævning i forhold til borgere og virksomheder, som har gæld til kommunen.
+        aftaler om afdragsordninger, som en del af opkrævningen.
+        
+    
+
+
+Eksempler er:
+
+
+    
+        opkrævning af tilbagebetalingspligtige ydelser efter servicelovens § 164 eller aktivlovens § 91 (32.45.10 Ø30).
+        regres af sygedagpenge iht. sygedagpengeloven (32.30.04 Ø30).";1
+"69741476-d09f-471e-9f6c-30becfde9a0c";"P35";"Mødereferater og mødeforberedelse";"P35 facetten dækker sager om møder, bl.a. dagsordener og mødereferater, og kombineres med det emne som mødet og referatet handler om.
+
+Desuden kan P35 bruges til at skille møder og mødereferater ud for sig selv i mere omfattende sager, fx projekter, og med reference til den pågældende sag. Ønsker man ikke at udskille mødereferater fra projektsagen indgår de blot som dokument i selvsamme sag.
+
+Eksempler på mødesager er:
+
+
+    
+        Afdelingsmøder
+        Borgermøder
+        Byggemøder
+        Forældremøder
+        Ledermøder
+        Beslutningsreferater
+        Bestyrelsesmøder";1
+"6aa3f777-c241-4f13-a4ab-3790d5ea8ca5";"G00";"Efter faste regler i almindelighed";"G00 anvendes når en sag går på tværs af flere G handlingsfacetter eller når G facetkategorien ikke rummer en specifik facet til sagen.";1
+"6c767c03-1a79-4160-8e51-83197a1847d6";"P19";"Godkendelser";"P19 dækker sager om godkendelser, fx:
+
+
+    
+        godkendelser hvor der i hvert enkelt tilfælde foretages en individuel vurdering eller et skøn
+        tilladelser/godkendelser med særlig juridisk forpligtigelse, som kan medføre større tab for kommunen ved eventuelle senere sagsanlæg
+        tilladelser/godkendelser af forhold, der kan få vidtrækkende konsekvenser i fremtiden, fx miljøgodkendelser/tilladelser
+        miljøgodkendelser
+        vedtagelse af årsbudget
+        juridisk bindende tilladelser
+        
+    
+
+
+P19 dækker hele sagsforløbet, også når udfaldet ikke er godkendelse.
+
+P19 kan ligeledes anvendes til at angive bevaring på visse sager, fx G01 sager.";1
+"6f0f7aa6-e40d-4240-ba03-85123cb4258f";"K04";"Høringer";"K04 dækker sager om høringer. Både når kommunen gennemfører høring og når kommunen er høringspart. K04 dækker lovregulerede og ikke lovregulerede høringer.";1
+"7a1885c5-4ff6-467b-b304-9547a1c5cd86";"A52";"Pressemeddelelser";"A52 dækker sager om udarbejdelse og publicering af pressemeddelelser. Facetten giver mulighed for at adskille pressemeddelelser fra øvrigt materiale til publicering, som er dækket af A50.";1
+"7a31609e-6b7a-4d28-a7e8-61efa8dd54cf";"Ø36";"Refusioner";"Anvendes til sager om refusion, herunder mellemkommunal refusion og statsrefusion.";1
+"7a9c3e6a-9254-4a76-b031-34316fe24a67";"P00";"Planlægning, regler og principper i almindelighed";"P00 anvendes når en sag går på tværs af flere P handlingsfacetter eller når P facetkategorien ikke rummer en specifik facet til sagen.";1
+"7ba06041-8420-43eb-a346-21c0c7fdabba";"S55";"Godkendelse af budgetter, regnskaber og takster fra institutioner, foreninger og erhverv";"Kommunen er lovgivningsmæssigt forpligtet til at godkende forskellige foreningers og institutioners budgetter, regnskaber mv. Som eksempler kan nævnes boligforeninger, selvejende institutioner, erhverv og private vandværker, hvor kommunen også skal godkende taksterne. Såfremt kommunen skal behandle/godkende vedtægter fra sådanne foreninger mv., anvendes handlingsfacet P24.";1
+"80b6b019-3b8c-47c8-9852-05cdabb5f901";"P22";"Politikker";"P22 anvendes til sager om kommunens politiske målsætninger og politikker.
+
+
+    
+        Politikker der vedrører flere hovedgrupper journaliseres under emnenr 00.01.10 tilføjet P22.
+        P22 bruges også til sager om fastlæggelse af serviceniveau.
+        Der er  direkte stikord til alment kendte politikker, fx børnepolitik og ældrepolitik.
+        
+    
+
+
+Henvisning til andre relevante facetter:
+
+
+    
+        Strategier tilføjes facet P15.
+        Regler og principper fastlagt af kommunen tilføjes facet P21.";1
+"8153e5c3-01e5-4ea0-9e7e-e26a4aee088f";"P10";"Prognoser";"P10 facetten dækker sager om prognoser, fx
+
+
+    
+        befolkningsprognoser
+        boligprognoser
+        beskæftigelsesprognoser
+        arbejdsløshedsprognoser
+        prognoser over forventet antal skoleelever og ældre
+        prognoser over udviklingen i beskatningsgrundlaget
+        prognoser omfattende kommunen, udarbejdet af andre end kommunen selv - fx ministerier og Danmarks Statistik
+        
+    
+
+
+P10 kombineres med det emne, der bedst dækker det område prognosen vedrører.
+
+Henvisning til relevante emner:
+
+
+    
+        Til befolkningsprognoser, se emnenr. 00.30.04
+        Regnskabsprognoser, se emnenr. 00.30.14 Budgetopfølgninger
+        Skolebørnsprognoser, se emnenr 17.00.00";1
+"81ad2c95-5481-46e8-a56c-94bde6c059e8";"Ø62";"Bøder, der pålægges kommunen";"Ø62 anvendes til sager, hvor kommunen bliver pålagt at skulle betale bøder for overtrædelse af lovgivningen.";1
+"83022681-617e-4af0-896e-dd077f3a0a4f";"S37";"Forsikringer vedr. personer";"S37 anvendes til sager om forsikringsforhold vedrørende personer. Det gælder lige fra indgåelsen af forsikringsaftalen til de konkrete skadesanmeldelser og erstatningsudbetalinger. Forsikringssager om skader på løsøre og ting, se handlingsfacet Ø38.
+
+Hvis kommunen er selvforsikret journaliseres de konkrete erstatningskrav til kommunen med handlingsfacet Ø61.
+
+Sager om patientforsikring efter lov om patientforsikring journaliseres med handlingsfacet S37. Dækker forsikringen flere hovedgrupper, journaliseres den under 00.01.10.";1
+"8d918adc-9937-438b-8c06-05838161b2da";"P27";"Aftaler og overenskomster";"P27 dækker sager, hvor kommunen indgår en aftale eller overenskomst. Eksempler er:
+
+
+    
+        rammeaftaler eller lokalaftaler mellem kommunen og de ansatte
+        driftsaftaler
+        fortolkninger af personaleoverenskomster
+        databehandleraftale med databehandler
+        aftaler om klassificering af stillinger klassifikationsaftaler
+        bindende ikke-økonomiske aftaler
+        prisaftaler med eksterne leverandører, bl.a. om ydelser, der er omfattet af regler om helbredstillæg
+        
+    
+
+
+Henvisning til andre relevante facetter:
+
+
+    
+        Aftaler med et økonomisk indhold, hvor der udarbejdes en kontrakt, se handlingsfacet Ø54";1
+"8e6b93b1-efb2-44cd-a792-4d4d0bb3d4fd";"K01";"Revision";"K01 dækker sager om kontrol i form af revision af kommunens måde at løse opgaverne på. Udfører kan være kommunen selv, eller revisionsfirma - revisor
+
+K01 anvendes også til:
+
+
+    
+        økonomisk ledelsestilsyn
+        intern revision af systembrugeres adgangsrettigheder til it-systemer
+        
+    
+    
+
+
+Henvisning til andre relevante facetter:
+
+
+    
+        Kommunalt ledelsestilsyn / fagligt ledelsestilsyn, se facet K09";1
+"92022bc2-3941-4b90-8aad-5d737e28575f";"Ø32";"Tilbagebetaling fra kommunen";"Ø32 dækker sager om tilbagebetaling fra kommunen når borgeren/virksomheden har indbetalt for meget eksempelvis restskat, ejendomsskat, samt diverse gebyrer og bidrag. En sag om tilbagebetaling af for meget indbetalt børnebidrag journaliseres derfor under 32.15.04 Ø32.";1
+"92f3464a-ce21-4676-8dca-975a02edd4c2";"A26";"Procedurer mv.";"A26 dækker sager, hvor kommunen fastlægger og dokumenterer sine procedurer mv.:
+
+
+    
+        forretningsorden
+        administrative procedurer
+        arbejdsgange
+        sagsforløb
+        sagsbehandlingsfrister
+        instrukser
+        interne vejledninger
+        administrative forskrifter
+        
+    
+    
+
+
+Et fællestræk for procedurerne, instrukserne, forretningsordener m.fl. er, at de er rettet mod egen organisation.";1
+"94109032-92b2-4438-b80d-e1bd2bca2256";"Ø54";"Kontrakter";"Ø54 bruges ved alle former for kontrakter og aftaler med et overvejende økonomisk indhold. Fx:
+
+
+    
+        købskontrakter
+        lejekontrakter
+        leasingkontrakter
+        serviceabonnementskontrakter
+        forpagtningskontrakter
+        
+    
+
+
+Bemærk at kassationsfristen på 5 år først gælder når kontraktens indhold ikke længere er retligt (juridisk) gældende og sagen kan afsluttes.
+
+Henvisning til andre relevante facetter:
+
+
+    
+        Er der tale om ""kontrakter"" uden økonomisk indhold, journaliseres disse med handlingsfacet P27";1
+"94db6c71-859d-43e6-9a62-4e7fa7daf878";"A1";"Anderledes organisering";"Til brug for anderledes organisering";1
+"9dc1dfaf-71b0-4d8d-8a28-1a9a993174e5";"I00";"Modtaget informativt materiale i almindelighed";"I00 anvendes når en sag går på tværs af flere I handlingsfacetter eller når I facetkategorien ikke rummer en specifik facet til sagen.";1
+"9fa87f1a-d1ee-4f85-9a4e-b0c772dd85df";"G14";"Deklarationer og servitutter";"G14 dækker sager om deklarationer og servitutter, fx:
+
+
+    
+        deklarationer ifm. ejendomme
+        parkeringsdeklarationer
+        deklarationer ifm. afhændelse af bioaske
+        
+    
+
+
+Handlingsfacetten dækker ligeledes tinglysning af ejendomme.
+
+
+    
+        Servicedeklarationer, se handlingsfacet P26.
+        Sager om vedtægter og regulativer, se handlingsfacet P24.";1
+"a05d3ce9-c9b4-4c6e-870f-6128c74c5cdd";"Ø34";"Fundraising, bidrag, puljer og tilskud til kommunen";"Anvendes til sager om formålsbestemte bidrag, puljer, tilskud til kommunen.
+        Kombineres med det emne i KLE, der bedst dækker formålet, indsatsen eller genstanden.
+        Dækker forløbet med ansøgning til ekstern part og udfaldet heraf.
+        Er der tilknyttet et projekt kan P20 anvendes.
+        
+    
+
+
+Eksempler på Ø34 sager er:
+
+
+    
+        ansøgning om ministerielle puljemidler
+        kommunens ansøgning om andel i de statslige satspuljemidler
+        tilskud og bidrag fra fonde (danske og EU)
+        midler fra private aktører og organisationer
+        sponsorstøtte til kommunen";1
+"a211319f-7e03-4df1-9588-b06b2a5d01ae";"Ø00";"Økonomi efter fastlagte rammer i almindelighed";"Ø00 anvendes når en sag går på tværs af flere Ø handlingsfacetter eller når Ø facetkategorien ikke rummer en specifik facet til sagen.
+
+Facet Ø00 kan desuden anvendes til økonomisager, hvor økonomi ikke fremgår af emnet.
+
+Et eksempel er sager om administration af fonde: En sag om økonomisk administration af en feriefond vil have samme emne som en sag om tilsyn med en feriefond – men de to sager vil have hver deres facet, hhv. Ø00 (økonomisagen) og K08 (tilsynssagen).";1
+"a3d0d4df-e726-4a01-aeea-b367576652d4";"P23";"Kvalitetssikring og standardisering";"P23 facetten dækker sager om standardisering, herunder kvalitetsstandarder, kvalitetssikring og certificering, fx:
+
+
+    
+        fastlæggelse af kvalitetsstandarder for personlig og praktisk hjælp
+        genoptræning efter serviceloven
+        miljøcertificering (ISO 14001)
+        certificering af kvalitetsstyringssystemet på natur- og miljøområdet
+        kommunestandarder for arbejdspladsers indretning
+        tekniske standarder i forbindelse med IT (fx ISO 15489 om Records Management).
+        
+    
+
+
+Sager om evaluering i forbindelse med kvalitetssikring journaliseres med P23, med mindre det er en del af den kommunale kontrol og tilsynsopgave. I det sidste tilfælde bruges relevante K-handlingsfacetter.";1
+"a64def17-450b-48ff-87b6-9beab664ad7a";"P25";"Dispensationer";"P25 anvendes ved samtlige sager, der behandles som dispensationsansøgninger, også selv om dispensationen ikke gives.
+
+Facetten anvendes også til sager, hvor kommunen ansøger om dispensation hos anden myndighed.";1
+"a658c198-0e17-48cc-b502-fbf91e73b3bf";"S49";"Rammer for kommunale tilskud og puljer";"S49 dækker sager om:
+
+
+    
+        Fastsættelse af en økonomisk ramme for kommunens tilskud
+        Puljer til borgere, virksomheder og foreninger
+        
+    
+    
+
+
+Eksempler er:
+
+
+    
+        Puljer til projekter og pilotprojekter, herunder kriterier for tildeling
+        Fastsættelse af en årlig beløbsramme til den folkeoplysende voksenundervisning. De konkrete ansøgninger tilføjes facet Ø40";1
+"ac0e6e34-f375-4462-a625-4318c4407c3d";"K03";"Anke";"K03 dækker sager om klager over kommunens afgørelse eller sagsbehandling til en højere instans, fx:
+
+
+    
+        Ankestyrelsen
+        Natur- og miljøklagenævnet
+        Klagenævnet for Specialundervisning 
+        Ombudsmanden
+        Borgerrådgiveren
+        Planklagenævnet
+        Styrelsen for Patientsikkerhed
+        Styrelsen for Patientklager
+        
+    
+    
+
+
+K03 forudsætter ikke nødvendigvis at der er en eksisterende K02 sag forud for K03 sagen. En sag kan godt starte med K03.";1
+"aea3fe98-808a-498f-bfc7-7d04e909bd22";"Ø40";"Tilskud fra kommunen";"Ø40 dækker sager om tilskud fra kommunen. Eksempler er: 
+
+
+    
+        tilskud fra kommunale puljer
+        tilskud til folkeoplysnings- og foreningsområdet
+        projekttilskud fra kommunen
+        sponsorstøtte fra kommunen
+        partistøtte efter partistøtteloven
+        fastlæggelse af en  økonomisk ramme for tilskuddene journaliseres med facet S49
+        
+    
+
+
+Ø40 dækker ikke kontante ydelser til borgere, dvs. hvor tilskudet er en rettighed. For fundraising og tilskud til kommunen, se facet Ø34.";1
+"afe1dbad-326e-4110-a4d8-5a6d8e027d75";"A21";"Administrativ organisering og  kompetencefordeling";"A21 dækker sager om ændringer i den administrative organisation, samt delegation af kompetence, fx:
+
+
+    
+        forvaltningsstruktur
+        stillingsbeskrivelser
+        administrativ kompetencefordeling
+        autorisation af kommunalt ansatte
+        
+    
+    
+
+
+Henvisning til relevante emner:
+
+
+    
+        Politisk kompetencefordeling, se gruppe 00.22.";1
+"b34e4574-ea7e-40fe-a6cd-2fbd7b6c4a77";"K02";"Klage";"K02 dækker sager om:
+
+
+    
+        klager til kommunen over afgørelser i første instans
+        klager til kommunen over andre borgere / virksomheder
+        kommunens klager over anden myndigheds afgørelse
+        Der skelnes mellem klager over afgørelser og henvendelser om kommunens serviceydelser (faktisk forvaltningsvirksomhed).
+        
+    
+
+
+Henvisning til andre relevante facetter:
+
+
+    
+        Klager til højere myndighed/instans, se facet K03
+        Ved klager over faktisk forvaltningsvirksomhed anvendes G01.";1
+"b7c7784d-397a-4044-bd10-8715b871bdc0";"G";"Efter faste regler";"G kategorien dækker sager der
+
+    
+        1) behandles på baggrund af faste regler og
+        2) er almindeligt forekommende
+        
+    
+    Faste regler er lovgivning, myndighedens egne fastlagte regler, procedurer, principper eller præcedens.
+
+
+Facetterne bruges til søgning efter bestemte sagstyper, ledelsesinformation eller søgning på tværs i forhold til emner.";1
+"b9377b5e-e65f-4cd9-84bd-6e1b66b7840c";"Ø38";"Forsikringer vedr. bygninger/løsøre/tingskader";"Forsikringssager vedrørende bygninger/ejendom, løsøre og ting, som ruder, inventar, køretøjer, tøj o.l. journaliseres med facet Ø38.
+
+Det samme gælder sager omkring uheld forårsaget af hjemmehjælpen i borgeres hjem.
+
+Forsikringssager vedrørende personskader journaliseres med handlingsfacet S37.
+
+Erstatningskrav i forbindelse med uheld med løsøre forårsaget af kommunens medarbejdere journaliseres med handlingsfacet Ø38, hvis kommunen er forsikret. 
+
+Hvis kommunen er selvforsikret journaliseres de konkrete erstatningskrav til kommunen med handlingsfacet Ø61.";1
+"c7704733-eacf-4a73-8655-251d775d62c4";"I10";"Kopisager fra andre myndigheder";"I10 facetten dækker sager, hvor afleveringsforpligtelsen i henhold til arkivloven er løst eller løses af anden myndighed. Facetten anvendes til sager fra de tidligere amter. Hvis der på baggrund af oplysninger fra en af disse sager sker en sagsbehandling, skal der oprettes en ny sag, eventuelt med en reference til I10-sagen.";1
+"ca152b21-7074-4671-9e4f-c4a9bb63a170";"G07";"Udlån (ikke økonomisk)";"G07 dækker sager om udlån af kommunale værdier, uden at der opkræves penge for udlånet, fx: 
+
+
+    
+        udlån af hjælpemidler til ældre og handicappede
+        udlån af undervisningsmaterialer til skoleelever i form af bøger, bærbare pc’er og opladere
+        udlån af diverse lokaler og driftsmidler i form af toiletvogne, skurvogne og scener
+        AV-midler og lignende til eksempelvis kulturelle arrangementer.";1
+"ce1a303d-d670-4196-8c72-9055057c34c9";"K07";"Års- og andre periodiske beretninger";"K07 dækker sager om årsberetninger og andre periodiske beretninger. I mange kommuner er specielt de kommunale institutioner pålagt at udarbejde en årsberetning eller lignende, der bl.a. indeholder afrapportering af, hvorvidt institutionen har levet op til de aftaler/målsætninger o.l., der er udstukket – altså en form for ""kontrol"". Samme opgave kan også være pålagt forvaltninger, selvejende institutioner, kommunale selskaber o.l. Sådanne sager journaliseres med handlingsfacet K07.
+
+Virksomhedsplaner og årsplaner for dele af kommunen, fx den enkelte daginstitution ( emnenr. 28.09.04) eller skole (emnenr. 17.01.11), se handlingsfacet P16.";1
+"d1166285-6a7a-4b62-94d6-02164b7ebd83";"I04";"Informativt materiale fra faste samarbejdsparter";"I04 facetten anvendes til materiale fra faste samarbejdsparter, der ikke er offentlige myndigheder, og som ikke direkte indgår i, eller medfører, sagsbehandling. Det drejer sig om informativt materiale fra eksempelvis KL, interesseforeninger eller boligforeninger.";1
+"db5714c1-9346-47e6-b7a7-2230bf997699";"A53";"Aktindsigtsanmodning mv.";"A53 facetten dækker sager om aktindsigtsanmodninger efter offentlighedsloven, forvaltningsloven, miljøoplysningsloven, samt indsigt efter databeskyttelsesforordningen og arkivloven. Aktindsigtssagen rummer både anmodning, myndighedens behandling og afgørelse. Eksempler er:
+
+
+    
+        Aktindsigt
+        Partsaktindsigt /partens aktindsigt  efter forvaltningsloven
+        Indsigt efter databeskyttelsesforordningen. Se også gruppe 23.25
+        Egenacces efter offentlighedsloven eller arkivloven
+        Indsigt i databeskrivelser
+        Videresendelse af aktindsigtsanmodning
+    
+
+
+A53 kombineres med det emne der bedst dækker, hvad der anmodes om indsigt i.
+
+Til sager, der vedrører indsigt i flere hovedgruppeområder, anvendes emnenr. 00.01.10. ’Opgaver der dækker flere hovedgrupper’ kombineret med facet A53.";1
+"de74f1f7-e28e-4724-9965-6aed821fc4b4";"P07";"Oversigter/fortegnelser mv.";"P07 facetten dækker sager, der indeholder en oversigt og eller-/fortegnelse, fx:
+
+
+    
+        personaleoversigter
+        inventarfortegnelser
+        arkivfortegnelse
+        vejfortegnelse
+        stifortegnelse";1
+"dff23571-ddd1-470c-92e9-415427088fe8";"A50";"Informationsudarbejdelse og publicering";"A50 dækker sager om udarbejdelse af information til publicering, fx:
+
+
+    
+        borgerinformation
+        brugerguider
+        information om tilbud
+        kampagner
+        kommunens annoncer
+        nyhedsbreve";1
+"e1b4a1a3-95bb-4798-b806-1998b5cf2d79";"S";"Overordnet økonomi";"S kategorien dækker sager med et økonomisk indhold af overordnet karakter. Med overordnet menes, at der oftest vil være tale om sager, som behandles/afgøres af økonomiudvalg og/eller kommunalbestyrelsen. De mere rutineprægede økonomisager, der typisk afgøres administrativt på grundlag af de overordnede rammer, principper og retningslinjer, journaliseres under Ø-handlingsfacetterne. Eksempelvis vil der i S49 »Rammer for kommunale tilskud« være fastlagt rammer for tilskud til borgere, foreninger, kredse i henhold til folkeoplysningsloven mv. De konkrete ansøgninger om tilskud skal efterfølgende journaliseres med Ø40.
+
+S- og Ø-handlingsfacetterne er bl.a. opdelt for at tilgodese bevarings- og kassationsregler for papirsager, idet sager med Ø-handlingsfacetter kan kasseres, mens S-handlingsfacetter skal bevares.
+
+Det kan være afhængigt af den enkelte kommunes delegations- og kompetencefordeling, om en sag bliver en S- eller en Ø-handlingsfacet. Derfor er der eksempelvis både en S- og en Ø-handlingsfacet vedrørende budgetomplaceringer, idet denne i nogle kommuner vil blive behandlet i økonomiudvalget, mens de i andre kommuner vil blive behandlet administrativt og/eller i fagudvalgene. Gr. 00.30 er nyoprettet og beregnet til kommunens samlede budgetaktiviteter.";1
+"e32b0d67-9199-41d0-a1e0-0e10d23ef5a7";"I";"Modtaget informativt materiale";"I kategorien anvendes til informativt materiale som ikke kræver sagsbehandling, men stadig ønskes gemt efter samme struktur som kommunens sager. Journalisering er således frivilligt.
+
+Facetterne bruges til søgning efter bestemte sagstyper, ledelsesinformation eller søgning på tværs, i forhold til emner.";1
+"ec077ef0-0126-4a97-8553-2ea090e1b00b";"G20";"Egne kurser, foredrag og temadage";"G20 dækker sager om kurser, foredrag, temadage og undervisningsforløb, som kommunen selv afholder, og som er relateret til medarbejderens arbejde.
+
+Facetten anvendes til egenproduceret materiale (præsentationer, program, deltagerlister etc.)
+
+Kombineres med relevant emne.
+
+Anvendes også til kurser/foredrag afholdt for andre.";1
+"f4020888-90b5-43f0-848f-de3064f84fd7";"Ø47";"Fritagelse for betaling (helt eller delvis)";"Ø47 dækker sager hvor borgere/virksomheder søger om fritagelse (helt eller delvis) for brugerbetaling. Fx ansøgninger om fripladser i daginstitutioner eller fritagelse for kommunale gebyrer o.l. Sager om fastsættelse af gebyrers størrelse journaliseres med handlingsfacet S29.";1

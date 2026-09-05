@@ -209,6 +209,7 @@ uuid;code;title;description;active
 
 ![Emneplan eksempel](../images/administration/emneplan-sample.png)
 
+[Download eksempel på CSV fil med emneplan fra Korsbæk Kommune](../../administrator/Emneplan.csv){ .md-button .md-button--primary }
 
 ## Handlingsfacetter
 
@@ -219,6 +220,9 @@ uuid;code;title;description;active
 ```
 
 ![Handlingsfacetter eksempel](../images/administration/handlingsfacetter-sample.png)
+
+[Download eksempel på CSV fil med handlingsfacetter fra Korsbæk Kommune](../../administrator/Handlingsfacetter.csv){ .md-button .md-button--primary }
+
 
 Når filerne er importeret, kan KLE-numre og handlingsfacetter anvendes ved oprettelse af sager.
 
