@@ -2,7 +2,8 @@
 	<div class="opencase-file-list">
 		<div v-for="file in files"
 			:key="file.id"
-			class="opencase-file-list__item">
+			class="opencase-file-list__item"
+			:class="{ 'opencase-file-list__item--deleted': file.is_deleted }">
 			<div class="opencase-file-list__main" @click="handleRowClick(file)">
 				<div class="opencase-file-list__icon">
 					<component :is="fileIcon(file.mime_type)" :size="22" />
@@ -19,54 +20,85 @@
 						{{ formatSize(file.size) }}
 						<span v-if="showVersion">· v{{ file.version }}</span>
 						· {{ formatDate(file.updated_at) }}
+						<span v-if="file.is_deleted" class="opencase-file-list__deleted">
+							· {{ t('opencase', 'Slettet {date}', { date: formatDate(file.deleted_date) }) }}
+						</span>
 					</span>
 				</div>
 			</div>
 			<NcActions :force-menu="true"
 				:open="openMenuId === file.id"
 				@update:open="val => openMenuId = val ? file.id : null">
-				<NcActionButton v-if="!isReadOnly && isEditableFile(file.mime_type)" @click="handleEdit(file)">
-					<template #icon>
-						<PencilIcon :size="20" />
-					</template>
-					{{ t('opencase', 'Rediger') }}
-				</NcActionButton>
-				<NcActionButton v-else @click="handleView(file)">
-					<template #icon>
-						<EyeIcon :size="20" />
-					</template>
-					{{ t('opencase', 'Vis') }}
-				</NcActionButton>
-				<NcActionButton @click="handleDownload(file)">
-					<template #icon>
-						<DownloadIcon :size="20" />
-					</template>
-					{{ t('opencase', 'Download') }}
-				</NcActionButton>
-				<NcActionButton @click="openVersions(file)">
-					<template #icon>
-						<HistoryIcon :size="20" />
-					</template>
-					{{ t('opencase', 'Vis versioner') }}
-				</NcActionButton>
-				<NcActionButton @click="openLog(file)">
-					<template #icon>
-						<ClipboardTextIcon :size="20" />
-					</template>
-					{{ t('opencase', 'Vis log') }}
-				</NcActionButton>
-				<NcActionButton @click="openShare(file)">
-					<template #icon>
-						<ShareVariantIcon :size="20" />
-					</template>
-					{{ t('opencase', 'Del') }}
-				</NcActionButton>
-				<NcActionButton v-if="!isReadOnly" @click="openMenuId = null; $emit('delete', file.id)">
-					<template #icon>
-						<DeleteIcon :size="20" />
-					</template>
-					{{ t('opencase', 'Slet') }}
-				</NcActionButton>
+				<template v-if="file.is_deleted || locked">
+					<NcActionButton v-if="file.is_deleted && !isReadOnly && !locked" @click="openMenuId = null; $emit('restore', file.id)">
+						<template #icon>
+							<RestoreIcon :size="20" />
+						</template>
+						{{ t('opencase', 'Gendan fil') }}
+					</NcActionButton>
+					<NcActionButton @click="handleDownload(file)">
+						<template #icon>
+							<DownloadIcon :size="20" />
+						</template>
+						{{ t('opencase', 'Download') }}
+					</NcActionButton>
+					<NcActionButton @click="openLog(file)">
+						<template #icon>
+							<ClipboardTextIcon :size="20" />
+						</template>
+						{{ t('opencase', 'Vis log') }}
+					</NcActionButton>
+				</template>
+				<template v-else>
+					<NcActionButton v-if="!isReadOnly && isEditableFile(file.mime_type)" @click="handleEdit(file)">
+						<template #icon>
+							<PencilIcon :size="20" />
+						</template>
+						{{ t('opencase', 'Rediger') }}
+					</NcActionButton>
+					<NcActionButton v-else @click="handleView(file)">
+						<template #icon>
+							<EyeIcon :size="20" />
+						</template>
+						{{ t('opencase', 'Vis') }}
+					</NcActionButton>
+					<NcActionButton @click="handleDownload(file)">
+						<template #icon>
+							<DownloadIcon :size="20" />
+						</template>
+						{{ t('opencase', 'Download') }}
+					</NcActionButton>
+					<NcActionButton @click="openVersions(file)">
+						<template #icon>
+							<HistoryIcon :size="20" />
+						</template>
+						{{ t('opencase', 'Vis versioner') }}
+					</NcActionButton>
+					<NcActionButton @click="openLog(file)">
+						<template #icon>
+							<ClipboardTextIcon :size="20" />
+						</template>
+						{{ t('opencase', 'Vis log') }}
+					</NcActionButton>
+					<NcActionButton @click="openShare(file)">
+						<template #icon>
+							<ShareVariantIcon :size="20" />
+						</template>
+						{{ t('opencase', 'Del') }}
+					</NcActionButton>
+					<NcActionButton v-if="!isReadOnly" @click="openRename(file)">
+						<template #icon>
+							<FormTextboxIcon :size="20" />
+						</template>
+						{{ t('opencase', 'Omdøb') }}
+					</NcActionButton>
+					<NcActionButton v-if="!isReadOnly" @click="openDelete(file)">
+						<template #icon>
+							<DeleteIcon :size="20" />
+						</template>
+						{{ t('opencase', 'Slet') }}
+					</NcActionButton>
+				</template>
 			</NcActions>
 		</div>
 
@@ -85,12 +117,68 @@
 			:file="shareFile || {}"
 			:is-read-only="isReadOnly"
 			@close="shareFile = null" />
+
+		<NcDialog v-if="renameFile !== null"
+			:name="t('opencase', 'Omdøb fil')"
+			@update:open="v => !v && closeRename()">
+			<div class="opencase-file-list__rename">
+				<NcTextField v-model="renameValue"
+					:label="t('opencase', 'Filnavn')"
+					:error="!!renameError"
+					:helper-text="renameError || t('opencase', 'Filtypen ({ext}) bevares', { ext: extensionOf(renameFile.original_filename) })"
+					@keyup.enter="submitRename" />
+			</div>
+			<template #actions>
+				<NcButton type="tertiary" @click="closeRename">
+					{{ t('opencase', 'Annuller') }}
+				</NcButton>
+				<NcButton type="primary"
+					:disabled="renaming || renameValue.trim() === ''"
+					@click="submitRename">
+					<template v-if="renaming" #icon>
+						<NcLoadingIcon :size="16" />
+					</template>
+					{{ renaming ? t('opencase', 'Gemmer…') : t('opencase', 'Omdøb') }}
+				</NcButton>
+			</template>
+		</NcDialog>
+
+		<NcDialog v-if="deleteFile !== null"
+			:name="t('opencase', 'Slet fil')"
+			@update:open="v => !v && closeDelete()">
+			<div class="opencase-file-list__delete">
+				<p>
+					{{ t('opencase', 'Er du sikker på, at du vil slette filen »{filename}«?', { filename: deleteFile.original_filename }) }}
+				</p>
+				<p v-if="softDeleteEnabled">
+					{{ t('opencase', 'Filen kan gendannes efterfølgende.') }}
+				</p>
+				<p v-else class="opencase-file-list__delete-warning">
+					{{ t('opencase', 'Filen og alle dens versioner slettes permanent og kan ikke gendannes.') }}
+				</p>
+			</div>
+			<template #actions>
+				<NcButton type="tertiary" @click="closeDelete">
+					{{ t('opencase', 'Annuller') }}
+				</NcButton>
+				<NcButton type="error" @click="submitDelete">
+					<template #icon>
+						<DeleteIcon :size="20" />
+					</template>
+					{{ t('opencase', 'Slet') }}
+				</NcButton>
+			</template>
+		</NcDialog>
 	</div>
 </template>
 
 <script>
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
+import NcDialog from '@nextcloud/vue/components/NcDialog'
+import NcButton from '@nextcloud/vue/components/NcButton'
+import NcTextField from '@nextcloud/vue/components/NcTextField'
+import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import FileIcon from 'vue-material-design-icons/File.vue'
 import FilePdfIcon from 'vue-material-design-icons/FilePdfBox.vue'
 import FileWordIcon from 'vue-material-design-icons/FileWord.vue'
@@ -103,6 +191,8 @@ import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import EyeIcon from 'vue-material-design-icons/Eye.vue'
 import ClipboardTextIcon from 'vue-material-design-icons/ClipboardText.vue'
 import ShareVariantIcon from 'vue-material-design-icons/ShareVariant.vue'
+import FormTextboxIcon from 'vue-material-design-icons/FormTextbox.vue'
+import RestoreIcon from 'vue-material-design-icons/Restore.vue'
 import { generateUrl, generateOcsUrl } from '@nextcloud/router'
 import api from '../services/api.js'
 import FileVersionsDialog from './FileVersionsDialog.vue'
@@ -120,20 +210,33 @@ const MIME_ICONS = {
 
 export default {
 	name: 'FileList',
-	components: { NcActions, NcActionButton, PencilIcon, EyeIcon, DownloadIcon, DeleteIcon, HistoryIcon, ClipboardTextIcon, ShareVariantIcon, FileVersionsDialog, FileAuditLogDialog, FileShareDialog },
+	components: { NcActions, NcActionButton, NcDialog, NcButton, NcTextField, NcLoadingIcon, PencilIcon, EyeIcon, DownloadIcon, DeleteIcon, HistoryIcon, ClipboardTextIcon, ShareVariantIcon, FormTextboxIcon, RestoreIcon, FileVersionsDialog, FileAuditLogDialog, FileShareDialog },
 	props: {
 		files: { type: Array, required: true },
 		showVersion: { type: Boolean, default: false },
 		isReadOnly: { type: Boolean, default: false },
 		showDocumentNumber: { type: Boolean, default: false },
+		// Files of a deleted document: not openable, download/log only
+		locked: { type: Boolean, default: false },
 	},
+	emits: ['delete', 'restore', 'renamed'],
 	data() {
 		return {
 			versionsFile: null,
 			logFile: null,
 			shareFile: null,
 			openMenuId: null,
+			renameFile: null,
+			renameValue: '',
+			renameError: '',
+			renaming: false,
+			deleteFile: null,
 		}
+	},
+	computed: {
+		softDeleteEnabled() {
+			return this.$store.state.softDeleteEnabled
+		},
 	},
 	methods: {
 		fileIcon(mimeType) {
@@ -159,6 +262,8 @@ export default {
 			].includes(mimeType)
 		},
 		handleRowClick(file) {
+			// Deleted files are not in the virtual filesystem and cannot be opened
+			if (file.is_deleted || this.locked) return
 			if (!this.isReadOnly && this.isEditableFile(file.mime_type)) {
 				this.handleEdit(file)
 			} else {
@@ -203,6 +308,54 @@ export default {
 			this.openMenuId = null
 			this.shareFile = file
 		},
+		openRename(file) {
+			this.openMenuId = null
+			this.renameFile = file
+			// Offer the name without its extension — the backend keeps that
+			this.renameValue = this.baseNameOf(file.original_filename)
+			this.renameError = ''
+		},
+		closeRename() {
+			this.renameFile = null
+			this.renameValue = ''
+			this.renameError = ''
+		},
+		async submitRename() {
+			const name = this.renameValue.trim()
+			if (this.renameFile === null || name === '' || this.renaming) return
+			this.renaming = true
+			this.renameError = ''
+			try {
+				const updated = await api.renameFile(this.renameFile.id, name)
+				this.$emit('renamed', updated)
+				this.closeRename()
+			} catch (e) {
+				this.renameError = e.response?.data?.ocs?.data?.error
+					|| t('opencase', 'Kunne ikke omdøbe filen')
+			} finally {
+				this.renaming = false
+			}
+		},
+		openDelete(file) {
+			this.openMenuId = null
+			this.deleteFile = file
+		},
+		closeDelete() {
+			this.deleteFile = null
+		},
+		submitDelete() {
+			if (this.deleteFile === null) return
+			this.$emit('delete', this.deleteFile.id)
+			this.closeDelete()
+		},
+		baseNameOf(filename) {
+			const dot = (filename || '').lastIndexOf('.')
+			return dot > 0 ? filename.slice(0, dot) : (filename || '')
+		},
+		extensionOf(filename) {
+			const dot = (filename || '').lastIndexOf('.')
+			return dot > 0 ? filename.slice(dot + 1) : ''
+		},
 		formatSize(bytes) {
 			if (bytes < 1024) return bytes + ' B'
 			if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB'
@@ -230,4 +383,12 @@ export default {
 .opencase-file-list__name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .opencase-file-list__docnumber { font-size: 0.8em; color: var(--color-text-maxcontrast); white-space: nowrap; flex-shrink: 0; font-family: monospace; }
 .opencase-file-list__meta { font-size: 0.8em; color: var(--color-text-lighter); }
+.opencase-file-list__rename { padding: 8px 0 16px; }
+.opencase-file-list__delete { display: flex; flex-direction: column; gap: 8px; padding: 8px 0 16px; }
+.opencase-file-list__delete-warning { color: var(--color-error-text, var(--color-error)); }
+.opencase-file-list__item--deleted .opencase-file-list__main { cursor: default; }
+.opencase-file-list__item--deleted .opencase-file-list__icon,
+.opencase-file-list__item--deleted .opencase-file-list__name { opacity: 0.5; }
+.opencase-file-list__item--deleted .opencase-file-list__name { text-decoration: line-through; }
+.opencase-file-list__deleted { color: var(--color-error-text, var(--color-error)); }
 </style>

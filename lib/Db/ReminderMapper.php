@@ -59,6 +59,24 @@ class ReminderMapper extends QBMapper {
     }
 
     /**
+     * Active reminders with a responsible user and a deadline before $cutoff
+     * (overdue ones included).
+     *
+     * @return Reminder[]
+     */
+    public function findActiveDueBefore(\DateTimeInterface $cutoff): array {
+        $qb = $this->db->getQueryBuilder();
+        $qb->select('*')
+            ->from($this->getTableName())
+            ->where($qb->expr()->eq('status', $qb->createNamedParameter('active')))
+            ->andWhere($qb->expr()->isNotNull('responsible_user_id'))
+            ->andWhere($qb->expr()->isNotNull('deadline'))
+            ->andWhere($qb->expr()->lt('deadline', $qb->createNamedParameter($cutoff, IQueryBuilder::PARAM_DATETIME_MUTABLE)))
+            ->orderBy('deadline', 'ASC');
+        return $this->findEntities($qb);
+    }
+
+    /**
      * Returns the active reminder with the earliest deadline for an entity.
      */
     public function findNextActive(string $entity, int $entityKey): ?Reminder {
@@ -75,5 +93,16 @@ class ReminderMapper extends QBMapper {
         } catch (DoesNotExistException) {
             return null;
         }
+    }
+
+    /**
+     * Delete all reminders of an entity (used when it is hard-deleted).
+     */
+    public function deleteByEntity(string $entity, int $key): void {
+        $qb = $this->db->getQueryBuilder();
+        $qb->delete($this->getTableName())
+            ->where($qb->expr()->eq('entity', $qb->createNamedParameter($entity)))
+            ->andWhere($qb->expr()->eq('entity_key', $qb->createNamedParameter($key, IQueryBuilder::PARAM_INT)));
+        $qb->executeStatement();
     }
 }

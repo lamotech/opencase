@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace OCA\OpenCase\Db;
 
 use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\AppFramework\Db\Entity;
 use OCP\AppFramework\Db\QBMapper;
 use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\IDBConnection;
+use OCP\IUserSession;
 
 /**
  * Mapper for the opencase_documents table.
@@ -21,8 +23,40 @@ use OCP\IDBConnection;
  */
 class DocumentMapper extends QBMapper {
 
-    public function __construct(IDBConnection $db) {
+    public function __construct(
+        IDBConnection $db,
+        private IUserSession $userSession,
+    ) {
         parent::__construct($db, 'opencase_documents', Document::class);
+    }
+
+    /**
+     * @param Document $entity
+     * @return Document
+     */
+    public function insert(Entity $entity): Entity {
+        if ($entity->getUpdatedBy() === null || $entity->getUpdatedBy() === '') {
+            $entity->setUpdatedBy($entity->getCreatedBy());
+        }
+        return parent::insert($entity);
+    }
+
+    /**
+     * Stamps updated_by with the logged-in user. Without a user session
+     * (background jobs, occ) the previous value is kept, falling back to
+     * created_by if it is empty.
+     *
+     * @param Document $entity
+     * @return Document
+     */
+    public function update(Entity $entity): Entity {
+        $uid = $this->userSession->getUser()?->getUID();
+        if ($uid !== null && $uid !== '') {
+            $entity->setUpdatedBy($uid);
+        } elseif ($entity->getUpdatedBy() === null || $entity->getUpdatedBy() === '') {
+            $entity->setUpdatedBy($entity->getCreatedBy());
+        }
+        return parent::update($entity);
     }
 
     // ---------------------------------------------------------------
@@ -74,15 +108,20 @@ class DocumentMapper extends QBMapper {
 
     /**
      * Get all documents belonging to a case.
+     * Soft-deleted documents are left out unless $includeDeleted is set.
      *
      * @return Document[]
      */
-    public function findByCase(int $caseId): array {
+    public function findByCase(int $caseId, bool $includeDeleted = false): array {
         $qb = $this->db->getQueryBuilder();
         $qb->select('*')
             ->from($this->getTableName())
             ->where($qb->expr()->eq('case_id', $qb->createNamedParameter($caseId, IQueryBuilder::PARAM_INT)))
             ->orderBy('id', 'DESC');
+
+        if (!$includeDeleted) {
+            $qb->andWhere($this->notDeleted($qb));
+        }
 
         return $this->findEntities($qb);
     }
@@ -98,6 +137,7 @@ class DocumentMapper extends QBMapper {
             ->from($this->getTableName())
             ->where($qb->expr()->eq('case_id', $qb->createNamedParameter($caseId, IQueryBuilder::PARAM_INT)))
             ->andWhere($qb->expr()->eq('status', $qb->createNamedParameter($status, IQueryBuilder::PARAM_INT)))
+            ->andWhere($this->notDeleted($qb))
             ->orderBy('created_at', 'ASC');
 
         return $this->findEntities($qb);
@@ -114,6 +154,7 @@ class DocumentMapper extends QBMapper {
             ->from($this->getTableName())
             ->where($qb->expr()->eq('case_id', $qb->createNamedParameter($caseId, IQueryBuilder::PARAM_INT)))
             ->andWhere($qb->expr()->eq('document_type', $qb->createNamedParameter($documentType)))
+            ->andWhere($this->notDeleted($qb))
             ->orderBy('created_at', 'ASC');
 
         return $this->findEntities($qb);
@@ -126,7 +167,8 @@ class DocumentMapper extends QBMapper {
         $qb = $this->db->getQueryBuilder();
         $qb->select($qb->func()->count('*', 'cnt'))
             ->from($this->getTableName())
-            ->where($qb->expr()->eq('case_id', $qb->createNamedParameter($caseId, IQueryBuilder::PARAM_INT)));
+            ->where($qb->expr()->eq('case_id', $qb->createNamedParameter($caseId, IQueryBuilder::PARAM_INT)))
+            ->andWhere($this->notDeleted($qb));
 
         $result = $qb->executeQuery();
         $count = (int)$result->fetchOne();
@@ -157,7 +199,8 @@ class DocumentMapper extends QBMapper {
             ->where($qb->expr()->in(
                 'case_id',
                 $qb->createNamedParameter($caseIds, IQueryBuilder::PARAM_INT_ARRAY)
-            ));
+            ))
+            ->andWhere($this->notDeleted($qb));
 
         $result = $qb->executeQuery();
         $ids = [];
@@ -200,6 +243,7 @@ class DocumentMapper extends QBMapper {
             ->innerJoin('d', 'opencase_cases', 'c', $qb->expr()->eq('c.id', 'd.case_id'))
             ->where($accessExpr)
             ->andWhere($qb->expr()->eq('c.is_inbox', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+            ->andWhere($this->notDeleted($qb, 'd'))
             ->andWhere($qb->expr()->iLike('d.title', $likeParam))
             ->orderBy('d.updated_at', 'DESC')
             ->setMaxResults($limit)
@@ -242,6 +286,7 @@ class DocumentMapper extends QBMapper {
                 'd.case_id',
                 $qb->createNamedParameter($inboxCaseIds, IQueryBuilder::PARAM_INT_ARRAY)
             ))
+            ->andWhere($this->notDeleted($qb, 'd'))
             ->orderBy('d.created_at', 'DESC')
             ->setMaxResults($limit)
             ->setFirstResult($offset);
@@ -271,7 +316,8 @@ class DocumentMapper extends QBMapper {
             ->where($qb->expr()->in(
                 'case_id',
                 $qb->createNamedParameter($inboxCaseIds, IQueryBuilder::PARAM_INT_ARRAY)
-            ));
+            ))
+            ->andWhere($this->notDeleted($qb));
 
         $result = $qb->executeQuery();
         $row    = $result->fetch();
@@ -291,6 +337,7 @@ class DocumentMapper extends QBMapper {
                 'case_id',
                 $qb->createNamedParameter($accessibleCaseIds, IQueryBuilder::PARAM_INT_ARRAY)
             ))
+            ->andWhere($this->notDeleted($qb))
             ->orderBy('updated_at', 'DESC')
             ->setMaxResults($limit);
 
@@ -336,6 +383,7 @@ class DocumentMapper extends QBMapper {
             ->leftJoin('c', 'opencase_org', 'o', $qb->expr()->eq('o.org_uuid', 'c.org_uuid'))
             ->where($accessExpr)
             ->andWhere($qb->expr()->eq('c.is_inbox', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+            ->andWhere($this->notDeleted($qb, 'd'))
             ->orderBy('d.updated_at', 'DESC')
             ->setMaxResults($limit)
             ->setFirstResult($offset);
@@ -404,7 +452,8 @@ class DocumentMapper extends QBMapper {
             ->innerJoin('d', 'opencase_cases', 'c', $qb->expr()->eq('c.id', 'd.case_id'))
             ->leftJoin('c', 'opencase_org', 'o', $qb->expr()->eq('o.org_uuid', 'c.org_uuid'))
             ->where($accessExpr)
-            ->andWhere($qb->expr()->eq('c.is_inbox', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)));
+            ->andWhere($qb->expr()->eq('c.is_inbox', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+            ->andWhere($this->notDeleted($qb, 'd'));
 
         if ($title !== null && trim($title) !== '') {
             $likeParam = $qb->createNamedParameter('%' . $this->db->escapeLikeParameter(trim($title)) . '%');
@@ -500,5 +549,86 @@ class DocumentMapper extends QBMapper {
             'EXISTS (' . $grants->getSQL() . ')',
             'EXISTS (' . $profiles->getSQL() . ')',
         ];
+    }
+
+    // ---------------------------------------------------------------
+    // Soft delete
+    // ---------------------------------------------------------------
+
+    /**
+     * Of the given document IDs, those that still exist and are not
+     * soft-deleted.
+     *
+     * @param int[] $documentIds
+     * @return int[]
+     */
+    public function filterLiveIds(array $documentIds): array {
+        if ($documentIds === []) {
+            return [];
+        }
+
+        $qb = $this->db->getQueryBuilder();
+        $qb->select('id')
+            ->from($this->getTableName())
+            ->where($qb->expr()->in('id', $qb->createNamedParameter(array_values($documentIds), IQueryBuilder::PARAM_INT_ARRAY)))
+            ->andWhere($this->notDeleted($qb));
+
+        $result = $qb->executeQuery();
+        $ids = [];
+        while (($id = $result->fetchOne()) !== false) {
+            $ids[] = (int)$id;
+        }
+        $result->closeCursor();
+
+        return $ids;
+    }
+
+    /**
+     * Set (or clear) updated_in_sapa directly, without going through update(),
+     * so updated_by/updated_at are left alone.
+     */
+    public function setUpdatedInSapa(string $uuid, ?\DateTime $time): void {
+        $qb = $this->db->getQueryBuilder();
+        $qb->update($this->getTableName())
+            ->set('updated_in_sapa', $qb->createNamedParameter($time, IQueryBuilder::PARAM_DATE))
+            ->where($qb->expr()->eq('uuid', $qb->createNamedParameter($uuid)))
+            ->executeStatement();
+    }
+
+    /**
+     * Flag a document as deleted (is_deleted=1, deleted_date=now).
+     */
+    public function markDeleted(int $documentId): void {
+        $qb = $this->db->getQueryBuilder();
+        $qb->update($this->getTableName())
+            ->set('is_deleted', $qb->createNamedParameter(true, IQueryBuilder::PARAM_BOOL))
+            ->set('deleted_date', $qb->createNamedParameter(new \DateTime(), IQueryBuilder::PARAM_DATE))
+            ->where($qb->expr()->eq('id', $qb->createNamedParameter($documentId, IQueryBuilder::PARAM_INT)));
+
+        $qb->executeStatement();
+    }
+
+    /**
+     * Clear the soft-delete flag (is_deleted=0, deleted_date=NULL).
+     */
+    public function markRestored(int $documentId): void {
+        $qb = $this->db->getQueryBuilder();
+        $qb->update($this->getTableName())
+            ->set('is_deleted', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL))
+            ->set('deleted_date', $qb->createNamedParameter(null, IQueryBuilder::PARAM_NULL))
+            ->where($qb->expr()->eq('id', $qb->createNamedParameter($documentId, IQueryBuilder::PARAM_INT)));
+
+        $qb->executeStatement();
+    }
+
+    /**
+     * WHERE clause matching documents that are not soft-deleted.
+     */
+    public function notDeleted(IQueryBuilder $qb, string $alias = ''): \OCP\DB\QueryBuilder\ICompositeExpression {
+        $column = ($alias !== '' ? $alias . '.' : '') . 'is_deleted';
+        return $qb->expr()->orX(
+            $qb->expr()->isNull($column),
+            $qb->expr()->eq($column, $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL))
+        );
     }
 }

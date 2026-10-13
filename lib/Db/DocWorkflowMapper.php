@@ -58,4 +58,25 @@ class DocWorkflowMapper extends QBMapper {
 
         return $this->findEntities($qb);
     }
+
+    /**
+     * Delete all workflows of a document and their steps (used when it is
+     * hard-deleted).
+     */
+    public function deleteByDocument(int $documentId): void {
+        $workflowIds = array_map(fn($w) => $w->getId(), $this->findByDocument($documentId));
+        if ($workflowIds === []) {
+            return;
+        }
+
+        $qb = $this->db->getQueryBuilder();
+        $qb->delete('opencase_doc_workflow_steps')
+            ->where($qb->expr()->in('workflow_id', $qb->createNamedParameter($workflowIds, IQueryBuilder::PARAM_INT_ARRAY)));
+        $qb->executeStatement();
+
+        $qb = $this->db->getQueryBuilder();
+        $qb->delete($this->getTableName())
+            ->where($qb->expr()->in('id', $qb->createNamedParameter($workflowIds, IQueryBuilder::PARAM_INT_ARRAY)));
+        $qb->executeStatement();
+    }
 }

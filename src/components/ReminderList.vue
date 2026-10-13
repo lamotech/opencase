@@ -274,7 +274,7 @@ export default {
 }
 
 .reminder-list__item-deadline--overdue {
-	color: var(--color-error);
+	color: #c62828;
 	font-weight: 600;
 }
 

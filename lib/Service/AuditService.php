@@ -66,6 +66,21 @@ class AuditService {
         ]);
     }
 
+    public function logDocumentDeleted(int $caseId, int $documentId, string $userId, ?string $documentNumber, string $title, bool $soft): void {
+        $this->write($caseId, $documentId, null, $userId, 'document_deleted', [
+            'document_number' => $documentNumber,
+            'title'           => $title,
+            'soft'            => $soft,
+        ]);
+    }
+
+    public function logDocumentRestored(int $caseId, int $documentId, string $userId, ?string $documentNumber, string $title): void {
+        $this->write($caseId, $documentId, null, $userId, 'document_restored', [
+            'document_number' => $documentNumber,
+            'title'           => $title,
+        ]);
+    }
+
     public function logDocumentMovedToCase(
         int    $targetCaseId,
         int    $documentId,
@@ -127,6 +142,26 @@ class AuditService {
         ]);
     }
 
+    public function logFileDeleted(int $caseId, int $documentId, int $fileId, string $userId, string $filename, bool $soft): void {
+        $this->write($caseId, $documentId, $fileId, $userId, 'file_deleted', [
+            'filename' => $filename,
+            'soft'     => $soft,
+        ]);
+    }
+
+    public function logFileRestored(int $caseId, int $documentId, int $fileId, string $userId, string $filename): void {
+        $this->write($caseId, $documentId, $fileId, $userId, 'file_restored', [
+            'filename' => $filename,
+        ]);
+    }
+
+    public function logFileRenamed(int $caseId, int $documentId, int $fileId, string $userId, string $from, string $to): void {
+        $this->write($caseId, $documentId, $fileId, $userId, 'file_renamed', [
+            'filename'      => $to,
+            'from_filename' => $from,
+        ]);
+    }
+
     public function logFileVersionViewed(int $caseId, int $documentId, int $fileId, string $userId, string $filename, int $versionTimestamp): void {
         $this->write($caseId, $documentId, $fileId, $userId, 'file_version_viewed', [
             'filename'          => $filename,
@@ -158,6 +193,28 @@ class AuditService {
 
     public function logContactDeleted(int $caseId, int $documentId, string $userId, string $roleName, string $name, string $cprCvr): void {
         $this->write($caseId, $documentId, null, $userId, 'document_contact_deleted', $this->partyDetails($roleName, $name, $cprCvr));
+    }
+
+    // ---------------------------------------------------------------
+    // Document relation events
+    // ---------------------------------------------------------------
+
+    public function logDocumentRelationAdded(int $caseId, int $documentId, string $userId, string $typeName, int $relatedDocumentId, ?string $relatedDocumentNumber, string $relatedTitle): void {
+        $this->write($caseId, $documentId, null, $userId, 'document_relation_added', [
+            'type'                    => $typeName,
+            'related_document_id'     => $relatedDocumentId,
+            'related_document_number' => $relatedDocumentNumber,
+            'related_title'           => $relatedTitle,
+        ]);
+    }
+
+    public function logDocumentRelationDeleted(int $caseId, int $documentId, string $userId, string $typeName, int $relatedDocumentId, ?string $relatedDocumentNumber, string $relatedTitle): void {
+        $this->write($caseId, $documentId, null, $userId, 'document_relation_deleted', [
+            'type'                    => $typeName,
+            'related_document_id'     => $relatedDocumentId,
+            'related_document_number' => $relatedDocumentNumber,
+            'related_title'           => $relatedTitle,
+        ]);
     }
 
     // ---------------------------------------------------------------
@@ -594,6 +651,18 @@ class AuditService {
         $this->write($caseId, null, null, $userId, 'access_request_sent', [
             'access_request_id' => $requestId,
             'delivery_method'   => $method,
+        ]);
+    }
+
+    /**
+     * @param array<string, int> $categories Masked areas per category (cpr, email, ...)
+     */
+    public function logAccessRequestMasked(int $caseId, string $userId, int $requestId, int $fileId, string $fileName, int $areaCount, array $categories): void {
+        $this->write($caseId, null, $fileId, $userId, 'access_request_masked', [
+            'access_request_id' => $requestId,
+            'file_name'         => $fileName,
+            'area_count'        => $areaCount,
+            'categories'        => $categories,
         ]);
     }
 

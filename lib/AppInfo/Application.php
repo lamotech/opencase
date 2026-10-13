@@ -4,21 +4,32 @@ declare(strict_types=1);
 
 namespace OCA\OpenCase\AppInfo;
 
+use OCA\OpenCase\BackgroundJob\AccessDeadlineNotificationJob;
 use OCA\OpenCase\BackgroundJob\BulkReindexJob;
 use OCA\OpenCase\BackgroundJob\DispatchDigitalPostJob;
 use OCA\OpenCase\BackgroundJob\ExportClosedCasesJob;
+use OCA\OpenCase\BackgroundJob\ProcessBulkUpdate;
 use OCA\OpenCase\BackgroundJob\ProcessDigitalPostReceivementsJob;
 use OCA\OpenCase\BackgroundJob\ProcessDistributionReceivementsJob;
 use OCA\OpenCase\BackgroundJob\ProcessImportsJob;
 use OCA\OpenCase\BackgroundJob\ProcessMessageReceivementsJob;
+use OCA\OpenCase\BackgroundJob\ReminderDeadlineNotificationJob;
+use OCA\OpenCase\BackgroundJob\WorkflowDeadlineNotificationJob;
 use OCA\OpenCase\BackgroundJob\IndexFileJob;
 use OCA\OpenCase\BackgroundJob\SyncFilecache;
 use OCA\OpenCase\Dashboard\FavoritesWidget;
 use OCA\OpenCase\Dashboard\InboundDocumentsWidget;
 use OCA\OpenCase\Dashboard\MyCasesWidget;
 use OCA\OpenCase\Dashboard\RecentWidget;
+use OCA\OpenCase\Db\AccessProfileMapper;
+use OCA\OpenCase\Db\BulkUpdateItemMapper;
+use OCA\OpenCase\Db\BulkUpdateMapper;
 use OCA\OpenCase\Db\CaseMapper;
+use OCA\OpenCase\Db\ClassificationSubjectMapper;
+use OCA\OpenCase\Db\DocumentMapper;
 use OCA\OpenCase\Db\FileMapper;
+use OCA\OpenCase\Db\OrganisationMapper;
+use OCA\OpenCase\Db\SensitivityMapper;
 use OCA\OpenCase\Event\FileUpdatedEvent;
 use OCA\OpenCase\Listener\FileUpdatedListener;
 use OCA\OpenCase\Listener\FilesIntegrationListener;
@@ -41,10 +52,13 @@ use OCA\OpenCase\Notification\FileShareNotifier;
 use OCA\OpenCase\Search\OpenCaseCasesSearchProvider;
 use OCA\OpenCase\Search\OpenCaseDocumentsSearchProvider;
 use OCA\OpenCase\Search\OpenCaseFilesSearchProvider;
+use OCA\OpenCase\Service\CaseService;
+use OCA\OpenCase\Service\DocumentService;
 use OCA\OpenCase\Service\ElasticsearchService;
 use OCA\OpenCase\Service\RoleService;
 use OCA\OpenCase\BackgroundJob\SyncOrganisationsJob;
 use OCA\OpenCase\BackgroundJob\SyncClassificationsJob;
+use OCA\OpenCase\BackgroundJob\ProcessCaseDocumentIndexJob;
 use OCA\OpenCase\Service\Configuration;
 use OCA\OpenCase\Service\TraceLogger;
 use OCP\AppFramework\App;
@@ -167,6 +181,23 @@ class Application extends App implements IBootstrap {
                 $c->get(LoggerInterface::class),
             );
         });
+
+        $context->registerService(ProcessBulkUpdate::class, function ($c) {
+            return new ProcessBulkUpdate(
+                $c->get(ITimeFactory::class),
+                $c->get(BulkUpdateMapper::class),
+                $c->get(BulkUpdateItemMapper::class),
+                $c->get(CaseService::class),
+                $c->get(CaseMapper::class),
+                $c->get(DocumentService::class),
+                $c->get(DocumentMapper::class),
+                $c->get(AccessProfileMapper::class),
+                $c->get(OrganisationMapper::class),
+                $c->get(ClassificationSubjectMapper::class),
+                $c->get(SensitivityMapper::class),
+                $c->get(LoggerInterface::class),
+            );
+        });
     }
 
     public function boot(IBootContext $context): void {
@@ -189,8 +220,8 @@ class Application extends App implements IBootstrap {
 		// null-argument rows clean themselves up, since QueuedJob::start()
 		// removes the row by id before running.
 		// ProcessDistributionReceivementsJob, ProcessMessageReceivementsJob,
-		// DispatchDigitalPostJob, ProcessDigitalPostReceivementsJob, and
-		// SyncClassificationsJob are Enterprise-only components (not present
+		// DispatchDigitalPostJob, ProcessDigitalPostReceivementsJob,
+		// SyncClassificationsJob and ProcessCaseDocumentIndexJob are Enterprise-only components (not present
 		// in the public App Store package). Only schedule them when the
 		// Enterprise package is installed AND licensed, and remove them from
 		// the job list otherwise so a disabled/downgraded instance doesn't
@@ -236,8 +267,28 @@ class Application extends App implements IBootstrap {
 		} elseif ($jobList->has(SyncClassificationsJob::class, null)) {
 			$jobList->remove(SyncClassificationsJob::class);
 		}
+		if ($enterpriseVersionEnabled && class_exists(ProcessCaseDocumentIndexJob::class)) {
+			if (!$jobList->has(ProcessCaseDocumentIndexJob::class, null)) {
+				$jobList->add(ProcessCaseDocumentIndexJob::class);
+			}
+		} elseif ($jobList->has(ProcessCaseDocumentIndexJob::class, null)) {
+			$jobList->remove(ProcessCaseDocumentIndexJob::class);
+		}
 		if (!$jobList->has(ExportClosedCasesJob::class, null)) {
 			$jobList->add(ExportClosedCasesJob::class);
+		}
+		if (!$jobList->has(ProcessBulkUpdate::class, null)) {
+			$jobList->add(ProcessBulkUpdate::class);
+		}
+		// Daily deadline notifications, sent around 05:00 local time.
+		foreach ([
+			AccessDeadlineNotificationJob::class,
+			ReminderDeadlineNotificationJob::class,
+			WorkflowDeadlineNotificationJob::class,
+		] as $notificationJob) {
+			if (!$jobList->has($notificationJob, null)) {
+				$jobList->add($notificationJob);
+			}
 		}
 		// ProcessImportsJob is a basic/community-edition job (not Enterprise-gated).
 		if (!$jobList->has(ProcessImportsJob::class, null)) {

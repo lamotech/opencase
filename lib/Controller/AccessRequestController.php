@@ -6,12 +6,14 @@ namespace OCA\OpenCase\Controller;
 
 use OCA\OpenCase\Db\AccessDecisionMapper;
 use OCA\OpenCase\Db\AccessExclusionReasonMapper;
+use OCA\OpenCase\Db\AccessMaskSuggestionMapper;
 use OCA\OpenCase\Db\AccessRequestItemMapper;
 use OCA\OpenCase\Db\AccessRequestMapper;
 use OCA\OpenCase\Db\AccessRedactionMapper;
 use OCA\OpenCase\Db\DocumentMapper;
 use OCA\OpenCase\Db\FileMapper;
 use OCA\OpenCase\Service\AccessDecisionService;
+use OCA\OpenCase\Service\AccessMaskingService;
 use OCA\OpenCase\Service\AccessRequestService;
 use OCA\OpenCase\Service\AccessSearchService;
 use OCA\OpenCase\Service\AuditService;
@@ -44,6 +46,8 @@ class AccessRequestController extends ApiController {
         private FileMapper $fileMapper,
         private IConfig $config,
         private PermissionService $permissionService,
+        private AccessMaskingService $maskingService,
+        private AccessMaskSuggestionMapper $suggestionMapper,
         private ?string $userId,
     ) {
         parent::__construct($appName, $request);
@@ -61,6 +65,19 @@ class AccessRequestController extends ApiController {
                 fn($r) => $this->requestService->serialize($r),
                 $requests,
             ),
+        ]);
+    }
+
+    /**
+     * Open access requests assigned to the current user (for "Foreslået arbejde").
+     */
+    #[NoAdminRequired]
+    public function mine(): DataResponse {
+        if ($this->userId === null) {
+            return new DataResponse(['access_requests' => []]);
+        }
+        return new DataResponse([
+            'access_requests' => $this->requestService->listOpenAssignedTo($this->userId),
         ]);
     }
 
@@ -157,6 +174,8 @@ class AccessRequestController extends ApiController {
         try {
             $req = $this->requestService->update($id, $this->userId, $this->request->getParams());
             return new DataResponse(['access_request' => $this->requestService->serialize($req)]);
+        } catch (\InvalidArgumentException $e) {
+            return new DataResponse(['message' => $e->getMessage()], Http::STATUS_BAD_REQUEST);
         } catch (\OCP\AppFramework\Db\DoesNotExistException) {
             return new DataResponse(['message' => 'Not found'], Http::STATUS_NOT_FOUND);
         }
@@ -284,6 +303,7 @@ class AccessRequestController extends ApiController {
             $item = $this->itemMapper->findById($itemId);
             $req  = $this->requestMapper->findById($item->getRequestId());
             $this->redactionMapper->deleteByItem($itemId);
+            $this->suggestionMapper->deleteByItem($itemId);
             $this->itemMapper->delete($item);
             $this->auditService->logAccessRequestUpdated($req->getCaseId(), $this->userId, $item->getRequestId());
             return new DataResponse([]);
@@ -408,8 +428,9 @@ class AccessRequestController extends ApiController {
             return new DataResponse(['message' => 'Not found'], Http::STATUS_NOT_FOUND);
         }
 
-        $items = $this->itemMapper->findByRequest($id);
-        $rows  = [];
+        $items       = $this->itemMapper->findByRequest($id);
+        $rows        = [];
+        $autoMasking = $this->maskingService->isConfigured();
 
         foreach ($items as $item) {
             if ($item->getSourceType() !== 'document') {
@@ -431,6 +452,10 @@ class AccessRequestController extends ApiController {
                         'file_name'       => $file->getOriginalFilename(),
                         'mime_type'       => $file->getMimeType(),
                         'has_masked'      => file_exists($maskedPath),
+                        'masked_mime'     => file_exists($maskedPath)
+                            ? AccessMaskingService::maskedDownloadInfo($maskedPath, $file->getOriginalFilename(), $file->getMimeType())[1]
+                            : null,
+                        'can_auto_mask'   => $autoMasking && $this->maskingService->supportsMimeType($file->getMimeType()),
                     ];
                 }
             } catch (\Throwable) {
@@ -451,6 +476,9 @@ class AccessRequestController extends ApiController {
             $item         = $this->itemMapper->findById($itemId);
             $originalFile = $this->fileMapper->findById($fileId);
         } catch (\OCP\AppFramework\Db\DoesNotExistException) {
+            return new DataResponse(['message' => 'Not found'], Http::STATUS_NOT_FOUND);
+        }
+        if (!$this->fileBelongsToItem($originalFile, $item)) {
             return new DataResponse(['message' => 'Not found'], Http::STATUS_NOT_FOUND);
         }
 
@@ -482,18 +510,19 @@ class AccessRequestController extends ApiController {
         } catch (\OCP\AppFramework\Db\DoesNotExistException) {
             return new DataResponse(['message' => 'Not found'], Http::STATUS_NOT_FOUND);
         }
+        if (!$this->fileBelongsToItem($originalFile, $item)) {
+            return new DataResponse(['message' => 'Not found'], Http::STATUS_NOT_FOUND);
+        }
 
         $path = $this->maskedPath($item->getRequestId(), $itemId, $fileId, $originalFile->getOriginalFilename());
         if (!file_exists($path)) {
             return new DataResponse(['message' => 'No masked file exists'], Http::STATUS_NOT_FOUND);
         }
 
-        $content = file_get_contents($path);
-        return new DataDownloadResponse(
-            $content,
-            'maskeret_' . $originalFile->getOriginalFilename(),
-            $originalFile->getMimeType() ?? 'application/octet-stream',
+        [$name, $mime] = AccessMaskingService::maskedDownloadInfo(
+            $path, $originalFile->getOriginalFilename(), $originalFile->getMimeType(),
         );
+        return new DataDownloadResponse(file_get_contents($path), 'maskeret_' . $name, $mime);
     }
 
     // ── Access resolution ────────────────────────────────────────────────
@@ -555,6 +584,18 @@ class AccessRequestController extends ApiController {
         } catch (\OCP\AppFramework\Db\DoesNotExistException) {
             return null;
         }
+    }
+
+    /**
+     * The guards above only check access to the item's case; the file id is
+     * supplied separately, so it must be checked to belong to the item's
+     * document — otherwise any file in the system could be read or replaced
+     * through an item the caller has access to.
+     */
+    private function fileBelongsToItem(?\OCA\OpenCase\Db\FileEntity $file, \OCA\OpenCase\Db\AccessRequestItem $item): bool {
+        return $file !== null
+            && $item->getSourceType() === 'document'
+            && $file->getDocumentId() === $item->getSourceId();
     }
 
     private function maskedDir(int $requestId, int $itemId): string {

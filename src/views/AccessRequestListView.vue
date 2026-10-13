@@ -34,7 +34,7 @@
 					<td>{{ req.requester_name ?? '—' }}</td>
 					<td><AccessRequestStatusBadge :status="req.status" /></td>
 					<td><AccessDeadlineBadge :deadline-at="req.effective_deadline_at" :colour="req.deadline_colour" /></td>
-					<td>{{ req.assigned_user ?? '—' }}</td>
+					<td>{{ req.assigned_user_display_name ?? req.assigned_user ?? '—' }}</td>
 					<td>{{ formatDate(req.received_at) }}</td>
 				</tr>
 			</tbody>

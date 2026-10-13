@@ -26,6 +26,12 @@ use OCP\AppFramework\Db\Entity;
  * @method void setUpdatedAt(\DateTime $updatedAt)
  * @method string getCreatedBy()
  * @method void setCreatedBy(string $createdBy)
+ * @method \DateTime|null getUpdatedInSapa()
+ * @method void setUpdatedInSapa(?\DateTime $updatedInSapa)
+ * @method string|null getSummary()
+ * @method void setSummary(?string $summary)
+ * @method string|null getUpdatedBy()
+ * @method void setUpdatedBy(?string $updatedBy)
  * @method int|null getInsightLevelId()
  * @method void setInsightLevelId(?int $insightLevelId)
  * @method string|null getDocumentDate()
@@ -38,6 +44,10 @@ use OCP\AppFramework\Db\Entity;
  * @method void setDocumentCategoryId(?int $documentCategoryId)
  * @method string|null getUuid()
  * @method void setUuid(?string $uuid)
+ * @method bool|null getIsDeleted()
+ * @method void setIsDeleted(bool $isDeleted)
+ * @method \DateTime|null getDeletedDate()
+ * @method void setDeletedDate(?\DateTime $deletedDate)
  */
 class Document extends Entity {
 
@@ -49,12 +59,17 @@ class Document extends Entity {
     protected ?\DateTime $createdAt = null;
     protected ?\DateTime $updatedAt = null;
     protected string $createdBy = '';
+    protected ?string $updatedBy = null;
+    protected ?string $summary = null;
+    protected ?\DateTime $updatedInSapa = null;
     protected ?int $insightLevelId = null;
     protected ?string $documentDate = null;
     protected ?string $receivedDate = null;
     protected ?string $registeredDate = null;
     protected ?int $documentCategoryId = null;
     protected ?string $uuid = null;
+    protected ?bool $isDeleted = false;
+    protected ?\DateTime $deletedDate = null;
 
     public function __construct() {
         $this->addType('id', 'integer');
@@ -66,11 +81,20 @@ class Document extends Entity {
         $this->addType('createdAt', 'datetime');
         $this->addType('updatedAt', 'datetime');
         $this->addType('createdBy', 'string');
+        $this->addType('updatedBy', 'string');
+        $this->addType('summary', 'string');
+        $this->addType('updatedInSapa', 'datetime');
         $this->addType('insightLevelId', 'integer');
         $this->addType('documentDate', 'string');
         $this->addType('receivedDate', 'string');
         $this->addType('registeredDate', 'string');
         $this->addType('documentCategoryId', 'integer');
         $this->addType('uuid', 'string');
+        $this->addType('isDeleted', 'boolean');
+        $this->addType('deletedDate', 'datetime');
+    }
+
+    public function isSoftDeleted(): bool {
+        return (bool)$this->isDeleted;
     }
 }

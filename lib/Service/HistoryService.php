@@ -27,6 +27,13 @@ class HistoryService {
         $this->recordAccess($userId, 'case', $caseId);
     }
 
+    /**
+     * Remove a document from every user's recent list (on delete).
+     */
+    public function removeDocument(int $documentId): void {
+        $this->mapper->deleteByEntity('document', $documentId);
+    }
+
     public function recordDocumentAccess(int $documentId, string $userId): void {
         $this->recordAccess($userId, 'document', $documentId);
     }

@@ -8,12 +8,16 @@ nav:
   - filversioner.md
   - kontakter.md
   - noter.md
+  - dokumentrelationer.md
   - workflow.md
   - paamindelser.md  
   - dokumentlog.md
   - del-fil.md
   - del-dokument.md
+  - slet-fil.md
+  - slet-dokument.md
   - digital-post.md
   - send-med-email.md
   - indkommende-dokumenter.md
   - ms-office.md
+  - masseredigering.md

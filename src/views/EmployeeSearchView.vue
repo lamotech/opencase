@@ -145,8 +145,47 @@
 			<!-- Tabs -->
 			<OverflowTabs :tabs="employeeTabs" :value="activeTab" @input="activeTab = $event" />
 
+			<!-- Tab: Opgaver -->
+			<div v-if="activeTab === 'tasks'" class="ocs-emp__tab-panel">
+				<NcLoadingIcon v-if="loadingTasks" :size="32" />
+				<NcEmptyContent v-else-if="tasks.length === 0"
+					:title="t('opencase', 'Ingen opgaver')">
+					<template #icon>
+						<ClipboardCheckOutlineIcon :size="32" />
+					</template>
+				</NcEmptyContent>
+				<table v-else class="ocs-emp__table">
+					<thead>
+						<tr>
+							<th>{{ t('opencase', 'Frist') }}</th>
+							<th>{{ t('opencase', 'Type') }}</th>
+							<th>{{ t('opencase', 'Opgave') }}</th>
+							<th>{{ t('opencase', 'Sag') }}</th>
+							<th>{{ t('opencase', 'Dokument') }}</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr v-for="task in tasks"
+							:key="task.key"
+							class="ocs-emp__row"
+							@click="openTask(task)">
+							<td class="ocs-emp__mono" :class="{ 'ocs-emp__overdue': isOverdue(task) }">
+								{{ task.deadline ? formatDate(task.deadline) : t('opencase', 'Ingen frist') }}
+							</td>
+							<td>{{ taskTypeLabel(task) }}</td>
+							<td>{{ taskTitle(task) }}</td>
+							<td>
+								<span class="ocs-emp__mono">{{ task.case_number || '–' }}</span>
+								<span v-if="task.case_title" class="ocs-emp__task-sub">{{ task.case_title }}</span>
+							</td>
+							<td>{{ task.document_title || '–' }}</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+
 			<!-- Tab: Sager -->
-			<div v-if="activeTab === 'cases'" class="ocs-emp__tab-panel">
+			<div v-else-if="activeTab === 'cases'" class="ocs-emp__tab-panel">
 				<div class="ocs-emp__tab-actions">
 					<NcButton type="primary" @click="showNewCaseDialog = true">
 						<template #icon>
@@ -270,6 +309,7 @@
 							<th>{{ t('opencase', 'Titel') }}</th>
 							<th>{{ t('opencase', 'Adgang') }}</th>
 							<th>{{ t('opencase', 'Tildelt den') }}</th>
+							<th>{{ t('opencase', 'Tildelt af') }}</th>
 							<th>{{ t('opencase', 'Udløber') }}</th>
 						</tr>
 					</thead>
@@ -287,6 +327,7 @@
 								</span>
 							</td>
 							<td class="ocs-emp__mono">{{ formatDate(grant.granted_at) }}</td>
+							<td>{{ grant.granted_by_display_name || '—' }}</td>
 							<td class="ocs-emp__mono">{{ grant.expires_at ? formatDate(grant.expires_at) : t('opencase', 'Permanent') }}</td>
 						</tr>
 					</tbody>
@@ -312,6 +353,7 @@ import ShieldKeyOutlineIcon from 'vue-material-design-icons/ShieldKeyOutline.vue
 import PlusIcon from 'vue-material-design-icons/Plus.vue'
 import FolderIcon from 'vue-material-design-icons/Folder.vue'
 import FolderOutlineIcon from 'vue-material-design-icons/FolderOutline.vue'
+import ClipboardCheckOutlineIcon from 'vue-material-design-icons/ClipboardCheckOutline.vue'
 import { showError } from '@nextcloud/dialogs'
 
 import OrgTreeNode from '../components/OrgTreeNode.vue'
@@ -337,6 +379,7 @@ export default {
 		ShieldKeyOutlineIcon,
 		PlusIcon,
 		FolderIcon,
+		ClipboardCheckOutlineIcon,
 		CaseStatusBadge,
 		NewCaseDialog,
 		OrgTreeNode,
@@ -359,6 +402,8 @@ export default {
 			loadingPrivileges: false,
 			cases: [],
 			loadingCases: false,
+			tasks: [],
+			loadingTasks: false,
 			showNewCaseDialog: false,
 		}
 	},
@@ -372,6 +417,7 @@ export default {
 
 		employeeTabs() {
 			return [
+				{ id: 'tasks', label: t('opencase', 'Opgaver'), count: this.tasks.length || null, icon: ClipboardCheckOutlineIcon },
 				{ id: 'cases', label: t('opencase', 'Sager'), count: this.cases.length || null, icon: FolderOutlineIcon },
 				{ id: 'orgtree', label: t('opencase', 'Organisationsstruktur'), icon: SitemapOutlineIcon },
 				{ id: 'access', label: t('opencase', 'Rettigheder'), count: this.userPrivileges.length || null, icon: ShieldKeyOutlineIcon },
@@ -531,6 +577,7 @@ export default {
 			this.manualGrants = []
 			this.userPrivileges = []
 			this.cases = []
+			this.tasks = []
 
 			if (updateUrl) {
 				sessionStorage.setItem('oc_selected_employee', JSON.stringify(emp))
@@ -570,6 +617,17 @@ export default {
 				}
 			}
 
+			if (emp.uuid) {
+				this.loadingTasks = true
+				try {
+					this.tasks = await api.getEmployeeTasks(emp.uuid) || []
+				} catch (e) {
+					showError(t('opencase', 'Kunne ikke hente opgaver'))
+				} finally {
+					this.loadingTasks = false
+				}
+			}
+
 			if (emp.username) {
 				this.loadingCases = true
 				try {
@@ -601,6 +659,37 @@ export default {
 
 		openCase(caseId) {
 			this.$router.push({ name: 'case-detail', params: { id: caseId } })
+		},
+
+		// Workflow tasks live on the document; reminders open on whichever
+		// entity they were created for.
+		openTask(task) {
+			if (task.type === 'workflow') {
+				this.$router.push({ path: '/document/' + task.document_id, hash: '#tab-workflow' })
+			} else if (task.document_id) {
+				this.$router.push({ path: '/document/' + task.document_id, hash: '#tab-info' })
+			} else if (task.case_id) {
+				this.openCase(task.case_id)
+			}
+		},
+
+		taskTypeLabel(task) {
+			if (task.type === 'reminder') return t('opencase', 'Påmindelse')
+			return task.workflow_type === 'review'
+				? t('opencase', 'Gennemse')
+				: t('opencase', 'Godkendelse')
+		},
+
+		taskTitle(task) {
+			if (task.type === 'reminder') return task.title || '–'
+			return task.workflow_type === 'review'
+				? t('opencase', 'Gennemse dokument')
+				: t('opencase', 'Godkend eller afvis dokument')
+		},
+
+		isOverdue(task) {
+			if (!task.deadline) return false
+			return new Date(task.deadline) < new Date()
 		},
 
 		formatDate(dateStr) {
@@ -705,6 +794,18 @@ export default {
 .ocs-emp__mono {
 	font-family: var(--font-monospace, monospace);
 	white-space: nowrap;
+}
+
+.ocs-emp__overdue {
+	color: #c62828;
+	font-weight: bold;
+}
+
+/* Case title under the case number in the task list */
+.ocs-emp__task-sub {
+	display: block;
+	color: var(--color-text-maxcontrast);
+	font-size: 0.9em;
 }
 
 .ocs-emp__orgs {

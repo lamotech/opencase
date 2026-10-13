@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace OCA\OpenCase\Db;
 
 use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\AppFramework\Db\Entity;
 use OCP\AppFramework\Db\QBMapper;
 use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\IDBConnection;
+use OCP\IUserSession;
 
 /**
  * Mapper for the opencase_cases table.
@@ -22,8 +24,171 @@ use OCP\IDBConnection;
  */
 class CaseMapper extends QBMapper {
 
-    public function __construct(IDBConnection $db) {
+    public function __construct(
+        IDBConnection $db,
+        private IUserSession $userSession,
+    ) {
         parent::__construct($db, 'opencase_cases', CaseEntity::class);
+    }
+
+    /**
+     * @param CaseEntity $entity
+     * @return CaseEntity
+     */
+    public function insert(Entity $entity): Entity {
+        if ($entity->getUpdatedBy() === null || $entity->getUpdatedBy() === '') {
+            $entity->setUpdatedBy($entity->getCreatedBy());
+        }
+        return parent::insert($entity);
+    }
+
+    /**
+     * Stamps updated_by with the logged-in user. Without a user session
+     * (background jobs, occ) the previous value is kept, falling back to
+     * created_by if it is empty.
+     *
+     * @param CaseEntity $entity
+     * @return CaseEntity
+     */
+    public function update(Entity $entity): Entity {
+        $uid = $this->userSession->getUser()?->getUID();
+        if ($uid !== null && $uid !== '') {
+            $entity->setUpdatedBy($uid);
+        } elseif ($entity->getUpdatedBy() === null || $entity->getUpdatedBy() === '') {
+            $entity->setUpdatedBy($entity->getCreatedBy());
+        }
+        return parent::update($entity);
+    }
+
+    /**
+     * Bumps a case's updated_at (and, through update(), updated_by) when
+     * something belonging to it changes — e.g. a journal note or a
+     * participant — so the SAPA transfer job re-sends the case.
+     */
+    public function touch(int $caseId): void {
+        $case = $this->findById($caseId);
+        if ($case === null) {
+            return;
+        }
+        $case->setUpdatedAt(new \DateTime());
+        $this->update($case);
+    }
+
+    /**
+     * Cases for the SagDokumentIndeks (SAPA) transfer job matching one rule's
+     * scopes. An empty filter list means "no restriction" for that type;
+     * $klePatterns are SQL LIKE patterns on the case's KLE code.
+     *
+     * $resend = false: cases never sent (updated_in_sapa IS NULL).
+     * $resend = true:  cases sent but changed since (updated_at > updated_in_sapa).
+     *
+     * Inbox and deleted cases are skipped, as are cases whose last attempt
+     * failed after their last change (so a failing case is only retried once
+     * it has been edited, instead of every run).
+     *
+     * @param int[] $casetypeIds
+     * @param string[] $orgUuids
+     * @param string[] $klePatterns
+     * @return array<int, array{id: int, uuid: string}>
+     */
+    public function findForSapaTransfer(array $casetypeIds, array $orgUuids, array $klePatterns, bool $resend, int $limit): array {
+        $qb = $this->db->getQueryBuilder();
+        $qb->select('c.id', 'c.uuid')
+            ->from($this->getTableName(), 'c')
+            ->orderBy('c.updated_at', 'ASC')
+            ->setMaxResults($limit);
+
+        if ($resend) {
+            $qb->andWhere($qb->expr()->isNotNull('c.updated_in_sapa'))
+                ->andWhere($qb->expr()->gt('c.updated_at', 'c.updated_in_sapa'));
+        } else {
+            $qb->andWhere($qb->expr()->isNull('c.updated_in_sapa'));
+        }
+
+        $this->applySapaScopeFilter($qb, $casetypeIds, $orgUuids, $klePatterns);
+
+        $failed = $this->db->getQueryBuilder();
+        $failed->select($failed->expr()->literal('1'))
+            ->from('opencase_casedocindex_log', 'l')
+            ->where($failed->expr()->eq('l.case_uuid', 'c.uuid'))
+            ->andWhere($failed->expr()->isNull('l.document_uuid'))
+            ->andWhere($failed->expr()->eq('l.status', $qb->createNamedParameter('failed')))
+            ->andWhere($failed->expr()->gt('l.created_at', 'c.updated_at'));
+        $qb->andWhere($qb->createFunction('NOT EXISTS (' . $failed->getSQL() . ')'));
+
+        $result = $qb->executeQuery();
+        $rows = [];
+        while ($row = $result->fetch()) {
+            $rows[] = ['id' => (int)$row['id'], 'uuid' => (string)$row['uuid']];
+        }
+        $result->closeCursor();
+        return $rows;
+    }
+
+    /**
+     * How many cases match one SAPA rule's scopes, and how many of those
+     * have been sent to SagDokumentIndeks (updated_in_sapa set). Same
+     * filters as findForSapaTransfer().
+     *
+     * @param int[] $casetypeIds
+     * @param string[] $orgUuids
+     * @param string[] $klePatterns
+     * @return array{matching: int, sent: int}
+     */
+    public function countForSapaRule(array $casetypeIds, array $orgUuids, array $klePatterns): array {
+        $qb = $this->db->getQueryBuilder();
+        $qb->select($qb->func()->count('c.id', 'matching'))
+            ->selectAlias($qb->createFunction('SUM(CASE WHEN c.updated_in_sapa IS NULL THEN 0 ELSE 1 END)'), 'sent')
+            ->from($this->getTableName(), 'c');
+        $this->applySapaScopeFilter($qb, $casetypeIds, $orgUuids, $klePatterns);
+
+        $row = $qb->executeQuery()->fetch();
+        return [
+            'matching' => (int)($row['matching'] ?? 0),
+            'sent' => (int)($row['sent'] ?? 0),
+        ];
+    }
+
+    /**
+     * Restricts $qb (cases aliased "c") to live, non-inbox cases matching a
+     * SAPA rule's scopes; an empty list means no restriction for that type.
+     *
+     * @param int[] $casetypeIds
+     * @param string[] $orgUuids
+     * @param string[] $klePatterns SQL LIKE patterns on the case's KLE code
+     */
+    private function applySapaScopeFilter(IQueryBuilder $qb, array $casetypeIds, array $orgUuids, array $klePatterns): void {
+        $qb->andWhere($qb->expr()->eq('c.is_inbox', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+            ->andWhere($qb->expr()->isNull('c.deleted_date'))
+            ->andWhere($qb->expr()->isNotNull('c.uuid'));
+
+        if ($casetypeIds !== []) {
+            $qb->andWhere($qb->expr()->in('c.casetype_id', $qb->createNamedParameter($casetypeIds, IQueryBuilder::PARAM_INT_ARRAY)));
+        }
+        if ($orgUuids !== []) {
+            $qb->andWhere($qb->expr()->in('c.org_uuid', $qb->createNamedParameter($orgUuids, IQueryBuilder::PARAM_STR_ARRAY)));
+        }
+        if ($klePatterns !== []) {
+            $qb->innerJoin('c', 'opencase_access_profiles', 'ap', $qb->expr()->eq('ap.id', 'c.access_profile_id'))
+                ->innerJoin('ap', 'opencase_class_subject', 'cs', $qb->expr()->eq('cs.uuid', 'ap.class_subject_uuid'));
+            $or = [];
+            foreach ($klePatterns as $pattern) {
+                $or[] = $qb->expr()->like('cs.code', $qb->createNamedParameter($pattern));
+            }
+            $qb->andWhere($qb->expr()->orX(...$or));
+        }
+    }
+
+    /**
+     * Set (or clear) updated_in_sapa directly, without going through update(),
+     * so updated_by/updated_at are left alone.
+     */
+    public function setUpdatedInSapa(string $uuid, ?\DateTime $time): void {
+        $qb = $this->db->getQueryBuilder();
+        $qb->update($this->getTableName())
+            ->set('updated_in_sapa', $qb->createNamedParameter($time, IQueryBuilder::PARAM_DATE))
+            ->where($qb->expr()->eq('uuid', $qb->createNamedParameter($uuid)))
+            ->executeStatement();
     }
 
     // ---------------------------------------------------------------
@@ -706,6 +871,7 @@ class CaseMapper extends QBMapper {
         ?string $classificationCode = null,
         ?string $sensitivityKey = null,
         ?int $casetypeId = null,
+        array $customFields = [],
     ): array {
         $now = (new \DateTime())->format('Y-m-d H:i:s');
         $qb  = $this->db->getQueryBuilder();
@@ -774,8 +940,81 @@ class CaseMapper extends QBMapper {
         if ($casetypeId !== null) {
             $qb->andWhere($qb->expr()->eq('c.casetype_id', $qb->createNamedParameter($casetypeId, IQueryBuilder::PARAM_INT)));
         }
+        $this->applyCustomFieldFilters($qb, $customFields);
 
         return $this->findEntities($qb);
+    }
+
+    /**
+     * Joins opencase_customfield_def/value onto the query once per entry
+     * in $customFields (each under its own alias, so multiple filters
+     * combine with AND — a case must match every one), restricting
+     * results to cases whose custom field (by field_key) matches the
+     * given value. The comparison strategy depends on the field's type,
+     * since each type is stored in a different typed column (see
+     * opencase_customfield_value):
+     *   text     — case-insensitive substring match on value_text
+     *   dropdown — exact match on value_text (fixed set of options)
+     *   checkbox — exact match on value_bool ("1"/"true" => true)
+     *   date     — range match on value_date; value_from/value_to are
+     *              each optional, but at least one must be given
+     *
+     * @param array<int, array{key: ?string, value: ?string, value_from: ?string, value_to: ?string, type: ?string}> $customFields
+     */
+    private function applyCustomFieldFilters(IQueryBuilder $qb, array $customFields): void {
+        $i = 0;
+        foreach ($customFields as $filter) {
+            $key   = $filter['key'] ?? null;
+            $type  = $filter['type'] ?? null;
+            if (!is_string($key) || $key === '') {
+                continue;
+            }
+
+            if ($type === 'date') {
+                $dateFrom = (isset($filter['value_from']) && $filter['value_from'] !== '') ? $filter['value_from'] : null;
+                $dateTo   = (isset($filter['value_to']) && $filter['value_to'] !== '') ? $filter['value_to'] : null;
+                if ($dateFrom === null && $dateTo === null) {
+                    continue;
+                }
+            } else {
+                $value = $filter['value'] ?? null;
+                if (!is_string($value) || $value === '') {
+                    continue;
+                }
+            }
+
+            $defAlias = "cfd{$i}";
+            $valAlias = "cfv{$i}";
+            $i++;
+
+            $qb->innerJoin('c', 'opencase_customfield_def', $defAlias,
+                $qb->expr()->eq("{$defAlias}.field_key", $qb->createNamedParameter($key)));
+            $qb->innerJoin('c', 'opencase_customfield_value', $valAlias, $qb->expr()->andX(
+                $qb->expr()->eq("{$valAlias}.case_id", 'c.id'),
+                $qb->expr()->eq("{$valAlias}.customfield_id", "{$defAlias}.id"),
+            ));
+
+            switch ($type) {
+                case 'checkbox':
+                    $boolValue = in_array(strtolower($value), ['1', 'true'], true);
+                    $qb->andWhere($qb->expr()->eq("{$valAlias}.value_bool", $qb->createNamedParameter($boolValue, IQueryBuilder::PARAM_BOOL)));
+                    break;
+                case 'date':
+                    if ($dateFrom !== null) {
+                        $qb->andWhere($qb->expr()->gte("{$valAlias}.value_date", $qb->createNamedParameter($dateFrom)));
+                    }
+                    if ($dateTo !== null) {
+                        $qb->andWhere($qb->expr()->lte("{$valAlias}.value_date", $qb->createNamedParameter($dateTo)));
+                    }
+                    break;
+                case 'dropdown':
+                    $qb->andWhere($qb->expr()->eq("{$valAlias}.value_text", $qb->createNamedParameter($value)));
+                    break;
+                default:
+                    $likeParam = $qb->createNamedParameter('%' . $this->db->escapeLikeParameter($value) . '%');
+                    $qb->andWhere($qb->expr()->iLike("{$valAlias}.value_text", $likeParam));
+            }
+        }
     }
 
     /**
@@ -795,6 +1034,7 @@ class CaseMapper extends QBMapper {
         ?string $classificationCode = null,
         ?string $sensitivityKey = null,
         ?int $casetypeId = null,
+        array $customFields = [],
     ): int {
         $now = (new \DateTime())->format('Y-m-d H:i:s');
         $qb  = $this->db->getQueryBuilder();
@@ -861,6 +1101,7 @@ class CaseMapper extends QBMapper {
         if ($casetypeId !== null) {
             $qb->andWhere($qb->expr()->eq('c.casetype_id', $qb->createNamedParameter($casetypeId, IQueryBuilder::PARAM_INT)));
         }
+        $this->applyCustomFieldFilters($qb, $customFields);
 
         $result = $qb->executeQuery();
         $row    = $result->fetch();

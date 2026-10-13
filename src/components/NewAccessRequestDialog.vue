@@ -1,5 +1,5 @@
 <template>
-	<NcDialog :name="t('opencase', 'Ny aktindsigtsanmodning')"
+	<NcDialog :name="isEdit ? t('opencase', 'Rediger aktindsigtsanmodning') : t('opencase', 'Ny aktindsigtsanmodning')"
 		:open="true"
 		size="normal"
 		@closing="$emit('close')">
@@ -15,6 +15,15 @@
 				:label="t('opencase', 'Emne / hvad ønskes der aktindsigt i')"
 				:required="true"
 				class="oc-new-ar__field" />
+
+			<label class="oc-new-ar__select-label">{{ t('opencase', 'Sagsbehandler') }}</label>
+			<NcSelect v-model="form.assigned_user"
+				:options="userOptions"
+				:loading="userSearchLoading"
+				:filterable="false"
+				:placeholder="t('opencase', 'Søg efter bruger')"
+				class="oc-new-ar__field"
+				@search="onUserSearch" />
 
 			<NcTextField v-model="form.requester_name"
 				:label="t('opencase', 'Anmoders navn')"
@@ -51,7 +60,7 @@
 				<template #icon>
 					<NcLoadingIcon v-if="saving" :size="20" />
 				</template>
-				{{ t('opencase', 'Opret') }}
+				{{ isEdit ? t('opencase', 'Gem') : t('opencase', 'Opret') }}
 			</NcButton>
 		</template>
 	</NcDialog>
@@ -66,35 +75,54 @@ import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import ClockOutlineIcon from 'vue-material-design-icons/ClockOutline.vue'
 import { showError } from '@nextcloud/dialogs'
+import { getCurrentUser } from '@nextcloud/auth'
 import api from '../services/api.js'
 
 export default {
 	name: 'NewAccessRequestDialog',
 	components: { NcDialog, NcButton, NcTextField, NcTextArea, NcSelect, NcLoadingIcon, ClockOutlineIcon },
 	props: {
-		caseId: { type: [Number, String], required: true },
+		caseId: { type: [Number, String], default: null },
+		// When set, the dialog edits this existing request instead of creating one
+		request: { type: Object, default: null },
 	},
-	emits: ['close', 'created'],
+	emits: ['close', 'created', 'updated'],
 	data() {
+		const typeOptions = [
+			{ id: 'public_access',  label: t('opencase', 'Offentlighedsloven') },
+			{ id: 'party_access',   label: t('opencase', 'Forvaltningsloven (partsaktindsigt)') },
+			{ id: 'gdpr_access',    label: t('opencase', 'Databeskyttelsesindsigt (GDPR)') },
+		]
+		const r = this.request
+		const currentUser = getCurrentUser()
+		let assignedUser = null
+		if (r?.assigned_user) {
+			assignedUser = { id: r.assigned_user, label: r.assigned_user_display_name || r.assigned_user }
+		} else if (!r && currentUser) {
+			assignedUser = { id: currentUser.uid, label: currentUser.displayName || currentUser.uid }
+		}
 		return {
+			userOptions: assignedUser ? [assignedUser] : [],
+			userSearchLoading: false,
+			userSearchTimeout: null,
 			saving: false,
 			form: {
-				type: null,
-				subject: '',
-				requester_name: '',
-				requester_email: '',
-				requester_phone: '',
-				requester_identifier: '',
-				description: '',
+				type: r ? (typeOptions.find(o => o.id === r.type) ?? null) : null,
+				subject: r?.subject ?? '',
+				requester_name: r?.requester_name ?? '',
+				requester_email: r?.requester_email ?? '',
+				requester_phone: r?.requester_phone ?? '',
+				requester_identifier: r?.requester_identifier ?? '',
+				description: r?.description ?? '',
+				assigned_user: assignedUser,
 			},
-			typeOptions: [
-				{ id: 'public_access',  label: t('opencase', 'Offentlighedsloven') },
-				{ id: 'party_access',   label: t('opencase', 'Forvaltningsloven (partsaktindsigt)') },
-				{ id: 'gdpr_access',    label: t('opencase', 'Databeskyttelsesindsigt (GDPR)') },
-			],
+			typeOptions,
 		}
 	},
 	computed: {
+		isEdit() {
+			return this.request !== null
+		},
 		deadlineHint() {
 			if (!this.form.type) return ''
 			if (this.form.type.id === 'gdpr_access') {
@@ -103,22 +131,48 @@ export default {
 			return t('opencase', 'Frist: 7 arbejdsdage (Offentlighedsloven §36)')
 		},
 	},
+	beforeUnmount() {
+		clearTimeout(this.userSearchTimeout)
+	},
 	methods: {
+		onUserSearch(query) {
+			clearTimeout(this.userSearchTimeout)
+			if (!query || query.length < 2) return
+			this.userSearchLoading = true
+			this.userSearchTimeout = setTimeout(async () => {
+				try {
+					this.userOptions = await api.searchUsers(query)
+				} catch {
+					// silently ignore
+				} finally {
+					this.userSearchLoading = false
+				}
+			}, 300)
+		},
 		async submit() {
 			this.saving = true
+			const payload = {
+				type:                   this.form.type?.id,
+				subject:                this.form.subject,
+				requester_name:         this.form.requester_name,
+				requester_email:        this.form.requester_email,
+				requester_phone:        this.form.requester_phone,
+				requester_identifier:   this.form.requester_identifier,
+				description:            this.form.description,
+				assigned_user:          this.form.assigned_user?.id ?? '',
+			}
 			try {
-				const req = await api.createAccessRequest(this.caseId, {
-					type:                   this.form.type?.id,
-					subject:                this.form.subject,
-					requester_name:         this.form.requester_name,
-					requester_email:        this.form.requester_email,
-					requester_phone:        this.form.requester_phone,
-					requester_identifier:   this.form.requester_identifier,
-					description:            this.form.description,
-				})
-				this.$emit('created', req)
+				if (this.isEdit) {
+					const req = await api.updateAccessRequest(this.request.id, payload)
+					this.$emit('updated', req)
+				} else {
+					const req = await api.createAccessRequest(this.caseId, payload)
+					this.$emit('created', req)
+				}
 			} catch {
-				showError(t('opencase', 'Kunne ikke oprette aktindsigtssagen'))
+				showError(this.isEdit
+					? t('opencase', 'Kunne ikke gemme aktindsigtssagen')
+					: t('opencase', 'Kunne ikke oprette aktindsigtssagen'))
 			} finally {
 				this.saving = false
 			}

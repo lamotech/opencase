@@ -12,6 +12,7 @@ use OCA\OpenCase\Db\ConfigMapper;
 use OCA\OpenCase\Db\OrganisationMapper;
 use OCA\OpenCase\Db\SensitivityMapper;
 use OCA\OpenCase\Service\CaseNumberService;
+use OCA\OpenCase\Service\DisposalService;
 use OCA\OpenCase\Service\PrivilegeService;
 use OCA\OpenCase\Service\RoleService;
 use OCP\AppFramework\Http;
@@ -52,6 +53,7 @@ class ConfigController extends OCSController {
         private SensitivityMapper $sensitivityMapper,
         private ClassificationFacetRepository $classificationFacetRepository,
         private PrivilegeService $privilegeService,
+        private DisposalService $disposalService,
         private LoggerInterface $logger,
     ) {
         parent::__construct($appName, $request);
@@ -179,6 +181,7 @@ class ConfigController extends OCSController {
             }
 
             if ($changed) {
+                $this->disposalService->applyDisposalCode($case);
                 $case->setUpdatedAt(new \DateTime());
                 $this->caseMapper->update($case);
             }

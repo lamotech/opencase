@@ -439,7 +439,7 @@ export default {
 
 .opencase-send-email-dialog__attachment-remove:hover {
 	background: var(--color-background-hover);
-	color: var(--color-error);
+	color: #c62828;
 }
 
 .opencase-send-email-dialog__editor {

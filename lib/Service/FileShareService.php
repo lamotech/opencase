@@ -149,7 +149,7 @@ class FileShareService {
 
         foreach ($shares as $share) {
             $file = $this->fileMapper->findById($share->getFileId());
-            if ($file === null) {
+            if ($file === null || $file->isSoftDeleted()) {
                 continue;
             }
             $sharer = $this->userManager->get($share->getOwnerId());
@@ -163,6 +163,9 @@ class FileShareService {
                     $docCache[$documentId] = $this->documentMapper->findById($documentId);
                 }
                 $doc = $docCache[$documentId];
+                if ($doc !== null && $doc->isSoftDeleted()) {
+                    continue;
+                }
                 if ($doc !== null) {
                     $docTitle  = $doc->getTitle();
                     $docNumber = $doc->getDocumentNumber();

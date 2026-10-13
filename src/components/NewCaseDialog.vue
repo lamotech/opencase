@@ -131,7 +131,7 @@
 					:filterable="false"
 					:placeholder="t('opencase', 'Søg efter organisation')"
 					@search="onOrgSearch"
-					@update:model-value="v => form.organisation = v?.id || ''" />
+					@update:model-value="v => { form.organisation = v?.id || ''; selectedOrgUuid = v?.uuid || ''; fetchApplicableCustomFields() }" />
 				<span v-if="errors.organisation" class="ncd-field__error">{{ errors.organisation }}</span>
 			</div>
 
@@ -141,7 +141,7 @@
 					<NcSelect v-model="selectedClassification"
 						:options="classificationOptions"
 						:placeholder="t('opencase', 'Vælg KLE-emneord')"
-						@update:model-value="v => form.classification_code = v?.id || ''" />
+						@update:model-value="v => { form.classification_code = v?.id || ''; fetchApplicableCustomFields() }" />
 					<span v-if="errors.classification_code" class="ncd-field__error">{{ errors.classification_code }}</span>
 				</div>
 
@@ -250,6 +250,28 @@
 					<editor-content class="ncd-editor__content" :editor="editor" />
 				</div>
 			</div>
+
+			<div v-for="field in customFields" :key="field.id" class="ncd-field">
+				<label>{{ field.label }}<span v-if="field.required"> *</span></label>
+
+				<NcSelect v-if="field.field_type === 'dropdown'"
+					:model-value="customFieldValues[field.field_key] ? { id: customFieldValues[field.field_key], label: customFieldValues[field.field_key] } : null"
+					:options="field.options.map(o => ({ id: o, label: o }))"
+					:placeholder="t('opencase', 'Vælg')"
+					@update:model-value="v => customFieldValues[field.field_key] = v?.id || ''" />
+
+				<NcCheckboxRadioSwitch v-else-if="field.field_type === 'checkbox'"
+					v-model="customFieldValues[field.field_key]"
+					type="switch" />
+
+				<input v-else-if="field.field_type === 'date'"
+					v-model="customFieldValues[field.field_key]"
+					type="date">
+
+				<NcTextField v-else v-model="customFieldValues[field.field_key]" />
+
+				<span v-if="errors[`custom_field_${field.field_key}`]" class="ncd-field__error">{{ errors[`custom_field_${field.field_key}`] }}</span>
+			</div>
 		</div>
 	</div>
 
@@ -303,6 +325,7 @@ import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
+import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import AccountIcon from 'vue-material-design-icons/Account.vue'
 import OfficeBuildingIcon from 'vue-material-design-icons/OfficeBuilding.vue'
@@ -344,7 +367,7 @@ export default {
 	name: 'NewCaseDialog',
 
 	components: {
-		NcDialog, NcButton, NcTextField, NcSelect, NcLoadingIcon, AccountIcon, OfficeBuildingIcon, CprDisplay,
+		NcDialog, NcButton, NcTextField, NcSelect, NcCheckboxRadioSwitch, NcLoadingIcon, AccountIcon, OfficeBuildingIcon, CprDisplay,
 		HomeCityIcon, HomeGroupIcon, HomeVariantIcon,
 		SelectCitizenDialog, ManualCitizenDialog, SelectCompanyDialog, ManualCompanyDialog, SelectEmployeeDialog, SelectEstateDialog,
 		OverflowTabs, CaseParticipantList, CaseCaseworkerList,
@@ -407,6 +430,9 @@ export default {
 			activeTab: 'info',
 			participantsCount: null,
 			caseworkersCount: null,
+			selectedOrgUuid: '',
+			customFields: [],
+			customFieldValues: {},
 		}
 	},
 
@@ -512,16 +538,19 @@ export default {
 		try {
 			const orgName = await api.getMyPrimaryOrg()
 			if (orgName) {
-				const option = { id: orgName, label: orgName }
-				if (!this.orgOptions.find(o => o.id === orgName)) {
+				const existing = this.orgOptions.find(o => o.id === orgName)
+				const option = existing || { id: orgName, label: orgName }
+				if (!existing) {
 					this.orgOptions = [option, ...this.orgOptions]
 				}
 				this.selectedOrg = option
 				this.form.organisation = orgName
+				this.selectedOrgUuid = option.uuid || ''
 			}
 		} catch (e) {
 			// silently ignore
 		}
+		this.fetchApplicableCustomFields()
 	},
 
 	beforeUnmount() {
@@ -581,6 +610,32 @@ export default {
 		},
 
 		/**
+		 * Re-fetches the custom fields applicable to the case type/org/KLE
+		 * combination selected so far, and prunes stale values for fields
+		 * that no longer apply while keeping values for fields still shown.
+		 */
+		async fetchApplicableCustomFields() {
+			try {
+				this.customFields = await api.getApplicableCustomFields({
+					casetypeId: this.form.casetype_id,
+					orgUuid: this.selectedOrgUuid || null,
+					classificationCode: this.form.classification_code || null,
+				})
+			} catch (e) {
+				this.customFields = []
+			}
+			const keys = new Set(this.customFields.map(f => f.field_key))
+			for (const key of Object.keys(this.customFieldValues)) {
+				if (!keys.has(key)) delete this.customFieldValues[key]
+			}
+			for (const field of this.customFields) {
+				if (!(field.field_key in this.customFieldValues)) {
+					this.customFieldValues[field.field_key] = field.field_type === 'checkbox' ? false : ''
+				}
+			}
+		},
+
+		/**
 		 * Editor HTML, or '' when the user left the summary untouched —
 		 * TipTap serialises an empty document as '<p></p>'.
 		 */
@@ -601,6 +656,12 @@ export default {
 			if (this.requiresCompany) this.errors.participant = t('opencase', 'Vælg en virksomhed')
 			if (this.requiresEmployee) this.errors.participant = t('opencase', 'Vælg en medarbejder')
 			if (this.requiresEstate) this.errors.participant = t('opencase', 'Vælg en ejendom')
+			for (const field of this.customFields) {
+				const value = this.customFieldValues[field.field_key]
+				if (field.required && field.field_type !== 'checkbox' && !value) {
+					this.errors[`custom_field_${field.field_key}`] = t('opencase', 'Påkrævet')
+				}
+			}
 			return Object.keys(this.errors).length === 0
 		},
 
@@ -656,6 +717,14 @@ export default {
 						await api.linkCaseEstate(created.id, this.selectedEstate, 1) // 1 = Primær ejendom
 					} catch (e) {
 						showError(t('opencase', 'Sag oprettet, men ejendommen kunne ikke tilknyttes'))
+					}
+				}
+
+				if (this.customFields.length) {
+					try {
+						await api.updateCaseCustomFields(created.id, this.customFieldValues)
+					} catch (e) {
+						showError(t('opencase', 'Sag oprettet, men tillægsfelterne kunne ikke gemmes'))
 					}
 				}
 

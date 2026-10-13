@@ -1,8 +1,9 @@
 <template>
 	<div class="opencase-document-list">
-		<div v-for="doc in documents"
+		<div v-for="doc in sortedDocuments"
 			:key="doc.id"
 			class="opencase-document-list__item"
+			:class="{ 'opencase-document-list__item--deleted': doc.is_deleted }"
 			@click="$emit('open', doc.id)">
 			<div class="opencase-document-list__icon">
 				<FileDocumentIcon :size="24" />
@@ -18,17 +19,30 @@
 					<span v-if="doc.document_type">{{ doc.document_type }}</span>
 					<CaseStatusBadge :status="doc.status" :label="doc.status_name" />
 					<span>{{ formatDate(doc.updated_at) }}</span>
+					<span v-if="doc.is_deleted" class="opencase-document-list__deleted">
+						{{ t('opencase', 'Slettet {date}', { date: formatDate(doc.deleted_date) }) }}
+					</span>
 				</span>
 			</div>
-			<NcActions :force-menu="true">
-				<NcActionButton @click.stop="$emit('open', doc.id)">
-					{{ t('opencase', 'Åbn') }}
-				</NcActionButton>
-				<NcActionButton v-if="doc.status === 1"
-					@click.stop="$emit('delete', doc.id)">
-					{{ t('opencase', 'Slet') }}
-				</NcActionButton>
-			</NcActions>
+			<!-- Keep clicks on the menu from opening the document via the row -->
+			<div class="opencase-document-list__actions" @click.stop>
+				<NcActions :force-menu="true">
+					<NcActionButton @click.stop="$emit('open', doc.id)">
+						{{ t('opencase', 'Åbn') }}
+					</NcActionButton>
+					<NcActionButton v-if="doc.is_deleted && canRestore"
+						@click.stop="$emit('restore', doc.id)">
+						<template #icon>
+							<RestoreIcon :size="20" />
+						</template>
+						{{ t('opencase', 'Gendan dokument') }}
+					</NcActionButton>
+					<NcActionButton v-else-if="!doc.is_deleted && doc.status === 1"
+						@click.stop="$emit('delete', doc.id)">
+						{{ t('opencase', 'Slet') }}
+					</NcActionButton>
+				</NcActions>
+			</div>
 		</div>
 	</div>
 </template>
@@ -37,13 +51,30 @@
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import FileDocumentIcon from 'vue-material-design-icons/FileDocument.vue'
+import RestoreIcon from 'vue-material-design-icons/Restore.vue'
 import CaseStatusBadge from './CaseStatusBadge.vue'
 
 export default {
 	name: 'DocumentList',
-	components: { NcActions, NcActionButton, FileDocumentIcon, CaseStatusBadge },
+	components: { NcActions, NcActionButton, FileDocumentIcon, RestoreIcon, CaseStatusBadge },
 	props: {
 		documents: { type: Array, required: true },
+		canRestore: { type: Boolean, default: false },
+	},
+	emits: ['open', 'delete', 'restore'],
+	computed: {
+		// Newest first: document numbers end in a running sequence ("2026-00113-6"),
+		// so a numeric-aware compare orders them correctly; unnumbered ones fall back to id
+		sortedDocuments() {
+			return [...this.documents].sort((a, b) => {
+				if (a.document_number && b.document_number) {
+					return b.document_number.localeCompare(a.document_number, undefined, { numeric: true })
+				}
+				if (a.document_number) return -1
+				if (b.document_number) return 1
+				return b.id - a.id
+			})
+		},
 	},
 	methods: {
 		formatDate(dateStr) {
@@ -67,4 +98,9 @@ export default {
 .opencase-document-list__title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .opencase-document-list__docnumber { font-size: 0.8em; color: var(--color-text-maxcontrast); white-space: nowrap; flex-shrink: 0; font-family: monospace; }
 .opencase-document-list__meta { display: flex; gap: 8px; align-items: center; font-size: 0.85em; color: var(--color-text-lighter); }
+.opencase-document-list__item--deleted .opencase-document-list__icon,
+.opencase-document-list__item--deleted .opencase-document-list__title { opacity: 0.5; }
+.opencase-document-list__item--deleted .opencase-document-list__title { text-decoration: line-through; }
+.opencase-document-list__deleted { color: var(--color-error-text, var(--color-error)); }
+.opencase-document-list__actions { flex-shrink: 0; cursor: default; }
 </style>

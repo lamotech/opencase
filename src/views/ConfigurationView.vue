@@ -171,6 +171,208 @@
 				@updated="onSeparationSheetUpdated" />
 		</div>
 
+		<!-- Custom fields tab -->
+		<div v-if="activeTab === 'customfields'" class="opencase-configuration__content opencase-configuration__content--wide">
+			<div class="opencase-configuration__toolbar">
+				<NcButton type="primary" @click="showCreateCustomFieldDialog = true">
+					{{ t('opencase', 'Opret nyt felt') }}
+				</NcButton>
+			</div>
+
+			<p v-if="customFields.length === 0 && !customFieldsLoading" class="opencase-configuration__description">
+				{{ t('opencase', 'Ingen tillægsfelter er oprettet endnu.') }}
+			</p>
+
+			<table v-else class="opencase-configuration__table">
+				<thead>
+					<tr>
+						<th>{{ t('opencase', 'Nøgle') }}</th>
+						<th>{{ t('opencase', 'Navn') }}</th>
+						<th>{{ t('opencase', 'Type') }}</th>
+						<th>{{ t('opencase', 'Påkrævet') }}</th>
+						<th>{{ t('opencase', 'Afgrænsning') }}</th>
+						<th>{{ t('opencase', 'Aktiv') }}</th>
+						<th></th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr v-for="field in customFields" :key="field.id">
+						<td><code>{{ field.field_key }}</code></td>
+						<td>{{ field.label }}</td>
+						<td>{{ cfFieldTypeLabel(field.field_type) }}</td>
+						<td>{{ field.required ? t('opencase', 'Ja') : t('opencase', 'Nej') }}</td>
+						<td>{{ cfScopeSummary(field) }}</td>
+						<td>
+							<NcCheckboxRadioSwitch :model-value="field.active"
+								type="switch"
+								@update:model-value="setCustomFieldActive(field, $event)" />
+						</td>
+						<td>
+							<div class="opencase-configuration__row-actions">
+								<NcButton @click="editingCustomField = field">
+									{{ t('opencase', 'Rediger') }}
+								</NcButton>
+								<NcButton type="error" @click="deleteCustomField(field)">
+									{{ t('opencase', 'Slet') }}
+								</NcButton>
+							</div>
+						</td>
+					</tr>
+				</tbody>
+			</table>
+
+			<p v-if="customFieldsError" class="opencase-configuration__error opencase-configuration__description">
+				{{ customFieldsError }}
+			</p>
+
+			<CreateCustomFieldDialog v-if="showCreateCustomFieldDialog"
+				:case-types="cfCaseTypes"
+				:org-units="cfOrgUnits"
+				@close="showCreateCustomFieldDialog = false"
+				@created="onCustomFieldCreated" />
+
+			<EditCustomFieldDialog v-if="editingCustomField"
+				:field="editingCustomField"
+				:case-types="cfCaseTypes"
+				:org-units="cfOrgUnits"
+				@close="editingCustomField = null"
+				@updated="onCustomFieldUpdated" />
+		</div>
+
+		<!-- SAPA (SagDokumentIndeks) transfer rules tab -->
+		<div v-if="activeTab === 'sapa'" class="opencase-configuration__content opencase-configuration__content--wide">
+			<p class="opencase-configuration__description">
+				{{ t('opencase', 'Reglerne bestemmer, hvilke sager der overføres til Sags- og Dokumentindekset (SAPA). En sag overføres, hvis den matcher mindst én aktiv regel. En regel uden afgrænsning gælder alle sager.') }}
+			</p>
+			<div class="opencase-configuration__toolbar">
+				<NcButton type="primary" @click="editingSapaRule = {}">
+					{{ t('opencase', 'Opret regel') }}
+				</NcButton>
+			</div>
+
+			<p v-if="sapaRules.length === 0 && !sapaRulesLoading" class="opencase-configuration__description">
+				{{ t('opencase', 'Ingen regler er oprettet endnu, så ingen sager overføres.') }}
+			</p>
+
+			<table v-else class="opencase-configuration__table">
+				<thead>
+					<tr>
+						<th>{{ t('opencase', 'Navn') }}</th>
+						<th>{{ t('opencase', 'Afgrænsning') }}</th>
+						<th>{{ t('opencase', 'Sager') }}</th>
+						<th>{{ t('opencase', 'Overført') }}</th>
+						<th>{{ t('opencase', 'Aktiv') }}</th>
+						<th></th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr v-for="rule in sapaRules" :key="rule.id">
+						<td>{{ rule.name }}</td>
+						<td>{{ cfScopeSummary(rule) }}</td>
+						<td>
+							<NcLoadingIcon v-if="!sapaRuleCounts[rule.id]" :size="16" />
+							<span v-else>{{ sapaRuleCounts[rule.id].error ? '–' : sapaRuleCounts[rule.id].matching.toLocaleString('da-DK') }}</span>
+						</td>
+						<td>
+							<NcLoadingIcon v-if="!sapaRuleCounts[rule.id]" :size="16" />
+							<span v-else>{{ sapaRuleCounts[rule.id].error ? '–' : sapaRuleCounts[rule.id].sent.toLocaleString('da-DK') }}</span>
+						</td>
+						<td>
+							<NcCheckboxRadioSwitch :model-value="rule.active"
+								type="switch"
+								@update:model-value="setSapaRuleActive(rule, $event)" />
+						</td>
+						<td>
+							<div class="opencase-configuration__row-actions">
+								<NcButton @click="editingSapaRule = rule">
+									{{ t('opencase', 'Rediger') }}
+								</NcButton>
+								<NcButton type="error" @click="deleteSapaRule(rule)">
+									{{ t('opencase', 'Slet') }}
+								</NcButton>
+							</div>
+						</td>
+					</tr>
+				</tbody>
+			</table>
+
+			<SapaRuleDialog v-if="editingSapaRule"
+				:rule="editingSapaRule.id ? editingSapaRule : null"
+				:case-types="cfCaseTypes"
+				:org-units="cfOrgUnits"
+				@close="editingSapaRule = null"
+				@saved="onSapaRuleSaved" />
+		</div>
+
+		<!-- Masking rules tab -->
+		<div v-if="activeTab === 'maskrules'" class="opencase-configuration__content opencase-configuration__content--wide">
+			<p class="opencase-configuration__description">
+				{{ t('opencase', 'Reglerne bestemmer, hvad "Foreslå maskering" finder i filer under aktindsigt. Fund vises som forslag, som sagsbehandleren gennemgår, før noget maskeres. Ændringer gælder fra næste analyse.') }}
+			</p>
+			<p v-if="!maskRulesLoading && !maskServiceConfigured" class="opencase-configuration__description opencase-configuration__error">
+				{{ t('opencase', 'Maskeringstjenesten er ikke sat op (Nextcloud-indstillinger → OpenCase → Maskering), så reglerne bruges ikke endnu.') }}
+			</p>
+
+			<div class="opencase-configuration__toolbar">
+				<NcButton type="primary" @click="editingMaskRule = {}">
+					{{ t('opencase', 'Opret regel') }}
+				</NcButton>
+			</div>
+
+			<NcLoadingIcon v-if="maskRulesLoading" :size="32" />
+			<p v-else-if="maskRules.length === 0" class="opencase-configuration__description">
+				{{ t('opencase', 'Der er ingen maskeringsregler. "Foreslå maskering" finder derfor kun tekst, sagsbehandleren selv tilføjer.') }}
+			</p>
+			<table v-else class="opencase-configuration__table">
+				<thead>
+					<tr>
+						<th>{{ t('opencase', 'Rækkefølge') }}</th>
+						<th>{{ t('opencase', 'Navn') }}</th>
+						<th>{{ t('opencase', 'Type') }}</th>
+						<th>{{ t('opencase', 'Regel') }}</th>
+						<th>{{ t('opencase', 'Hjemmel') }}</th>
+						<th>{{ t('opencase', 'Aktiv') }}</th>
+						<th></th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr v-for="rule in maskRules" :key="rule.id">
+						<td>{{ rule.sort_order }}</td>
+						<td>{{ rule.label }}</td>
+						<td>{{ rule.kind === 'terms' ? t('opencase', 'Ordliste') : t('opencase', 'Mønster') }}</td>
+						<td class="opencase-configuration__rule-pattern">
+							<template v-if="rule.kind === 'terms'">
+								{{ n('opencase', '{count} ord/udtryk', '{count} ord/udtryk', rule.pattern.split('\n').length, { count: rule.pattern.split('\n').length }) }}
+							</template>
+							<code v-else :title="rule.pattern">{{ rule.pattern }}</code>
+						</td>
+						<td>{{ rule.legal_reference || '—' }}</td>
+						<td>
+							<NcCheckboxRadioSwitch :model-value="rule.enabled"
+								type="switch"
+								@update:model-value="setMaskRuleEnabled(rule, $event)" />
+						</td>
+						<td>
+							<div class="opencase-configuration__row-actions">
+								<NcButton @click="editingMaskRule = rule">
+									{{ t('opencase', 'Rediger') }}
+								</NcButton>
+								<NcButton type="error" @click="deleteMaskRule(rule)">
+									{{ t('opencase', 'Slet') }}
+								</NcButton>
+							</div>
+						</td>
+					</tr>
+				</tbody>
+			</table>
+
+			<MaskRuleDialog v-if="editingMaskRule"
+				:rule="editingMaskRule.id ? editingMaskRule : null"
+				:service-configured="maskServiceConfigured"
+				@close="editingMaskRule = null"
+				@saved="onMaskRuleSaved" />
+		</div>
+
 		<CodeListDialog v-if="openList"
 			:list="openList.list"
 			:title="openList.label"
@@ -183,11 +385,16 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
+import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 
 import { showError, showSuccess } from '@nextcloud/dialogs'
 import OverflowTabs from '../components/OverflowTabs.vue'
 import CodeListDialog from '../components/CodeListDialog.vue'
 import CreateSeparationSheetDialog from '../components/CreateSeparationSheetDialog.vue'
+import CreateCustomFieldDialog from '../components/CreateCustomFieldDialog.vue'
+import EditCustomFieldDialog from '../components/EditCustomFieldDialog.vue'
+import MaskRuleDialog from '../components/MaskRuleDialog.vue'
+import SapaRuleDialog from '../components/SapaRuleDialog.vue'
 import { generateAndPrintSeparationSheetPdf } from '../utils/generateSeparationSheetPdf.js'
 import api from '../services/api.js'
 
@@ -206,16 +413,21 @@ const SETTINGS_KEYS = ['case_number_mask', 'search_max_result_count', 'search_pa
 export default {
 	name: 'ConfigurationView',
 
-	components: { NcButton, NcTextField, NcLoadingIcon, NcSelect, OverflowTabs, CodeListDialog, CreateSeparationSheetDialog },
+	components: { NcButton, NcTextField, NcLoadingIcon, NcSelect, NcCheckboxRadioSwitch, OverflowTabs, CodeListDialog, CreateSeparationSheetDialog, CreateCustomFieldDialog, EditCustomFieldDialog, MaskRuleDialog, SapaRuleDialog },
 
 	data() {
 		return {
 			activeTab: 'settings',
-			tabs: [
+			allTabs: [
 				{ id: 'settings', label: t('opencase', 'Indstillinger') },
 				{ id: 'codelists', label: t('opencase', 'Værdilister') },
 				{ id: 'incoming', label: t('opencase', 'Indkommende dokumenter') },
 				{ id: 'separationsheets', label: t('opencase', 'Separationsark') },
+				{ id: 'customfields', label: t('opencase', 'Tillægsfelter') },
+				// SagDokumentIndeks integration is Enterprise only
+				{ id: 'sapa', label: t('opencase', 'SAPA'), enterprise: true },
+				// Rules drive the redaction service, which is Enterprise only
+				{ id: 'maskrules', label: t('opencase', 'Maskeringsregler'), enterprise: true },
 			],
 
 			// Settings tab
@@ -256,10 +468,35 @@ export default {
 			printingSheetId: null,
 			deletingSheetId: null,
 			creatingAttachmentSheet: false,
+
+			// Custom fields tab
+			customFields: [],
+			customFieldsLoading: true,
+			customFieldsError: '',
+			cfCaseTypes: [],
+			cfOrgUnits: [],
+			showCreateCustomFieldDialog: false,
+			editingCustomField: null,
+
+			// SAPA rules tab
+			sapaRules: [],
+			sapaRulesLoading: true,
+			sapaRuleCounts: {},
+			editingSapaRule: null,
+
+			// Masking rules tab
+			maskRules: [],
+			maskRulesLoading: true,
+			maskServiceConfigured: false,
+			editingMaskRule: null,
 		}
 	},
 
 	computed: {
+		tabs() {
+			const enterprise = this.$store.state.enterpriseVersionEnabled
+			return this.allTabs.filter(tab => !tab.enterprise || enterprise)
+		},
 		sensitivityOptions() {
 			return this.$store.state.sensitivities.map(s => ({
 				id: s.uuid,
@@ -288,6 +525,7 @@ export default {
 				label: l.name,
 			}))
 		},
+
 	},
 
 	async mounted() {
@@ -330,6 +568,12 @@ export default {
 		}
 
 		this.fetchSeparationSheets()
+		this.fetchCustomFields()
+		this.fetchCustomFieldReferenceData()
+		this.fetchMaskRules()
+		if (this.$store.state.enterpriseVersionEnabled) {
+			this.fetchSapaRules()
+		}
 	},
 
 	methods: {
@@ -515,6 +759,178 @@ export default {
 				this.incomingSaving = false
 			}
 		},
+
+		// ── Custom fields tab ──────────────────────────────────────────
+		async fetchCustomFields() {
+			this.customFieldsLoading = true
+			try {
+				this.customFields = await api.getCustomFieldDefs()
+			} catch (e) {
+				showError(t('opencase', 'Kunne ikke hente tillægsfelter'))
+			} finally {
+				this.customFieldsLoading = false
+			}
+		},
+		async fetchCustomFieldReferenceData() {
+			try {
+				const [caseTypes, orgs] = await Promise.all([
+					api.getCaseTypes(),
+					api.getOrgTree(),
+				])
+				this.cfCaseTypes = caseTypes
+				this.cfOrgUnits = orgs
+			} catch (e) {
+				// silently ignore — scope picker options just stay empty
+			}
+		},
+		cfCaseTypeName(id) {
+			return this.cfCaseTypes.find((c) => String(c.id) === String(id))?.name || id
+		},
+		cfOrgName(uuid) {
+			return this.cfOrgUnits.find((o) => o.org_uuid === uuid)?.org_name || uuid
+		},
+		cfScopeValueLabel(scope) {
+			if (scope.scope_type === 'casetype') {
+				return this.cfCaseTypeName(scope.scope_value)
+			}
+			if (scope.scope_type === 'organisation') {
+				return this.cfOrgName(scope.scope_value)
+			}
+			return scope.scope_value
+		},
+		cfScopeTypeLabel(type) {
+			return {
+				casetype: t('opencase', 'Sagstype'),
+				organisation: t('opencase', 'Organisation'),
+				kle: t('opencase', 'KLE-nummer'),
+			}[type] || type
+		},
+		cfFieldTypeLabel(type) {
+			return {
+				text: t('opencase', 'Tekst'),
+				dropdown: t('opencase', 'Valgliste'),
+				checkbox: t('opencase', 'Afkrydsningsfelt'),
+				date: t('opencase', 'Dato'),
+			}[type] || type
+		},
+		cfScopeSummary(field) {
+			if (!field.scopes || field.scopes.length === 0) {
+				return t('opencase', 'Alle sager')
+			}
+			return field.scopes.map((s) => `${this.cfScopeTypeLabel(s.scope_type)}: ${this.cfScopeValueLabel(s)}`).join(', ')
+		},
+		onCustomFieldCreated() {
+			this.showCreateCustomFieldDialog = false
+			this.fetchCustomFields()
+		},
+		async deleteCustomField(field) {
+			if (!window.confirm(t('opencase', 'Er du sikker på at du vil slette feltet "{label}"? Alle gemte værdier for feltet slettes også.', { label: field.label }))) {
+				return
+			}
+			try {
+				await api.deleteCustomFieldDef(field.id)
+				await this.fetchCustomFields()
+			} catch (e) {
+				this.customFieldsError = t('opencase', 'Kunne ikke slette feltet')
+			}
+		},
+		// ── SAPA rules tab ─────────────────────────────────────────────
+		async fetchSapaRules() {
+			this.sapaRulesLoading = true
+			try {
+				this.sapaRules = await api.getSapaRules()
+			} catch (e) {
+				showError(t('opencase', 'Kunne ikke hente SAPA-regler'))
+			} finally {
+				this.sapaRulesLoading = false
+			}
+			this.fetchSapaRuleCounts()
+		},
+		/**
+		 * Case counts are fetched per rule after the table is shown, since
+		 * they can take a while on large installations.
+		 */
+		fetchSapaRuleCounts() {
+			this.sapaRuleCounts = {}
+			for (const rule of this.sapaRules) {
+				api.getSapaRuleCounts(rule.id)
+					.then(counts => { this.sapaRuleCounts[rule.id] = counts })
+					.catch(() => { this.sapaRuleCounts[rule.id] = { error: true } })
+			}
+		},
+		async onSapaRuleSaved() {
+			this.editingSapaRule = null
+			showSuccess(t('opencase', 'Reglen er gemt'))
+			await this.fetchSapaRules()
+		},
+		async setSapaRuleActive(rule, active) {
+			try {
+				await api.updateSapaRule(rule.id, { active })
+				rule.active = active
+			} catch (e) {
+				showError(t('opencase', 'Opdatering fejlede'))
+			}
+		},
+		async deleteSapaRule(rule) {
+			if (!window.confirm(t('opencase', 'Slet reglen "{name}"?', { name: rule.name }))) {
+				return
+			}
+			try {
+				await api.deleteSapaRule(rule.id)
+				await this.fetchSapaRules()
+			} catch (e) {
+				showError(t('opencase', 'Reglen kunne ikke slettes'))
+			}
+		},
+		// ── Masking rules tab ──────────────────────────────────────────
+		async fetchMaskRules() {
+			this.maskRulesLoading = true
+			try {
+				const result = await api.getAccessMaskRules()
+				this.maskRules = result.rules ?? []
+				this.maskServiceConfigured = !!result.service_configured
+			} catch (e) {
+				showError(t('opencase', 'Kunne ikke hente maskeringsregler'))
+			} finally {
+				this.maskRulesLoading = false
+			}
+		},
+		async onMaskRuleSaved() {
+			this.editingMaskRule = null
+			showSuccess(t('opencase', 'Maskeringsreglen er gemt'))
+			await this.fetchMaskRules()
+		},
+		async setMaskRuleEnabled(rule, enabled) {
+			try {
+				await api.updateAccessMaskRule(rule.id, { enabled })
+				rule.enabled = enabled
+			} catch (e) {
+				showError(e?.response?.data?.ocs?.data?.error ?? t('opencase', 'Opdatering fejlede'))
+			}
+		},
+		async deleteMaskRule(rule) {
+			if (!window.confirm(t('opencase', 'Slet maskeringsreglen "{label}"?', { label: rule.label }))) {
+				return
+			}
+			try {
+				await api.deleteAccessMaskRule(rule.id)
+				await this.fetchMaskRules()
+			} catch (e) {
+				showError(t('opencase', 'Reglen kunne ikke slettes'))
+			}
+		},
+		async setCustomFieldActive(field, active) {
+			try {
+				await api.updateCustomFieldDef(field.id, { active })
+				await this.fetchCustomFields()
+			} catch (e) {
+				this.customFieldsError = t('opencase', 'Kunne ikke opdatere feltet')
+			}
+		},
+		onCustomFieldUpdated() {
+			this.editingCustomField = null
+			this.fetchCustomFields()
+		},
 	},
 }
 </script>
@@ -530,6 +946,15 @@ export default {
 
 .opencase-configuration__content--wide {
 	max-width: 900px;
+}
+
+.opencase-configuration__rule-pattern code {
+	display: inline-block;
+	max-width: 360px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	vertical-align: bottom;
 }
 
 .opencase-configuration__toolbar {
@@ -613,5 +1038,9 @@ export default {
 .opencase-configuration__codelist-btn:focus-visible {
 	background-color: var(--color-background-hover);
 	outline: none;
+}
+
+.opencase-configuration__error {
+	color: #c62828;
 }
 </style>

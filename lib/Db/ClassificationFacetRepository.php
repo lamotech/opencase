@@ -20,7 +20,7 @@ class ClassificationFacetRepository {
 		return $row ?: null;
 	}
 
-	public function insert(string $uuid, string $code, string $title, string $description): void {
+	public function insert(string $uuid, string $code, string $title, string $description, ?int $disposalcodeId, ?int $deletionDeadlineId): void {
 		$qb = $this->db->getQueryBuilder();
 		$qb->insert('opencase_class_facet')
 			->values([
@@ -28,16 +28,20 @@ class ClassificationFacetRepository {
 				'code'        => $qb->createNamedParameter($code),
 				'title'       => $qb->createNamedParameter($title),
 				'description' => $qb->createNamedParameter($description),
+				'disposalcode_id'      => $qb->createNamedParameter($disposalcodeId, $disposalcodeId === null ? IQueryBuilder::PARAM_NULL : IQueryBuilder::PARAM_INT),
+				'deletion_deadline_id' => $qb->createNamedParameter($deletionDeadlineId, $deletionDeadlineId === null ? IQueryBuilder::PARAM_NULL : IQueryBuilder::PARAM_INT),
 				'active'      => $qb->createNamedParameter(1, IQueryBuilder::PARAM_INT),
 			])->executeStatement();
 	}
 
-	public function update(string $uuid, string $code, string $title, string $description): void {
+	public function update(string $uuid, string $code, string $title, string $description, ?int $disposalcodeId, ?int $deletionDeadlineId): void {
 		$qb = $this->db->getQueryBuilder();
 		$qb->update('opencase_class_facet')
 			->set('code',        $qb->createNamedParameter($code))
 			->set('title',       $qb->createNamedParameter($title))
 			->set('description', $qb->createNamedParameter($description))
+			->set('disposalcode_id',      $qb->createNamedParameter($disposalcodeId, $disposalcodeId === null ? IQueryBuilder::PARAM_NULL : IQueryBuilder::PARAM_INT))
+			->set('deletion_deadline_id', $qb->createNamedParameter($deletionDeadlineId, $deletionDeadlineId === null ? IQueryBuilder::PARAM_NULL : IQueryBuilder::PARAM_INT))
 			->where($qb->expr()->eq('uuid', $qb->createNamedParameter($uuid)))
 			->executeStatement();
 	}

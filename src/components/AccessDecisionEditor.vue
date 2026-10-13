@@ -66,7 +66,7 @@ export default {
 		requestId: { type: Number, required: true },
 		decision:  { type: Object, default: null },
 	},
-	emits: ['saved'],
+	emits: ['saved', 'approved'],
 	data() {
 		const dec = this.decision
 		return {
@@ -119,7 +119,7 @@ export default {
 			try {
 				const d = await api.approveAccessDecision(this.requestId)
 				showSuccess(t('opencase', 'Afgørelse godkendt'))
-				this.$emit('saved', d)
+				this.$emit('approved', d)
 			} catch {
 				showError(t('opencase', 'Godkendelse fejlede'))
 			} finally {

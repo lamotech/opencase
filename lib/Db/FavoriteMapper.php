@@ -63,4 +63,15 @@ class FavoriteMapper extends QBMapper {
 
         $qb->executeStatement();
     }
+
+    /**
+     * Delete every user's favourites of an entity (used when it is hard-deleted).
+     */
+    public function deleteByEntity(string $entity, int $key): void {
+        $qb = $this->db->getQueryBuilder();
+        $qb->delete($this->getTableName())
+            ->where($qb->expr()->eq('entity', $qb->createNamedParameter($entity)))
+            ->andWhere($qb->expr()->eq('entity_key', $qb->createNamedParameter($key, IQueryBuilder::PARAM_INT)));
+        $qb->executeStatement();
+    }
 }

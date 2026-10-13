@@ -18,7 +18,7 @@ class AuditLogMapper extends QBMapper {
     }
 
     /**
-     * Return case-level audit entries plus document_created events, newest first.
+     * Return case-level audit entries plus document created/deleted/restored events, newest first.
      *
      * @return AuditLogEntry[]
      */
@@ -29,7 +29,10 @@ class AuditLogMapper extends QBMapper {
             ->where($qb->expr()->eq('case_id', $qb->createNamedParameter($caseId, IQueryBuilder::PARAM_INT)))
             ->andWhere($qb->expr()->orX(
                 $qb->expr()->isNull('document_id'),
-                $qb->expr()->eq('event_type', $qb->createNamedParameter('document_created'))
+                $qb->expr()->in('event_type', $qb->createNamedParameter(
+                    ['document_created', 'document_deleted', 'document_restored'],
+                    IQueryBuilder::PARAM_STR_ARRAY
+                ))
             ))
             ->orderBy('created_at', 'DESC')
             ->setMaxResults($limit)
@@ -44,7 +47,10 @@ class AuditLogMapper extends QBMapper {
             ->where($qb->expr()->eq('case_id', $qb->createNamedParameter($caseId, IQueryBuilder::PARAM_INT)))
             ->andWhere($qb->expr()->orX(
                 $qb->expr()->isNull('document_id'),
-                $qb->expr()->eq('event_type', $qb->createNamedParameter('document_created'))
+                $qb->expr()->in('event_type', $qb->createNamedParameter(
+                    ['document_created', 'document_deleted', 'document_restored'],
+                    IQueryBuilder::PARAM_STR_ARRAY
+                ))
             ));
         return (int) $qb->executeQuery()->fetchOne();
     }

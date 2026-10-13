@@ -11,12 +11,14 @@ use OCA\OpenCase\Db\DocumentContact;
 use OCA\OpenCase\Db\DocumentContactMapper;
 use OCA\OpenCase\Db\DocumentNote;
 use OCA\OpenCase\Db\DocumentNoteMapper;
+use OCA\OpenCase\Db\DocumentRelationTypeMapper;
 use OCA\OpenCase\Db\DocumentStatusMapper;
 use OCA\OpenCase\Db\ContactRoleMapper;
 use OCA\OpenCase\Service\AuditService;
 use OCA\OpenCase\Service\CaseExportService;
 use OCA\OpenCase\Service\CaseService;
 use OCA\OpenCase\Service\CprCvrLookupService;
+use OCA\OpenCase\Service\DocumentRelationService;
 use OCA\OpenCase\Service\DocumentService;
 use OCA\OpenCase\Service\FileService;
 use OCA\OpenCase\Service\NotFoundException;
@@ -34,7 +36,7 @@ use OCP\IUserSession;
  * Public data REST API for documents.
  *
  * GET  /index.php/apps/opencase/public/v1/api/documents?uuid=...|document_number=...
- *   — a single document: DocumentType (Files, Contacts, Notes, WorkflowHistory nested)
+ *   — a single document: DocumentType (Files, Contacts, Notes, Relations, WorkflowHistory nested)
  * GET  /index.php/apps/opencase/public/v1/api/documents/search?...
  *   — search documents by metadata (see search() for filters): DocumentSearchResult
  *     { Total, Limit, Offset, Documents: [{Id, Uuid, DocumentNumber, Title, ...}, ...] }
@@ -63,6 +65,18 @@ use OCP\IUserSession;
  *   — add a note to a document. Body:
  *       Uuid or DocumentNumber (required, one of)
  *       Title (required), Text (optional)
+ * POST /index.php/apps/opencase/public/v1/api/documents/relations
+ *   — relate one or more documents to a document (this document is the
+ *     from-side). Body:
+ *       Uuid or DocumentNumber (required, one of) — the document
+ *       RelationTypeId (optional, default 1 = Bilag; see GET .../documentrelationtype)
+ *       RelatedDocuments: list of {Uuid or DocumentNumber}
+ *     All related documents must resolve before anything is created; pairs
+ *     that already have a relation of the same type are skipped. Returns
+ *     the created relations as DocumentRelationType.
+ * DELETE /index.php/apps/opencase/public/v1/api/documents/relations?uuid=...|document_number=...&relation_id=...
+ *   — remove a relation that has the document on either side. Returns the
+ *     updated document as DocumentType.
  * PUT  /index.php/apps/opencase/public/v1/api/documents
  *   — update an existing document's metadata. Body: Uuid or DocumentNumber
  *     (required, identifies the document) plus any subset of:
@@ -93,6 +107,8 @@ class PublicDocumentApiController extends AbstractPublicDataApiController {
         private TemplateService $templateService,
         private TemplateMergeService $templateMergeService,
         private CaseMapper $caseMapper,
+        private DocumentRelationService $documentRelationService,
+        private DocumentRelationTypeMapper $documentRelationTypeMapper,
         IUserSession $userSession,
     ) {
         parent::__construct($appName, $request, $userSession);
@@ -325,6 +341,106 @@ class PublicDocumentApiController extends AbstractPublicDataApiController {
         $fields = $this->caseExportService->documentNoteFieldsFromEntity($note);
 
         return $this->respond('Note', $fields, Http::STATUS_CREATED);
+    }
+
+    /**
+     * Relate one or more documents to a document.
+     */
+    #[PublicPage]
+    #[NoAdminRequired]
+    #[NoCSRFRequired]
+    public function addRelations(): Response {
+        ['fields' => $fields, 'items' => $relatedInput] = $this->requestBodyWithList('RelatedDocuments', 'RelatedDocument');
+
+        $uuid           = $this->bodyValue($fields, 'Uuid', 'uuid');
+        $documentNumber = $this->bodyValue($fields, 'DocumentNumber', 'document_number');
+
+        try {
+            $documentEntity = $this->resolveDocument($uuid, $documentNumber);
+        } catch (PublicDocumentApiError $e) {
+            return $this->errorResponse($e->getMessage(), $e->getStatusCode());
+        }
+
+        $userId = $this->actingUserId();
+        if ($userId === null) {
+            return $this->errorResponse('No acting user resolved', Http::STATUS_FORBIDDEN);
+        }
+
+        if (!$this->caseService->canWriteCase($documentEntity->getCaseId(), $userId)) {
+            return $this->errorResponse('User does not have write access to this document\'s case', Http::STATUS_FORBIDDEN);
+        }
+
+        if (empty($relatedInput)) {
+            return $this->errorResponse('At least one related document is required', Http::STATUS_BAD_REQUEST);
+        }
+
+        $typeIdRaw = $this->bodyValue($fields, 'RelationTypeId', 'relation_type_id', 'documentrelationtype_id');
+        $typeId    = $typeIdRaw !== null ? (int)$typeIdRaw : 1;
+
+        $relatedIds = [];
+        foreach ($relatedInput as $item) {
+            $relUuid   = $this->bodyValue($item, 'Uuid', 'uuid');
+            $relNumber = $this->bodyValue($item, 'DocumentNumber', 'document_number');
+            try {
+                $relatedIds[] = $this->resolveDocument($relUuid, $relNumber)->getId();
+            } catch (PublicDocumentApiError $e) {
+                return $this->errorResponse(
+                    'Related document ' . ($relUuid ?? $relNumber ?? '') . ': ' . $e->getMessage(),
+                    $e->getStatusCode()
+                );
+            }
+        }
+
+        try {
+            $created = $this->documentRelationService->addRelations($documentEntity, $relatedIds, $typeId, $userId, 'da');
+        } catch (\InvalidArgumentException $e) {
+            return $this->errorResponse($e->getMessage(), Http::STATUS_BAD_REQUEST);
+        } catch (NotFoundException $e) {
+            return $this->errorResponse($e->getMessage(), Http::STATUS_NOT_FOUND);
+        }
+
+        $typeNames = $this->documentRelationTypeMapper->getNameMap('da');
+        $items = array_values(array_filter(array_map(
+            fn ($r) => $this->caseExportService->documentRelationFieldsFromEntity($r, $documentEntity->getId(), $typeNames),
+            $created,
+        )));
+
+        return $this->respondList('Relations', 'Relation', $items, Http::STATUS_CREATED);
+    }
+
+    /**
+     * Remove a relation from a document.
+     */
+    #[PublicPage]
+    #[NoAdminRequired]
+    #[NoCSRFRequired]
+    public function deleteRelation(?string $uuid = null, ?string $document_number = null, ?int $relation_id = null): Response {
+        try {
+            $documentEntity = $this->resolveDocument($uuid, $document_number);
+        } catch (PublicDocumentApiError $e) {
+            return $this->errorResponse($e->getMessage(), $e->getStatusCode());
+        }
+
+        if (empty($relation_id)) {
+            return $this->errorResponse('relation_id is required', Http::STATUS_BAD_REQUEST);
+        }
+
+        $userId = $this->actingUserId();
+        if ($userId === null) {
+            return $this->errorResponse('No acting user resolved', Http::STATUS_FORBIDDEN);
+        }
+
+        if (!$this->caseService->canWriteCase($documentEntity->getCaseId(), $userId)) {
+            return $this->errorResponse('User does not have write access to this document\'s case', Http::STATUS_FORBIDDEN);
+        }
+
+        try {
+            $this->documentRelationService->deleteRelation($documentEntity, $relation_id, $userId, 'da');
+        } catch (NotFoundException $e) {
+            return $this->errorResponse($e->getMessage(), Http::STATUS_NOT_FOUND);
+        }
+
+        return $this->respond('Document', $this->caseExportService->singleDocumentFields($documentEntity));
     }
 
     /**

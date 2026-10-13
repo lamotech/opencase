@@ -142,6 +142,23 @@ class OrganisationMapper extends QBMapper {
      *
      * @return Organisation[]
      */
+    /**
+     * org_uuid => org_parent_uuid for every organisation, active or not.
+     *
+     * @return array<string, string>
+     */
+    public function getParentMap(): array {
+        $qb = $this->db->getQueryBuilder();
+        $qb->select('org_uuid', 'org_parent_uuid')->from($this->getTableName());
+        $result = $qb->executeQuery();
+        $map = [];
+        while ($row = $result->fetch()) {
+            $map[(string)$row['org_uuid']] = (string)$row['org_parent_uuid'];
+        }
+        $result->closeCursor();
+        return $map;
+    }
+
     public function findAllActive(): array {
         $qb = $this->db->getQueryBuilder();
         $qb->select('*')

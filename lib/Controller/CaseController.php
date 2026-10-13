@@ -8,6 +8,7 @@ use OCA\OpenCase\Db\AccessProfileMapper;
 use OCA\OpenCase\Db\CaseStatusMapper;
 use OCA\OpenCase\Db\CaseTypeMapper;
 use OCA\OpenCase\Db\CaseWorkerMapper;
+use OCA\OpenCase\Db\DisposalCodeMapper;
 use OCA\OpenCase\Db\UserAccessMapper;
 use OCA\OpenCase\Db\UserInfoMapper;
 use OCA\OpenCase\Db\ClassificationFacetRepository;
@@ -46,6 +47,9 @@ use OCP\IUserManager;
  */
 class CaseController extends ApiController {
 
+    /** @var array<int, string> disposal code id → name, cached per request */
+    private array $disposalcodeNames = [];
+
     public function __construct(
         string $appName,
         IRequest $request,
@@ -58,6 +62,7 @@ class CaseController extends ApiController {
         private CaseStatusMapper $caseStatusMapper,
         private CaseTypeMapper $caseTypeMapper,
         private InsightLevelMapper $insightLevelMapper,
+        private DisposalCodeMapper $disposalCodeMapper,
         private IConfig $config,
         private IUserManager $userManager,
         private CaseWorkerMapper $caseWorkerMapper,
@@ -97,6 +102,7 @@ class CaseController extends ApiController {
         $responsibleUserId        = $this->request->getParam('responsible_user_id') ?: null;
         $casetypeIdRaw            = $this->request->getParam('casetype_id');
         $casetypeId               = ($casetypeIdRaw !== null && $casetypeIdRaw !== '') ? (int)$casetypeIdRaw : null;
+        $customFields             = $this->parseCustomFieldFilters($this->request->getParam('custom_fields', []));
         $limit                    = min((int)($this->request->getParam('limit', '50')), 1000);
         $offset                   = max((int)($this->request->getParam('offset', '0')), 0);
 
@@ -114,6 +120,7 @@ class CaseController extends ApiController {
             $insightLevelId,
             $responsibleUserId,
             $casetypeId,
+            $customFields,
         );
 
         if ($this->userId !== null) {
@@ -129,6 +136,9 @@ class CaseController extends ApiController {
                 'responsible_user_id'      => $responsibleUserId,
                 'casetype_id'              => $casetypeId,
             ], fn($v) => $v !== null && $v !== '');
+            if (!empty($customFields)) {
+                $criteria['custom_fields'] = $customFields;
+            }
             $this->transactionLogService->log($this->userId, 'search_case', $criteria);
         }
 
@@ -685,6 +695,34 @@ class CaseController extends ApiController {
     // ---------------------------------------------------------------
 
     /**
+     * Normalizes the `custom_fields[N][key|value|value_from|value_to|type]`
+     * query params (a PHP-native nested array from the query string) into
+     * a clean list of filters for CaseService::list(). date-type fields
+     * use value_from/value_to (a range) instead of value.
+     *
+     * @return array<int, array{key: ?string, value: ?string, value_from: ?string, value_to: ?string, type: ?string}>
+     */
+    private function parseCustomFieldFilters(mixed $raw): array {
+        if (!is_array($raw)) {
+            return [];
+        }
+        $filters = [];
+        foreach ($raw as $entry) {
+            if (!is_array($entry)) {
+                continue;
+            }
+            $filters[] = [
+                'key'        => isset($entry['key']) ? (string)$entry['key'] : null,
+                'value'      => isset($entry['value']) ? (string)$entry['value'] : null,
+                'value_from' => isset($entry['value_from']) ? (string)$entry['value_from'] : null,
+                'value_to'   => isset($entry['value_to']) ? (string)$entry['value_to'] : null,
+                'type'       => isset($entry['type']) ? (string)$entry['type'] : null,
+            ];
+        }
+        return $filters;
+    }
+
+    /**
      * Fetch the access profile and resolve its classification subject + sensitivity in one shot.
      *
      * @return array{class_subject: ?ClassificationSubject, sensitivity: ?Sensitivity}
@@ -730,6 +768,17 @@ class CaseController extends ApiController {
         }
         $map = $this->caseTypeMapper->getNamesByIds([$casetypeId], $this->userLanguage());
         return $map[$casetypeId] ?? '';
+    }
+
+    /**
+     * Resolve a disposal code ID to its name.
+     */
+    private function resolveDisposalcodeName(?int $disposalcodeId): string {
+        if ($disposalcodeId === null) {
+            return '';
+        }
+        return $this->disposalcodeNames[$disposalcodeId]
+            ??= $this->disposalCodeMapper->findById($disposalcodeId)?->getName() ?? '';
     }
 
     /**
@@ -800,6 +849,8 @@ class CaseController extends ApiController {
         $responsibleUser = $responsibleUid ? $this->userManager->get($responsibleUid) : null;
         $createdByUid    = $entity->getCreatedBy();
         $createdByUser   = $createdByUid ? $this->userManager->get($createdByUid) : null;
+        $updatedByUid    = $entity->getUpdatedBy() ?: $createdByUid;
+        $updatedByUser   = $updatedByUid ? $this->userManager->get($updatedByUid) : null;
 
         return [
             'id'                                => $entity->getId(),
@@ -819,8 +870,11 @@ class CaseController extends ApiController {
             'status_is_closed'                  => $statusInfo['is_closed'] ?? false,
             'created_at'                        => $entity->getCreatedAt()?->format('c'),
             'updated_at'                        => $entity->getUpdatedAt()?->format('c'),
+            'updated_in_sapa'                   => $entity->getUpdatedInSapa()?->format('c'),
             'created_by'                        => $entity->getCreatedBy(),
             'created_by_display_name'           => $createdByUser?->getDisplayName() ?? $createdByUid ?? '',
+            'updated_by'                        => $updatedByUid,
+            'updated_by_display_name'           => $updatedByUser?->getDisplayName() ?? $updatedByUid ?? '',
             'virtual_path'                      => $entity->getCreatedYear() . '/' . $entity->getCreatedMonth() . '/' . $entity->getCreatedDay() . '/' . $entity->getCaseNumber(),
             'responsible_user_id'               => $responsibleUid,
             'responsible_user_display_name'     => $responsibleUser?->getDisplayName() ?? $responsibleUid ?? '',
@@ -835,6 +889,12 @@ class CaseController extends ApiController {
             'casetype_id'                       => $entity->getCasetypeId(),
             'casetype_name'                     => $casetypeName,
             'summary'                           => $entity->getSummary(),
+            'disposalcode_id'                   => $entity->getDisposalcodeId(),
+            'disposalcode_name'                 => $this->resolveDisposalcodeName($entity->getDisposalcodeId()),
+            'closed_date'                       => $entity->getClosedDate()?->format('c'),
+            'disposal_date'                     => $entity->getDisposalDate()?->format('c'),
+            'deletion_deadline_id'              => $entity->getDeletionDeadlineId(),
+            'deletion_date'                     => $entity->getDeletionDate()?->format('c'),
         ];
     }
 

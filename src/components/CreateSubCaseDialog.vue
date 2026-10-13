@@ -292,7 +292,7 @@ export default {
 }
 
 .opencase-sub-case__error {
-	color: var(--color-error);
+	color: #c62828;
 	font-size: 0.85em;
 }
 </style>

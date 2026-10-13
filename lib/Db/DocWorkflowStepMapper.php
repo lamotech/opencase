@@ -67,6 +67,48 @@ class DocWorkflowStepMapper extends QBMapper {
             ->where($qb->expr()->eq('s.user_id', $qb->createNamedParameter($userId)))
             ->andWhere($qb->expr()->eq('s.status', $qb->createNamedParameter('pending')))
             ->andWhere($qb->expr()->eq('w.status', $qb->createNamedParameter('active')))
+            ->andWhere($qb->expr()->orX(
+                $qb->expr()->isNull('d.is_deleted'),
+                $qb->expr()->eq('d.is_deleted', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL))
+            ))
+            ->orderBy('s.deadline', 'ASC');
+
+        $result = $qb->executeQuery();
+        $rows = [];
+        while ($row = $result->fetch()) {
+            $rows[] = $row;
+        }
+        $result->closeCursor();
+        return $rows;
+    }
+
+    /**
+     * Pending steps in active workflows (on non-deleted documents) with a
+     * deadline before $cutoff, enriched with workflow type and document title.
+     * Callers must check that the step is the workflow's current step.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function findPendingDueBefore(\DateTimeInterface $cutoff): array {
+        $qb = $this->db->getQueryBuilder();
+        $qb->select(
+            's.id AS step_id',
+            's.workflow_id',
+            'w.type AS workflow_type',
+            'w.document_id',
+            'd.title AS document_title',
+        )
+            ->from($this->getTableName(), 's')
+            ->innerJoin('s', 'opencase_doc_workflows', 'w', $qb->expr()->eq('w.id', 's.workflow_id'))
+            ->innerJoin('s', 'opencase_documents', 'd', $qb->expr()->eq('d.id', 'w.document_id'))
+            ->where($qb->expr()->eq('s.status', $qb->createNamedParameter('pending')))
+            ->andWhere($qb->expr()->eq('w.status', $qb->createNamedParameter('active')))
+            ->andWhere($qb->expr()->isNotNull('s.deadline'))
+            ->andWhere($qb->expr()->lt('s.deadline', $qb->createNamedParameter($cutoff, IQueryBuilder::PARAM_DATETIME_MUTABLE)))
+            ->andWhere($qb->expr()->orX(
+                $qb->expr()->isNull('d.is_deleted'),
+                $qb->expr()->eq('d.is_deleted', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL))
+            ))
             ->orderBy('s.deadline', 'ASC');
 
         $result = $qb->executeQuery();

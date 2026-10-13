@@ -5,19 +5,55 @@ declare(strict_types=1);
 namespace OCA\OpenCase\Db;
 
 use OCP\AppFramework\Db\DoesNotExistException;
+use OCP\AppFramework\Db\Entity;
 use OCP\AppFramework\Db\QBMapper;
 use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\IDBConnection;
 
 /**
- * Mapper for the opencase_caseparticipants table.
+ * Mapper for the opencase_caseparticipants table. Inserting, updating or
+ * deleting a participant also bumps its case's updated_at
+ * (CaseMapper::touch()).
  *
  * @extends QBMapper<CaseParticipant>
  */
 class CaseParticipantMapper extends QBMapper {
 
-    public function __construct(IDBConnection $db) {
+    public function __construct(
+        IDBConnection $db,
+        private CaseMapper $caseMapper,
+    ) {
         parent::__construct($db, 'opencase_caseparticipants', CaseParticipant::class);
+    }
+
+    /**
+     * @param CaseParticipant $entity
+     * @return CaseParticipant
+     */
+    public function insert(Entity $entity): Entity {
+        $entity = parent::insert($entity);
+        $this->caseMapper->touch($entity->getCaseId());
+        return $entity;
+    }
+
+    /**
+     * @param CaseParticipant $entity
+     * @return CaseParticipant
+     */
+    public function update(Entity $entity): Entity {
+        $entity = parent::update($entity);
+        $this->caseMapper->touch($entity->getCaseId());
+        return $entity;
+    }
+
+    /**
+     * @param CaseParticipant $entity
+     * @return CaseParticipant
+     */
+    public function delete(Entity $entity): Entity {
+        $entity = parent::delete($entity);
+        $this->caseMapper->touch($entity->getCaseId());
+        return $entity;
     }
 
     public function findById(int $id): ?CaseParticipant {

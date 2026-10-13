@@ -81,4 +81,15 @@ class HistoryMapper extends QBMapper {
             ->where($del->expr()->in('id', $del->createNamedParameter($ids, IQueryBuilder::PARAM_INT_ARRAY)));
         $del->executeStatement();
     }
+
+    /**
+     * Remove an entity from every user's recent list.
+     */
+    public function deleteByEntity(string $entity, int $key): void {
+        $qb = $this->db->getQueryBuilder();
+        $qb->delete($this->getTableName())
+            ->where($qb->expr()->eq('entity', $qb->createNamedParameter($entity)))
+            ->andWhere($qb->expr()->eq('entity_key', $qb->createNamedParameter($key, IQueryBuilder::PARAM_INT)));
+        $qb->executeStatement();
+    }
 }

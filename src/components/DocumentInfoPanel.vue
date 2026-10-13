@@ -69,8 +69,17 @@
 			<span>{{ formatDate(document.updated_at) }}</span>
 		</div>
 		<div class="opencase-doc-info__field">
+			<template v-if="document.updated_in_sapa">
+				<label>{{ t('opencase', 'Overført til SAPA') }}</label>
+				<span>{{ formatDate(document.updated_in_sapa) }}</span>
+			</template>
 		</div>
 
+		<div v-if="document.summary" class="opencase-doc-info__field opencase-doc-info__field--full">
+			<label>{{ t('opencase', 'Dokumentresume') }}</label>
+			<!-- eslint-disable-next-line vue/no-v-html -- rich text authored in the app's own TipTap editor -->
+			<div class="opencase-doc-info__summary" v-html="document.summary" />
+		</div>
 	</div>
 </template>
 
@@ -139,5 +148,50 @@ export default {
 
 .opencase-doc-info__mono {
 	font-family: monospace;
+}
+
+.opencase-doc-info__summary {
+	font-size: 0.95em;
+	line-height: 1.6;
+	color: var(--color-main-text);
+	overflow-wrap: break-word;
+}
+</style>
+
+<style>
+/* Unscoped: the summary is rendered from stored HTML */
+.opencase-doc-info__summary p {
+	margin: 0 0 8px 0;
+}
+
+.opencase-doc-info__summary h1 {
+	font-size: 1.5em;
+	font-weight: 700;
+	margin: 14px 0 6px 0;
+}
+
+.opencase-doc-info__summary h2 {
+	font-size: 1.2em;
+	font-weight: 700;
+	margin: 12px 0 6px 0;
+}
+
+.opencase-doc-info__summary h3 {
+	font-size: 1.05em;
+	font-weight: 700;
+	margin: 10px 0 4px 0;
+}
+
+.opencase-doc-info__summary ul,
+.opencase-doc-info__summary ol {
+	padding-left: 20px;
+	margin: 0 0 8px 0;
+}
+
+.opencase-doc-info__summary blockquote {
+	border-left: 3px solid var(--color-border-maxcontrast);
+	padding-left: 12px;
+	margin: 0 0 8px 0;
+	color: var(--color-text-lighter);
 }
 </style>

@@ -54,20 +54,21 @@
 						</span>
 					</td>
 					<td class="oc-doc-table__actions">
-						<NcButton v-if="!c.already_added"
-							size="small"
-							@click="addItem(c)">
-							<template #icon>
-								<PlusIcon :size="16" />
-							</template>
-							{{ t('opencase', 'Tilføj') }}
-						</NcButton>
-						<NcButton v-else
-							size="small"
-							type="tertiary"
-							@click="$emit('open-item', c.item_id)">
-							{{ t('opencase', 'Åbn') }}
-						</NcButton>
+						<div class="oc-doc-table__actions-inner">
+							<NcButton v-if="!c.already_added"
+								size="small"
+								@click="addItem(c)">
+								<template #icon>
+									<PlusIcon :size="16" />
+								</template>
+								{{ t('opencase', 'Tilføj') }}
+							</NcButton>
+							<NcButton size="small"
+								type="tertiary"
+								@click="openDocument(c)">
+								{{ t('opencase', 'Åbn') }}
+							</NcButton>
+						</div>
 					</td>
 				</tr>
 			</tbody>
@@ -106,7 +107,7 @@ export default {
 	props: {
 		requestId: { type: Number, required: true },
 	},
-	emits: ['item-added', 'open-item'],
+	emits: ['item-added'],
 	data() {
 		return {
 			query: '',
@@ -134,6 +135,10 @@ export default {
 			} finally {
 				this.searching = false
 			}
+		},
+		openDocument(candidate) {
+			const href = this.$router.resolve({ name: 'document-detail', params: { id: candidate.source_id } }).href
+			window.open(href, '_blank', 'noopener')
 		},
 		async addItem(candidate) {
 			try {
@@ -184,6 +189,7 @@ export default {
 .oc-doc-table__table th { font-weight: 600; background: var(--color-background-hover); }
 .oc-doc-table__row--added { background: var(--color-background-hover); }
 .oc-doc-table__actions { text-align: right; }
+.oc-doc-table__actions-inner { display: flex; justify-content: flex-end; gap: 4px; }
 .oc-dec-chip { display: inline-block; padding: 1px 8px; border-radius: 8px; font-size: 0.78em; font-weight: 600; }
 .oc-dec-chip--pending { background: #f5f5f5; color: #616161; }
 .oc-dec-chip--include { background: #e8f5e9; color: #2e7d32; }

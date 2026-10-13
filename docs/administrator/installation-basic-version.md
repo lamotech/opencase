@@ -230,6 +230,15 @@ Når filerne er importeret, kan KLE-numre og handlingsfacetter anvendes ved opre
 
 # Konfiguration af Adgangsstyring
 
+!!! warning "Nextcloud med DK Kommunal Adgang app'en"
+
+    Miljøer der tidligere er konfigureret med adgangsstyring med app'en "DK Kommunal Adgang" skal først have denne adgangsstyring deaktiveret.
+
+    ![DK Kommunal Adgangsstyring](../images/administration/dk-kommunal-adgangsstyring.png)
+
+    Brugere der er oprettet med "DK Kommunal Adgang" bliver automatisk oprettet i OpenCase, når de logger ind igen efter adgangsstyringen er aktiveret i OpenCase, hvis de har de nødvendige adgangsrettigheder.
+
+
 Åbn:
 
 > **Systemindstillinger → OpenCase → Serviceplatformen → Adgangsstyring**
@@ -270,6 +279,51 @@ I Fælleskommunal Administrator:
 
 - Opret brugersystemroller.
 - Tildel jobfunktionsroller til brugerne.
+
+### Brugersystemroller
+
+Brugersystemrollerne oprettes med følgende URI'er, hvor `<domæne>` er OpenCase-installationens domæne:
+
+| Rolle | URI | Dataafgrænsninger |
+|---|---|---|
+| Nextcloud bruger | `http://<domæne>/roles/usersystemrole/nextclouduser/1` | Ingen |
+| Bruger | `http://<domæne>/roles/usersystemrole/opencaseuser/1` | Organisation, KLE, Følsomhed |
+| Læsebruger | `http://<domæne>/roles/usersystemrole/opencasereaduser/1` | Organisation, KLE, Følsomhed |
+| Skabelon administrator | `http://<domæne>/roles/usersystemrole/opencasetemplateadministrator/1` | Ingen |
+| OpenCase administrator | `http://<domæne>/roles/usersystemrole/opencaseadministrator/1` | Ingen |
+| Systemadministrator | `http://<domæne>/roles/usersystemrole/systemadministrator/1` | Ingen |
+
+Rollerne giver følgende adgang:
+
+#### nextclouduser – Nextcloud bruger
+
+Brugeren oprettes og aktiveres i Nextcloud og kan anvende Nextcloud (filer, Talk m.m.), men får ingen adgang til OpenCase. OpenCase vises ikke i menuen, og brugeren tildeles ingen OpenCase-roller eller organisationer.
+
+#### opencaseuser – Bruger
+
+Giver adgang til OpenCase med læse- og skriveadgang til sager og dokumenter inden for de tildelte dataafgrænsninger (organisation, KLE-numre og følsomhed). Brugeren tilføjes de organisationers grupper, der er angivet i dataafgrænsningen, og får dermed adgang til organisationernes mapper.
+
+#### opencasereaduser – Læsebruger
+
+Som *Bruger*, men med kun læseadgang til sager og dokumenter inden for de tildelte dataafgrænsninger. Har en bruger både *Bruger* og *Læsebruger* på samme afgrænsning, gælder skriveadgangen.
+
+#### opencasetemplateadministrator – Skabelon administrator
+
+Giver adgang til menupunktet **Administrer skabeloner**, hvor dokumentskabeloner kan oprettes, redigeres og slettes. Se [Administrer skabeloner](administrer-skabeloner.md).
+
+#### opencaseadministrator – OpenCase administrator
+
+Giver adgang til menupunktet **Konfiguration** i OpenCase, hvor bl.a. konfigurationsværdier, kodelister, brugerdefinerede felter, adgangsmasker, dokumentindeksregler og adskillelsesark administreres. Rollen giver også adgang til at administrere skabeloner. Se [Konfiguration](konfiguration.md).
+
+#### systemadministrator – Systemadministrator
+
+Brugeren tilføjes Nextclouds `admin`-gruppe og får dermed fuld adgang til Nextclouds administration, herunder **Systemindstillinger → OpenCase**. Rollen giver ikke i sig selv adgang til sager.
+
+!!! note "Kombination af roller"
+
+    *Skabelon administrator* og *OpenCase administrator* giver kun adgang til funktioner i OpenCase-app'en og skal derfor kombineres med *Bruger* eller *Læsebruger*, for at brugeren kan åbne OpenCase. En bruger med *Nextcloud bruger* alene og ingen OpenCase-roller kan logge ind i Nextcloud, men ikke anvende OpenCase.
+
+    Rollerne synkroniseres ved hvert login. Fjernes en rolle fra brugeren i Fælleskommunal Administrator, fjernes den tilsvarende adgang ved næste login. Har brugeren ingen af ovenstående roller, deaktiveres brugeren i Nextcloud.
 
 ---
 

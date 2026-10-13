@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\OpenCase\Migration;
 
 use OCP\DB\QueryBuilder\IQueryBuilder;
+use OCP\IConfig;
 use OCP\IDBConnection;
 use OCP\Migration\IOutput;
 use OCP\Migration\IRepairStep;
@@ -21,7 +22,10 @@ use OCP\Migration\IRepairStep;
  */
 class SeedReferenceData implements IRepairStep {
 
-    public function __construct(private IDBConnection $db) {}
+    public function __construct(
+        private IDBConnection $db,
+        private IConfig $config,
+    ) {}
 
     public function getName(): string {
         return 'Seed OpenCase reference data';
@@ -35,13 +39,18 @@ class SeedReferenceData implements IRepairStep {
         $this->seedCaseStatuses($output);
         $this->seedCaseTypes($output);
         $this->seedInsightLevels($output);
+        $this->seedDisposalCodes($output);
+        $this->seedDeletionDeadlines($output);
         $this->seedRoles($output);
         $this->seedAdminUserAccess($output);
         $this->seedContactRoles($output);
         $this->seedParticipantRoles($output);
         $this->seedEstateRoles($output);
         $this->seedContactTypes($output);
+        $this->seedDocumentRelationTypes($output);
         $this->seedConfig($output);
+        $this->seedRuntimeConfig($output);
+        $this->seedMaskRules($output);
         $this->seedCprEvents($output);
         $this->seedAiPrompts($output);
         $this->seedAiActions($output);
@@ -115,20 +124,27 @@ class SeedReferenceData implements IRepairStep {
 
     private function seedSensitivities(IOutput $output): void {
         $seeds = [
-            ['uuid' => '1d81c472-0808-44cc-963d-f5ef0170ae1d', 'key' => 'Ikke_fortrolige_data',            'title' => 'Ikke-fortrolige data'],
-            ['uuid' => '292e85a9-8ad4-46df-9e50-f97d6837ad74', 'key' => 'Fortrolige_personoplysninger',    'title' => 'Almindelige personoplysninger eller fortrolige forretningsdata'],
-            ['uuid' => '31c09910-e011-46a5-86fb-254374421fe8', 'key' => 'Foelsomme_personoplysninger',     'title' => 'Følsomme personoplysninger eller følsomme forretningsdata'],
-            ['uuid' => '44f4108b-26d4-46de-a90f-35e35b55b8d8', 'key' => 'Saerligt_beskyttede_oplysninger', 'title' => 'Særligt beskyttede oplysninger'],
+            ['uuid' => '1d81c472-0808-44cc-963d-f5ef0170ae1d', 'key' => 'Ikke_fortrolige_data',            'title' => 'Ikke-fortrolige data',                                           'enumeration' => 'IKKE_FORTROLIGE_DATA'],
+            ['uuid' => '292e85a9-8ad4-46df-9e50-f97d6837ad74', 'key' => 'Fortrolige_personoplysninger',    'title' => 'Almindelige personoplysninger eller fortrolige forretningsdata', 'enumeration' => 'FORTROLIGE_PERSONOPLYSNINGER'],
+            ['uuid' => '31c09910-e011-46a5-86fb-254374421fe8', 'key' => 'Foelsomme_personoplysninger',     'title' => 'Følsomme personoplysninger eller følsomme forretningsdata',      'enumeration' => 'FOELSOMME_PERSONOPLYSNINGER'],
+            ['uuid' => '44f4108b-26d4-46de-a90f-35e35b55b8d8', 'key' => 'Saerligt_beskyttede_oplysninger', 'title' => 'Særligt beskyttede oplysninger',                                 'enumeration' => 'VIP_SAGER'],
         ];
         $inserted = 0;
         foreach ($seeds as $seed) {
             $check = $this->db->getQueryBuilder();
-            $check->select('uuid')->from('opencase_sensitivity')
+            $check->select('uuid', 'enumeration')->from('opencase_sensitivity')
                 ->where($check->expr()->eq('uuid', $check->createNamedParameter($seed['uuid'])));
             $res = $check->executeQuery();
             $row = $res->fetch();
             $res->closeCursor();
             if ($row) {
+                if (($row['enumeration'] ?? '') === '') {
+                    $upd = $this->db->getQueryBuilder();
+                    $upd->update('opencase_sensitivity')
+                        ->set('enumeration', $upd->createNamedParameter($seed['enumeration']))
+                        ->where($upd->expr()->eq('uuid', $upd->createNamedParameter($seed['uuid'])))
+                        ->executeStatement();
+                }
                 continue;
             }
             $ins = $this->db->getQueryBuilder();
@@ -138,6 +154,7 @@ class SeedReferenceData implements IRepairStep {
                 'title'       => $ins->createNamedParameter($seed['title']),
                 'description' => $ins->createNamedParameter(null, IQueryBuilder::PARAM_NULL),
                 'active'      => $ins->createNamedParameter(1, IQueryBuilder::PARAM_INT),
+                'enumeration' => $ins->createNamedParameter($seed['enumeration']),
             ])->executeStatement();
             $inserted++;
         }
@@ -251,6 +268,82 @@ class SeedReferenceData implements IRepairStep {
             $inserted++;
         }
         $output->info("Seeded {$inserted} insight level row(s).");
+    }
+
+    private function seedDisposalCodes(IOutput $output): void {
+        $rows = [
+            [1, '9af0ad08-5b8e-4dbe-925e-80224e13aebc', 'B',   'B',   'B står for Bevaring',  null],
+            [2, '9759224d-76bd-4cec-9cc3-0d9451ab1cf9', 'K',   'K',   'K står for Kassation', 0],
+            [3, '0b6e2655-6ea9-462a-899e-55b6eea3027d', 'K10', 'K10', 'K10',                  10],
+            [4, '6567cc17-1347-4ff9-bcff-36b981bf49ce', 'K5',  'K5',  'K5',                   5],
+        ];
+        $inserted = 0;
+        foreach ($rows as [$id, $uuid, $code, $name, $description, $disposalYears]) {
+            $check = $this->db->getQueryBuilder();
+            $check->select($check->func()->count('*'))
+                ->from('opencase_disposalcode')
+                ->where($check->expr()->eq('id', $check->createNamedParameter($id, IQueryBuilder::PARAM_INT)));
+            $res   = $check->executeQuery();
+            $count = (int)$res->fetchOne();
+            $res->closeCursor();
+            if ($count > 0) {
+                continue;
+            }
+            $ins = $this->db->getQueryBuilder();
+            $ins->insert('opencase_disposalcode')
+                ->setValue('id',             $ins->createNamedParameter($id,            IQueryBuilder::PARAM_INT))
+                ->setValue('uuid',           $ins->createNamedParameter($uuid))
+                ->setValue('code',           $ins->createNamedParameter($code))
+                ->setValue('name',           $ins->createNamedParameter($name))
+                ->setValue('description',    $ins->createNamedParameter($description))
+                ->setValue('disposal_years', $ins->createNamedParameter($disposalYears, $disposalYears === null ? IQueryBuilder::PARAM_NULL : IQueryBuilder::PARAM_INT))
+                ->setValue('expired',        $ins->createNamedParameter(false,          IQueryBuilder::PARAM_BOOL))
+                ->executeStatement();
+            $inserted++;
+        }
+        $output->info("Seeded {$inserted} disposal code row(s).");
+    }
+
+    private function seedDeletionDeadlines(IOutput $output): void {
+        $rows = [
+            [1,  '721ec273-3a5a-4c20-a759-de36cf23b3ae', 'P100D',   '100 dage', 'Slettefrist', 100],
+            [2,  'eb86e3bb-af9a-4714-a29b-c2a253fa94b2', 'P365D',   '1 år',     'Slettefrist', 365],
+            [3,  '1f7c4f99-cefd-495e-be7e-f9a2a475a155', 'P1825D',  '5 år',     'Slettefrist', 1825],
+            [4,  '92dc5f9b-bcd0-4558-9c6e-218b25c06a65', 'P2190D',  '6 år',     'Slettefrist', 2190],
+            [5,  '35ab5514-7ce5-48b9-acee-02e020f45191', 'P3285D',  '9 år',     'Slettefrist', 3285],
+            [6,  '175ceb19-97d4-45f7-9d07-8063ed7b4be2', 'P3650D',  '10 år',    'Slettefrist', 3650],
+            [7,  'b2a8401a-c1d3-4c04-821c-91ce4ced35d5', 'P4015D',  '11 år',    'Slettefrist', 4015],
+            [8,  '2a435485-8dda-4d45-a27c-92366bbdbe36', 'P5475D',  '15 år',    'Slettefrist', 5475],
+            [9,  '5f9fb6b9-fa1d-4b26-a133-4e74f4377813', 'P10950D', '30 år',    'Slettefrist', 10950],
+            [10, 'a6c26e0b-06ca-409f-83eb-b6980b700eea', 'P12775D', '35 år',    'Slettefrist', 12775],
+            [11, 'caed3f3b-95cb-4a29-a416-432403b342b0', 'P16425D', '45 år',    'Slettefrist', 16425],
+            [12, 'd86d02fb-dbbf-49ca-8a63-0df448037f27', 'P18250D', '50 år',    'Slettefrist', 18250],
+        ];
+        $inserted = 0;
+        foreach ($rows as [$id, $uuid, $code, $name, $description, $deletionDays]) {
+            $check = $this->db->getQueryBuilder();
+            $check->select($check->func()->count('*'))
+                ->from('opencase_deletion_deadline')
+                ->where($check->expr()->eq('id', $check->createNamedParameter($id, IQueryBuilder::PARAM_INT)));
+            $res   = $check->executeQuery();
+            $count = (int)$res->fetchOne();
+            $res->closeCursor();
+            if ($count > 0) {
+                continue;
+            }
+            $ins = $this->db->getQueryBuilder();
+            $ins->insert('opencase_deletion_deadline')
+                ->setValue('id',            $ins->createNamedParameter($id,           IQueryBuilder::PARAM_INT))
+                ->setValue('uuid',          $ins->createNamedParameter($uuid))
+                ->setValue('code',          $ins->createNamedParameter($code))
+                ->setValue('name',          $ins->createNamedParameter($name))
+                ->setValue('description',   $ins->createNamedParameter($description))
+                ->setValue('deletion_days', $ins->createNamedParameter($deletionDays, IQueryBuilder::PARAM_INT))
+                ->setValue('expired',       $ins->createNamedParameter(false,         IQueryBuilder::PARAM_BOOL))
+                ->executeStatement();
+            $inserted++;
+        }
+        $output->info("Seeded {$inserted} deletion deadline row(s).");
     }
 
     private function seedRoles(IOutput $output): void {
@@ -420,6 +513,28 @@ class SeedReferenceData implements IRepairStep {
             $inserted++;
         }
         $output->info("Seeded {$inserted} contact type rows.");
+    }
+
+    private function seedDocumentRelationTypes(IOutput $output): void {
+        $rows = [
+            [1, 'da', 'Bilag'],
+            [2, 'da', 'Besvarelse'],
+            [3, 'da', 'Udgangspunkt'],
+            [4, 'da', 'Relation'],
+            [1, 'en', 'Attachment'],
+            [2, 'en', 'Response'],
+            [3, 'en', 'Origin'],
+            [4, 'en', 'Relation'],
+        ];
+        $inserted = 0;
+        foreach ($rows as [$id, $lang, $name]) {
+            $this->db->executeStatement(
+                'INSERT IGNORE INTO `*PREFIX*opencase_documentrelationtype` (`id`, `language`, `name`, `expired`) VALUES (?, ?, ?, 0)',
+                [$id, $lang, $name]
+            );
+            $inserted++;
+        }
+        $output->info("Seeded {$inserted} document relation type rows.");
     }
 
     private function seedConfig(IOutput $output): void {
@@ -675,5 +790,221 @@ class SeedReferenceData implements IRepairStep {
             $inserted++;
         }
         $output->info("Seeded {$inserted} AI action row(s).");
+    }
+
+    /**
+     * Default masking rules for access requests (Konfiguration →
+     * Maskeringsregler). Only seeded into an empty table, so rules an
+     * administrator has changed or deleted are never restored. The patterns
+     * match DEFAULT_RULES in redaction-service/detectors.py.
+     */
+    private function seedMaskRules(IOutput $output): void {
+        $qb = $this->db->getQueryBuilder();
+        $count = (int) $qb->select($qb->createFunction('COUNT(*)'))
+            ->from('opencase_access_mask_rules')
+            ->executeQuery()
+            ->fetchOne();
+        if ($count > 0) {
+            return;
+        }
+
+        $legal = 'Offentlighedsloven § 30, nr. 1';
+        $rules = [
+            ['CPR-nr.',  'cpr',     '(?<!\\d)\\d{6}[- ]?\\d{4}(?!\\d)', 'cpr_date'],
+            ['E-mail',   'email',   '[A-Za-z0-9._%+\\-]+@[A-Za-z0-9.\\-]+\\.[A-Za-z]{2,}', null],
+            ['Kontonr.', 'account', '(?<!\\d)\\d{4}[- ]\\d{6,10}(?!\\d)', null],
+            ['Telefon',  'phone',   '(?<![\\d+])(?:(?:\\+|00)45[ ]?)?(?:\\d{2} \\d{2} \\d{2} \\d{2}|\\d{4} \\d{4}|\\d{8})(?!\\d)', 'not_date'],
+        ];
+
+        foreach ($rules as $i => [$label, $category, $pattern, $validator]) {
+            $qb = $this->db->getQueryBuilder();
+            $qb->insert('opencase_access_mask_rules')->values([
+                'label'           => $qb->createNamedParameter($label),
+                'category'        => $qb->createNamedParameter($category),
+                'kind'            => $qb->createNamedParameter('regex'),
+                'pattern'         => $qb->createNamedParameter($pattern),
+                'validator'       => $qb->createNamedParameter($validator),
+                'legal_reference' => $qb->createNamedParameter($legal),
+                'enabled'         => $qb->createNamedParameter(true, \OCP\DB\QueryBuilder\IQueryBuilder::PARAM_BOOL),
+                'sort_order'      => $qb->createNamedParameter(($i + 1) * 10, \OCP\DB\QueryBuilder\IQueryBuilder::PARAM_INT),
+            ])->executeStatement();
+        }
+
+        $output->info('Seeded ' . count($rules) . ' masking rules.');
+    }
+
+    /**
+     * Runtime config entries (opencase_config) and access-request exclusion
+     * reasons. Existing config values are kept; only name/description is refreshed.
+     */
+    private function seedRuntimeConfig(IOutput $output): void {
+        $this->seedConfigEntry(
+            'search_max_result_count',
+            '500',
+            'Maksimalt antal søgeresultater',
+            'Det maksimale antal rækker der returneres på tværs af søgninger (Fritekst, Sager, Dokumenter og Alle sager). Brugeren kan bladre i resultater op til denne grænse.',
+            $output,
+        );
+
+        $this->seedConfigEntry(
+            'search_page_size',
+            '50',
+            'Sidevisning – søgeresultater',
+            'Antal rækker pr. side i søgeresultater og sagslister.',
+            $output,
+        );
+
+        $this->seedConfigEntry(
+            'msoffice_addin_port',
+            '1443',
+            'MS Office add-in port',
+            'nginx port used to serve the MS Office add-in backend (Outlook/Word/Excel/PowerPoint task panes), read by msoffice/nginx/deploy.sh.',
+            $output,
+        );
+
+        $this->seedConfigEntry(
+            'msoffice_graph_client_id',
+            '',
+            'MS Office Graph app (client) ID',
+            'Application (client) ID of the Entra ID app registration used by the MS Office add-ins to call Microsoft Graph (downloading real file/email content when running in a browser). Register a Single-page application (SPA) with redirect URI https://<addin host>/shared/graph-auth.html and delegated Microsoft Graph permission Files.Read (mail add-in also needs Mail.Read), with admin consent granted.',
+            $output,
+        );
+
+        $this->seedConfigEntry(
+            'msoffice_graph_tenant_id',
+            '',
+            'MS Office Graph tenant ID',
+            'Directory (tenant) ID of the Entra ID tenant that owns the app registration above.',
+            $output,
+        );
+
+        $this->seedConfigEntry(
+            'enterprise_version',
+            '0',
+            'Enterprise version enabled',
+            'Set to 1 only when the Enterprise deployment package (which installs the Distribution components) has been installed. Leave at 0 for the public App Store release.',
+            $output,
+        );
+
+        $defaultExportFolder = rtrim($this->config->getSystemValueString('datadirectory', ''), '/')
+            . '/opencase_storage/_export';
+        $this->seedConfigEntry(
+            'export_folder',
+            $defaultExportFolder,
+            'Eksportmappe',
+            'Sti hvor lukkede sager eksporteres til (XML-metadata, dokumentfiler og logs), én undermappe pr. sagsnummer. Skrives til hver time af ExportClosedCasesJob.',
+            $output,
+        );
+
+        $this->seedConfigEntry(
+            'export_enabled',
+            '0',
+            'Eksport aktiveret',
+            'Om ExportClosedCasesJob skal eksportere lukkede sager. Deaktiveret som standard.',
+            $output,
+        );
+
+        $this->seedConfigEntry(
+            'entity_id_opencase_api',
+            'http://opencase.dk/service/api/1',
+            'Audience for OpenCase API',
+            'Den Audience-værdi som bearer-tokens til den offentlige data-API skal matche.',
+            $output,
+        );
+
+        $this->seedConfigEntry(
+            'history_count',
+            '20',
+            'Antal elementer i seneste',
+            'Angiv antal elementer i seneste sager og dokumenter.',
+            $output,
+        );
+
+        $this->seedConfigEntry(
+            'redaction_service_url',
+            '',
+            'Maskeringstjeneste – URL',
+            'Adresse på maskeringstjenesten (redaction-service), f.eks. http://127.0.0.1:8080. Bruges til automatisk at finde og maskere personoplysninger i PDF-filer under aktindsigt. Tom = kun manuel upload af maskerede filer.',
+            $output,
+        );
+
+        $this->seedConfigEntry(
+            'redaction_service_api_key',
+            '',
+            'Maskeringstjeneste – API-nøgle',
+            'Delt nøgle der sendes som "Authorization: Bearer <nøgle>" til maskeringstjenesten. Skal svare til REDACTION_API_KEY i tjenestens miljø.',
+            $output,
+        );
+
+        $this->seedExclusionReasons($output);
+    }
+
+    private function seedConfigEntry(
+        string $key,
+        string $defaultValue,
+        string $name,
+        string $description,
+        IOutput $output,
+    ): void {
+        $qb = $this->db->getQueryBuilder();
+        $qb->select('config_key')
+            ->from('opencase_config')
+            ->where($qb->expr()->eq('config_key', $qb->createNamedParameter($key)));
+        $result = $qb->executeQuery();
+        $exists = $result->fetchOne();
+        $result->closeCursor();
+
+        if ($exists === false) {
+            $qb->resetQueryParts();
+            $qb->insert('opencase_config')->values([
+                'config_key'   => $qb->createNamedParameter($key),
+                'config_value' => $qb->createNamedParameter($defaultValue),
+                'name'         => $qb->createNamedParameter($name),
+                'description'  => $qb->createNamedParameter($description),
+            ])->executeStatement();
+            $output->info("Seeded config: {$key}.");
+        } else {
+            $qb->resetQueryParts();
+            $qb->update('opencase_config')
+                ->set('name', $qb->createNamedParameter($name))
+                ->set('description', $qb->createNamedParameter($description))
+                ->where($qb->expr()->eq('config_key', $qb->createNamedParameter($key)))
+                ->executeStatement();
+            $output->info("Updated metadata for config: {$key}.");
+        }
+    }
+
+    private function seedExclusionReasons(IOutput $output): void {
+        $qb = $this->db->getQueryBuilder();
+        $count = (int) $qb->select($qb->createFunction('COUNT(*)'))
+            ->from('opencase_access_exclusion_reasons')
+            ->executeQuery()
+            ->fetchOne();
+
+        if ($count > 0) {
+            return;
+        }
+
+        $labels = [
+            'Interne arbejdsdokumenter (§23)',
+            'Ministerbetjening (§24)',
+            'Personfølsomme oplysninger',
+            'Fortrolige oplysninger',
+            'CPR-numre',
+            'Helbredsoplysninger',
+            'Straffesager',
+            'Beskyttede adresser',
+            'Tredjepartsoplysninger',
+            'Forretningshemmeligheder',
+        ];
+
+        foreach ($labels as $label) {
+            $qb = $this->db->getQueryBuilder();
+            $qb->insert('opencase_access_exclusion_reasons')
+                ->values(['label' => $qb->createNamedParameter($label)])
+                ->executeStatement();
+        }
+
+        $output->info('Seeded opencase_access_exclusion_reasons with ' . count($labels) . ' rows.');
     }
 }

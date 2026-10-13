@@ -9,13 +9,14 @@ use OCA\OpenCase\Db\AccessRequest;
 use OCA\OpenCase\Db\AccessRequestItemMapper;
 use OCA\OpenCase\Db\AccessRequestMapper;
 use OCA\OpenCase\Db\CaseMapper;
+use OCP\IUserManager;
 
 class AccessRequestService {
 
     private const VALID_TYPES    = ['public_access', 'party_access', 'gdpr_access'];
     private const VALID_STATUSES = [
         'received', 'collecting', 'reviewing', 'redacting',
-        'approval', 'sent', 'rejected', 'partly_rejected', 'closed',
+        'approval', 'approved', 'sent', 'rejected', 'partly_rejected', 'closed',
     ];
 
     public function __construct(
@@ -25,6 +26,7 @@ class AccessRequestService {
         private CaseMapper $caseMapper,
         private AccessDeadlineService $deadlineService,
         private AuditService $auditService,
+        private IUserManager $userManager,
     ) {
     }
 
@@ -57,7 +59,7 @@ class AccessRequestService {
         $req->setRequesterEmail($data['requester_email'] ?? null);
         $req->setRequesterPhone($data['requester_phone'] ?? null);
         $req->setRequesterIdentifier($data['requester_identifier'] ?? null);
-        $req->setAssignedUser($data['assigned_user'] ?? null);
+        $req->setAssignedUser(($data['assigned_user'] ?? '') !== '' ? $data['assigned_user'] : $createdBy);
         $req->setLegalBasis($data['legal_basis'] ?? null);
         $req->setReceivedAt($now);
         $req->setDeadlineAt($deadline);
@@ -75,7 +77,15 @@ class AccessRequestService {
     public function update(int $id, string $userId, array $data): AccessRequest {
         $req = $this->requestMapper->findById($id);
 
-        if (isset($data['assigned_user']))      { $req->setAssignedUser($data['assigned_user']); }
+        if (isset($data['type']) && $data['type'] !== $req->getType()) {
+            if (!in_array($data['type'], self::VALID_TYPES, true)) {
+                throw new \InvalidArgumentException("Invalid type '{$data['type']}'");
+            }
+            $req->setType($data['type']);
+            $req->setDeadlineAt($this->deadlineService->computeDeadline($data['type'], $req->getReceivedAt() ?? new \DateTime()));
+        }
+        if (isset($data['subject']) && trim($data['subject']) !== '') { $req->setSubject($data['subject']); }
+        if (isset($data['assigned_user']))      { $req->setAssignedUser($data['assigned_user'] !== '' ? $data['assigned_user'] : null); }
         if (isset($data['requester_name']))      { $req->setRequesterName($data['requester_name']); }
         if (isset($data['requester_email']))     { $req->setRequesterEmail($data['requester_email']); }
         if (isset($data['requester_phone']))     { $req->setRequesterPhone($data['requester_phone']); }
@@ -119,6 +129,24 @@ class AccessRequestService {
         return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($data), 4));
     }
 
+    /**
+     * Open (not sent/rejected/closed) requests assigned to $userId, serialized
+     * with the owning case's number, soonest deadline first.
+     */
+    public function listOpenAssignedTo(string $userId): array {
+        $caseNumbers = [];
+        $result = [];
+        foreach ($this->requestMapper->findByAssignedUser($userId) as $req) {
+            $caseId = $req->getCaseId();
+            if (!array_key_exists($caseId, $caseNumbers)) {
+                $caseNumbers[$caseId] = $this->caseMapper->findById($caseId)?->getCaseNumber();
+            }
+            $result[] = $this->serialize($req) + ['case_number' => $caseNumbers[$caseId]];
+        }
+        usort($result, fn($a, $b) => strcmp($a['effective_deadline_at'], $b['effective_deadline_at']));
+        return $result;
+    }
+
     public function serialize(AccessRequest $req): array {
         $effectiveDeadline = $this->deadlineService->effectiveDeadline(
             $req->getExtendedDeadlineAt(),
@@ -138,6 +166,9 @@ class AccessRequestService {
             'subject'               => $req->getSubject(),
             'description'           => $req->getDescription(),
             'assigned_user'         => $req->getAssignedUser(),
+            'assigned_user_display_name' => $req->getAssignedUser() !== null && $req->getAssignedUser() !== ''
+                ? ($this->userManager->getDisplayName($req->getAssignedUser()) ?? $req->getAssignedUser())
+                : null,
             'received_at'           => $req->getReceivedAt()?->format('c'),
             'deadline_at'           => $req->getDeadlineAt()?->format('c'),
             'extended_deadline_at'  => $req->getExtendedDeadlineAt()?->format('c'),

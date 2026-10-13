@@ -109,7 +109,31 @@ Eksempler på oplysninger, der ofte maskeres:
 - personfølsomme oplysninger
 - andre fortrolige oplysninger
 
-Maskering foretages ved at:
+### Automatisk maskering
+
+!!! info "Enterprise"
+    Hvis administratoren har sat maskeringstjenesten op (Enterprise-versionen), vises knappen **Foreslå maskering** ud for filerne under fanen **Maskering**. Den fungerer for PDF-, Word-, Excel-, PowerPoint- og OpenDocument-filer.
+
+    ![Foreslå maskering](../images/sager/aktindsigt-foreslaa-knappen.png)
+
+    1. Klik **Foreslå maskering**. Filen gennemsøges efter de maskeringsregler, administratoren har sat op – fra start CPR-numre, e-mailadresser, telefonnumre og kontonumre. Hvert fund vises med regel og eventuel hjemmel.
+    ![Foreslå maskering](../images/sager/aktindsigt-foreslaa-maskering.png)
+    2. Gennemgå forslagene. Alle fund er markeret på forhånd – fjern markeringen ved fund, der ikke skal maskeres.
+    3. Tilføj selv tekst, der skal maskeres, f.eks. navne, i feltet **Tilføj tekst der skal maskeres**. Teksten maskeres alle steder i filen.
+    4. Klik **Anvend maskering**.
+
+    Resultatet gemmes som filens maskerede version. Det er altid en PDF, også når originalen er et Word- eller Excel-dokument. Teksten under de sorte felter er fjernet fra filen og kan ikke kopieres frem.
+
+    ![Maskeret pdf](../images/sager/aktindsigt-maskeret-pdf.png)
+
+
+    !!! note
+
+        Tjenesten finder kun det, maskeringsreglerne beskriver. Navne, helbredsoplysninger og andre fortrolige oplysninger skal du som regel selv tilføje. Sider uden tekst (f.eks. scannede sider) kan ikke gennemsøges – dialogen advarer, hvis filen har sådanne sider.
+
+### Manuel maskering
+
+Maskering kan også foretages ved at:
 
 1. downloade dokumentets fil
 2. maskere de relevante oplysninger

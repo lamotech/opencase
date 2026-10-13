@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OCA\OpenCase\Controller;
 
+use OCA\OpenCase\Db\DocumentMapper;
 use OCA\OpenCase\Db\HistoryEntity;
 use OCA\OpenCase\Service\HistoryService;
 use OCP\AppFramework\ApiController;
@@ -18,6 +19,7 @@ class RecentController extends ApiController {
         string $appName,
         IRequest $request,
         private HistoryService $historyService,
+        private DocumentMapper $documentMapper,
         private ?string $userId,
     ) {
         parent::__construct($appName, $request);
@@ -31,8 +33,20 @@ class RecentController extends ApiController {
     #[ApiRoute(verb: 'GET', url: '/api/v1/recent')]
     public function index(): DataResponse {
         $entries = $this->historyService->findByUser($this->userId ?? '');
+
+        // Leave out deleted documents (soft-deleted, or gone for good)
+        $documentKeys = array_map(
+            fn(HistoryEntity $e) => (int)$e->getEntityKey(),
+            array_filter($entries, fn(HistoryEntity $e) => $e->getEntity() === 'document'),
+        );
+        $liveDocuments = array_flip($this->documentMapper->filterLiveIds($documentKeys));
+        $entries = array_filter(
+            $entries,
+            fn(HistoryEntity $e) => $e->getEntity() !== 'document' || isset($liveDocuments[(int)$e->getEntityKey()]),
+        );
+
         return new DataResponse([
-            'recent' => array_map(fn($e) => $this->serialize($e), $entries),
+            'recent' => array_values(array_map(fn($e) => $this->serialize($e), $entries)),
         ]);
     }
 

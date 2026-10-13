@@ -177,6 +177,8 @@ class OpenCaseFilesSearchProvider implements IProvider {
             ->from('opencase_files', 'f')
             ->innerJoin('f', 'opencase_cases', 'c',
                 $qb->expr()->eq('c.id', 'f.case_id'))
+            ->innerJoin('f', 'opencase_documents', 'd',
+                $qb->expr()->eq('d.id', 'f.document_id'))
             ->innerJoin('c', 'opencase_user_access', 'ua',
                 $qb->expr()->eq('ua.access_profile_id', 'c.access_profile_id'))
             ->leftJoin('f', 'opencase_doc_user_access', 'dua',
@@ -185,6 +187,14 @@ class OpenCaseFilesSearchProvider implements IProvider {
                     $qb->expr()->eq('dua.user_id', $qb->createNamedParameter($userId))
                 ))
             ->where($qb->expr()->eq('ua.user_id', $qb->createNamedParameter($userId)))
+            ->andWhere($qb->expr()->orX(
+                $qb->expr()->isNull('f.is_deleted'),
+                $qb->expr()->eq('f.is_deleted', $qb->createNamedParameter(false, \OCP\DB\QueryBuilder\IQueryBuilder::PARAM_BOOL))
+            ))
+            ->andWhere($qb->expr()->orX(
+                $qb->expr()->isNull('d.is_deleted'),
+                $qb->expr()->eq('d.is_deleted', $qb->createNamedParameter(false, \OCP\DB\QueryBuilder\IQueryBuilder::PARAM_BOOL))
+            ))
             ->andWhere($qb->expr()->iLike(
                 'f.virtual_filename',
                 $qb->createNamedParameter('%' . $this->db->escapeLikeParameter($term) . '%')

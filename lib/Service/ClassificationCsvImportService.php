@@ -107,14 +107,19 @@ class ClassificationCsvImportService {
 
             $existing = $repo->find($row['uuid']);
             if ($existing === null) {
-                $repo->insert($row['uuid'], $row['code'], $row['title'], $row['description']);
+                $repo->insert($row['uuid'], $row['code'], $row['title'], $row['description'], null, null);
                 $created++;
                 if (!$row['active']) {
                     $repo->setActive($row['uuid'], false);
                 }
             } else {
                 if ($existing['code'] !== $row['code'] || $existing['title'] !== $row['title'] || $existing['description'] !== $row['description']) {
-                    $repo->update($row['uuid'], $row['code'], $row['title'], $row['description']);
+                    // The CSV carries no Mapninger, so keep the disposal code / deletion deadline from the last KLE sync
+                    $repo->update(
+                        $row['uuid'], $row['code'], $row['title'], $row['description'],
+                        $existing['disposalcode_id'] !== null ? (int)$existing['disposalcode_id'] : null,
+                        $existing['deletion_deadline_id'] !== null ? (int)$existing['deletion_deadline_id'] : null,
+                    );
                     $updated++;
                 }
                 if ((bool)$existing['active'] !== $row['active']) {

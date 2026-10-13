@@ -1,5 +1,6 @@
 <template>
 	<NcDialog :name="t('opencase', 'Rediger dokument')"
+		size="large"
 		@update:open="v => !v && $emit('close')">
 		<div class="opencase-edit-doc">
 			<div class="opencase-edit-doc__field">
@@ -39,6 +40,10 @@
 				<label>{{ t('opencase', 'Registreret dato') }}</label>
 				<input v-model="form.registered_date" type="date" class="opencase-edit-doc__date-input" />
 			</div>
+			<div class="opencase-edit-doc__field">
+				<label>{{ t('opencase', 'Dokumentresume') }}</label>
+				<RichTextEditor ref="summaryEditor" :content="document.summary || ''" />
+			</div>
 		</div>
 		<template #actions>
 			<NcButton @click="$emit('close')">{{ t('opencase', 'Annuller') }}</NcButton>
@@ -55,6 +60,7 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
 import api from '../services/api.js'
+import RichTextEditor from './RichTextEditor.vue'
 import { showError, showSuccess } from '@nextcloud/dialogs'
 
 function today() {
@@ -63,7 +69,7 @@ function today() {
 
 export default {
 	name: 'EditDocumentDialog',
-	components: { NcDialog, NcButton, NcTextField, NcSelect },
+	components: { NcDialog, NcButton, NcTextField, NcSelect, RichTextEditor },
 	props: {
 		document: { type: Object, required: true },
 	},
@@ -120,6 +126,7 @@ export default {
 					document_date: this.form.document_date || null,
 					received_date: this.form.received_date || null,
 					registered_date: this.form.registered_date || null,
+					summary: this.$refs.summaryEditor.getHtml(),
 				})
 				showSuccess(t('opencase', 'Dokument opdateret'))
 				this.$emit('saved', updated)

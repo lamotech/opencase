@@ -10,6 +10,7 @@ use OCA\OpenCase\Db\ClassificationFacetRepository;
 use OCA\OpenCase\Db\ClassificationSubjectMapper;
 use OCA\OpenCase\Db\ContactRoleMapper;
 use OCA\OpenCase\Db\DocumentCategoryMapper;
+use OCA\OpenCase\Db\DocumentRelationTypeMapper;
 use OCA\OpenCase\Db\DocumentStatusMapper;
 use OCA\OpenCase\Db\InsightLevelMapper;
 use OCA\OpenCase\Db\ParticipantRoleMapper;
@@ -47,6 +48,7 @@ class PublicReferenceApiController extends AbstractPublicDataApiController {
         private CaseTypeMapper $caseTypeMapper,
         private ContactRoleMapper $contactRoleMapper,
         private DocumentCategoryMapper $documentCategoryMapper,
+        private DocumentRelationTypeMapper $documentRelationTypeMapper,
         private DocumentStatusMapper $documentStatusMapper,
         private InsightLevelMapper $insightLevelMapper,
         private ParticipantRoleMapper $participantRoleMapper,
@@ -116,6 +118,19 @@ class PublicReferenceApiController extends AbstractPublicDataApiController {
         ], $this->rowsWithFallback(fn ($lang) => $this->documentCategoryMapper->findByLanguage($lang, true)));
 
         return $this->respondList('DocumentCategories', 'DocumentCategory', $items);
+    }
+
+    #[PublicPage]
+    #[NoAdminRequired]
+    #[NoCSRFRequired]
+    public function documentRelationTypes(): Response {
+        $items = array_map(fn (array $t) => [
+            'Id'      => $t['id'],
+            'Name'    => $t['name'],
+            'Expired' => $t['expired'],
+        ], $this->rowsWithFallback(fn ($lang) => $this->documentRelationTypeMapper->findByLanguage($lang, true)));
+
+        return $this->respondList('DocumentRelationTypes', 'DocumentRelationType', $items);
     }
 
     #[PublicPage]

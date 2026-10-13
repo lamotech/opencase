@@ -8,6 +8,13 @@ use OCA\OpenCase\Db\CaseMapper;
 use OCA\OpenCase\Db\Document;
 use OCA\OpenCase\Service\CaseService;
 use OCA\OpenCase\Db\DocumentMapper;
+use OCA\OpenCase\Db\DocumentContactMapper;
+use OCA\OpenCase\Db\DocumentNoteMapper;
+use OCA\OpenCase\Db\DocumentRelationMapper;
+use OCA\OpenCase\Db\DocWorkflowMapper;
+use OCA\OpenCase\Db\FavoriteMapper;
+use OCA\OpenCase\Db\ReminderMapper;
+use OCP\IDBConnection;
 use OCA\OpenCase\Service\AuditService;
 use OCA\OpenCase\Service\CaseNumberService;
 use Psr\Log\LoggerInterface;
@@ -23,6 +30,15 @@ class DocumentService {
         private PermissionService $permissionService,
         private CaseNumberService $caseNumberService,
         private AuditService $auditService,
+        private FileService $fileService,
+        private HistoryService $historyService,
+        private DocumentContactMapper $contactMapper,
+        private DocumentNoteMapper $noteMapper,
+        private DocumentRelationMapper $relationMapper,
+        private DocWorkflowMapper $workflowMapper,
+        private FavoriteMapper $favoriteMapper,
+        private ReminderMapper $reminderMapper,
+        private IDBConnection $db,
         private LoggerInterface $logger,
     ) {
     }
@@ -40,6 +56,7 @@ class DocumentService {
         ?string $receivedDate = null,
         ?string $registeredDate = null,
         ?int $documentCategoryId = null,
+        ?string $summary = null,
     ): Document {
         // Verify case exists and user has write access
         $case = $this->caseMapper->findById($caseId);
@@ -74,6 +91,7 @@ class DocumentService {
         $entity->setReceivedDate($receivedDate);
         $entity->setRegisteredDate($registeredDate);
         $entity->setDocumentCategoryId($documentCategoryId);
+        $entity->setSummary($summary);
         $entity->setCreatedAt(new \DateTime());
         $entity->setUpdatedAt(new \DateTime());
         $entity->setCreatedBy($userId);
@@ -113,9 +131,11 @@ class DocumentService {
         bool $receivedDateProvided = false,
         ?string $registeredDate = null,
         bool $registeredDateProvided = false,
+        ?string $summary = null,
+        bool $summaryProvided = false,
     ): Document {
         $entity = $this->documentMapper->findById($documentId);
-        if ($entity === null) {
+        if ($entity === null || $entity->isSoftDeleted()) {
             throw new NotFoundException("Document {$documentId} not found");
         }
 
@@ -151,6 +171,12 @@ class DocumentService {
         }
         if ($registeredDateProvided) {
             $entity->setRegisteredDate($registeredDate);
+        }
+        if ($summaryProvided && $summary !== $entity->getSummary()) {
+            // The summary is rich-text HTML and can run long — record only that
+            // it changed, not the before/after content.
+            $metadataChanges['summary'] = ['changed' => true];
+            $entity->setSummary($summary);
         }
 
         $oldStatusId = $entity->getStatus();
@@ -203,7 +229,7 @@ class DocumentService {
      */
     public function getByUuid(string $uuid, string $userId): Document {
         $entity = $this->documentMapper->findByUuid($uuid);
-        if ($entity === null) {
+        if ($entity === null || $entity->isSoftDeleted()) {
             throw new NotFoundException("Document with uuid {$uuid} not found");
         }
 
@@ -215,7 +241,7 @@ class DocumentService {
      */
     public function getByDocumentNumber(string $documentNumber, string $userId): Document {
         $entity = $this->documentMapper->findByDocumentNumber($documentNumber);
-        if ($entity === null) {
+        if ($entity === null || $entity->isSoftDeleted()) {
             throw new NotFoundException("Document with document number {$documentNumber} not found");
         }
 
@@ -237,17 +263,18 @@ class DocumentService {
     }
 
     /**
-     * List all documents in a case (with access checks).
+     * List all documents in a case (with access checks). Soft-deleted
+     * documents are only included when $includeDeleted is set.
      *
      * @return Document[]
      */
-    public function listByCase(int $caseId, string $userId): array {
+    public function listByCase(int $caseId, string $userId, bool $includeDeleted = false): array {
         // Verify case-level read access
         if (!$this->permissionService->userHasReadAccessToCase($userId, $caseId)) {
             throw new NotFoundException('Access denied');
         }
 
-        $documents = $this->documentMapper->findByCase($caseId);
+        $documents = $this->documentMapper->findByCase($caseId, $includeDeleted);
 
         // Filter out documents with per-user deny overrides
         return array_values(array_filter($documents, function (Document $doc) use ($userId) {
@@ -256,12 +283,21 @@ class DocumentService {
     }
 
     /**
-     * Delete a document and all its files.
-     * Only allowed for draft documents.
+     * Delete a document. Only allowed for draft documents.
+     *
+     * With opencase_config.use_softdelete = 1 the document is only flagged as
+     * deleted (is_deleted=1, deleted_date=now) and its files are taken out of
+     * the ES index and the virtual filesystem, so it can be restored later.
+     * Otherwise the document is removed for good together with its files,
+     * contacts, notes, relations, workflows, favourites and reminders. The
+     * audit log is kept.
+     * Either way the document leaves every user's recent list.
+     *
+     * @return bool true if the document was soft-deleted, false if removed for good
      */
-    public function delete(int $documentId, string $userId): void {
+    public function delete(int $documentId, string $userId): bool {
         $entity = $this->documentMapper->findById($documentId);
-        if ($entity === null) {
+        if ($entity === null || $entity->isSoftDeleted()) {
             throw new NotFoundException("Document {$documentId} not found");
         }
 
@@ -275,10 +311,73 @@ class DocumentService {
             );
         }
 
-        // Deletion of associated files should be handled here
-        // (physical files + ES index entries)
-        // For now, delete the DB entity
-        $this->documentMapper->delete($entity);
+        $softDelete = $this->fileService->isSoftDeleteEnabled();
+
+        $this->auditService->logDocumentDeleted(
+            $entity->getCaseId(), $documentId, $userId,
+            $entity->getDocumentNumber(), $entity->getTitle(), $softDelete,
+        );
+
+        $this->historyService->removeDocument($documentId);
+
+        if ($softDelete) {
+            $this->documentMapper->markDeleted($documentId);
+            $this->fileService->hideDocumentFiles($documentId);
+            return true;
+        }
+
+        // Files first: physical files, versions, shares, ES and filecache
+        // cannot be rolled back with the DB transaction anyway
+        $this->fileService->purgeDocumentFiles($documentId);
+
+        $this->db->beginTransaction();
+        try {
+            $this->contactMapper->deleteByDocument($documentId);
+            $this->noteMapper->deleteByDocument($documentId);
+            $this->relationMapper->deleteByDocument($documentId);
+            $this->workflowMapper->deleteByDocument($documentId);
+            $this->favoriteMapper->deleteByEntity('document', $documentId);
+            $this->reminderMapper->deleteByEntity('document', $documentId);
+            $this->documentMapper->delete($entity);
+            $this->db->commit();
+        } catch (\Throwable $e) {
+            $this->db->rollBack();
+            throw $e;
+        }
+
+        $this->logger->info('OpenCase: Document hard-deleted: {id} ({number})', [
+            'id'     => $documentId,
+            'number' => $entity->getDocumentNumber(),
+        ]);
+        return false;
+    }
+
+    /**
+     * Restore a soft-deleted document: clear is_deleted/deleted_date and put
+     * its files back into the virtual filesystem and the ES index.
+     */
+    public function restore(int $documentId, string $userId): Document {
+        $entity = $this->documentMapper->findById($documentId);
+        if ($entity === null) {
+            throw new NotFoundException("Document {$documentId} not found");
+        }
+
+        if (!$this->permissionService->userHasWriteAccessToDocument($userId, $documentId)) {
+            throw new NotFoundException('Access denied');
+        }
+
+        if (!$entity->isSoftDeleted()) {
+            throw new \DomainException('Document is not deleted');
+        }
+
+        $this->documentMapper->markRestored($documentId);
+        $this->fileService->showDocumentFiles($documentId);
+
+        $this->auditService->logDocumentRestored(
+            $entity->getCaseId(), $documentId, $userId, $entity->getDocumentNumber(), $entity->getTitle(),
+        );
+
+        return $this->documentMapper->findById($documentId);
     }
 
     /**

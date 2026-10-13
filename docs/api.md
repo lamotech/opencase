@@ -156,8 +156,11 @@ GET /cases?uuid=8f14e...
 GET /cases?case_number=2024-001234
 ```
 Exactly one of `uuid`/`case_number` is required. Response: `{ "Case": CaseType }`
-(schema: `#/$defs/CaseType`), with `Participants`/`Caseworkers` nested but
-**not** `Documents`/`JournalNotes` (use the endpoints below for those).
+(schema: `#/$defs/CaseType`), with `Participants`/`Caseworkers`/`Estates`/
+`CustomFields` nested but **not** `Documents`/`JournalNotes` (use the
+endpoints below for those). `CustomFields` lists the admin-defined fields
+applicable to this case (by casetype/organisation/KLE-nummer), each with its
+current value if one has been set.
 
 #### Search cases
 ```
@@ -182,7 +185,10 @@ POST /cases
   "InsightLevelId": 1,
   "CasetypeId": 2,
   "ParentCaseId": null,
-  "Summary": "<p>Rich-text summary</p>"
+  "Summary": "<p>Rich-text summary</p>",
+  "CustomFields": [
+    { "FieldKey": "byggesagsnummer", "Value": "BS-123" }
+  ]
 }
 ```
 `Title`, `ClassificationFacetUuid`, and one of each `{OrgUuid | organisation}`,
@@ -190,9 +196,12 @@ POST /cases
 `{SensitivityUuid | sensitivity}` are required — the `Uuid` variants resolve
 via `GET /organisations`, `/kle-numbers`, `/sensitivities`; the plain
 variants take the name/code/key directly. `ResponsibleUserId`,
-`InsightLevelId`, `CasetypeId`, `ParentCaseId`, `Summary` are optional.
-Lowercase/snake_case field names are also accepted throughout. Response
-(201): `{ "Case": CaseType }`.
+`InsightLevelId`, `CasetypeId`, `ParentCaseId`, `Summary`, `CustomFields` are
+optional. `CustomFields` is a list of `{FieldKey, Value}` — an unknown
+`FieldKey` or a `Value` invalid for its field (wrong type, missing when
+required, not one of a dropdown's options) rejects the whole request with a
+400 **before** the case is created. Lowercase/snake_case field names are
+also accepted throughout. Response (201): `{ "Case": CaseType }`.
 
 #### Update a case
 ```json
@@ -202,7 +211,10 @@ PUT /cases
 `Uuid` or `CaseNumber` is required to identify the case; any subset of the
 Create fields may follow — omitted fields are left unchanged.
 `ClassificationFacetUuid`, `InsightLevelId`, `Summary` can be explicitly
-cleared by sending them as an empty string. Response: `{ "Case": CaseType }`.
+cleared by sending them as an empty string. A `CustomFields` list, if
+present, sets the value of each listed field only — fields not mentioned
+keep their existing value; same validation as on create. Response:
+`{ "Case": CaseType }`.
 
 #### List / create a case's documents
 ```
@@ -219,7 +231,7 @@ POST /cases/documents
 `DocumentType`, `InsightLevelId`, `DocumentDate`, `ReceivedDate`,
 `RegisteredDate` are optional. Creates metadata only — no attached file.
 Response (201): `{ "Document": DocumentType }` (with empty
-`Files`/`Contacts`/`Notes`/`WorkflowHistory`).
+`Files`/`Contacts`/`Notes`/`Relations`/`WorkflowHistory`).
 
 #### List / add a case's journal notes
 ```
@@ -277,13 +289,15 @@ restored if the caseworker assignment is later removed.
 
 | Method & path | Purpose |
 |---|---|
-| `GET /documents?uuid=...` or `?document_number=...` | Get a single document (`DocumentType`, with `Files`/`Contacts`/`Notes`/`WorkflowHistory` nested) |
+| `GET /documents?uuid=...` or `?document_number=...` | Get a single document (`DocumentType`, with `Files`/`Contacts`/`Notes`/`Relations`/`WorkflowHistory` nested) |
 | `GET /documents/search?...` | Search documents by metadata |
 | `PUT /documents` | Update a document's metadata |
 | `POST /documents/contacts` | Add one or more contacts to a document |
 | `POST /documents/files` | Upload a file to a document (base64 body) |
 | `POST /documents/files/from-template` | Create a file by merging a template |
 | `POST /documents/notes` | Add a note to a document |
+| `POST /documents/relations` | Relate one or more documents to a document (e.g. as Bilag) |
+| `DELETE /documents/relations?...` | Remove a document relation |
 
 #### Get a document
 ```
@@ -323,6 +337,43 @@ POST /documents/notes
 `Uuid`/`DocumentNumber` (one of) and `Title` required, `Text` optional.
 Requires write access to the document's case. Response (201):
 `{ "Note": NoteType }`.
+
+#### Document relations
+Every `DocumentType` carries a `Relations` list — all relations the document
+takes part in, seen from that document:
+```json
+{ "Id": "12", "RelationTypeId": "1", "RelationTypeName": "Bilag", "Direction": "To",
+  "RelatedDocumentId": "17", "RelatedDocumentUuid": "5d84...", "RelatedDocumentNumber": "2026-00002-11",
+  "CreatedAt": "2026-10-01T10:15:14+00:00", "CreatedBy": "jdoe" }
+```
+`Direction` is `To` when this document points to the related document (e.g.
+the related document is this document's Bilag) and `From` when the related
+document points to this one. `RelationTypeId`: see `GET /documentrelationtype`
+(1=Bilag, 2=Besvarelse, 3=Udgangspunkt, 4=Relation).
+
+```json
+POST /documents/relations
+{
+  "DocumentNumber": "2024-001234-3",
+  "RelationTypeId": 1,
+  "RelatedDocuments": [ { "DocumentNumber": "2024-001234-4" }, { "Uuid": "5d84..." } ]
+}
+```
+`Uuid`/`DocumentNumber` (one of) identifies the document, which becomes the
+from-side of each new relation. `RelationTypeId` is optional (default 1 =
+Bilag). Each `RelatedDocuments` entry is identified by `Uuid` or
+`DocumentNumber` and must be readable by the acting user; if any entry fails
+to resolve, nothing is created. Pairs that already have a relation of the same
+type are skipped. Requires write access to the document's case. Response
+(201): `{ "Relations": [DocumentRelationType, ...] }` — only the newly created
+relations.
+
+```
+DELETE /documents/relations?document_number=2024-001234-3&relation_id=12
+```
+`uuid`/`document_number` (one of) and `relation_id` required. The relation
+may have the document on either side. Requires write access to the
+document's case. Response: `{ "Document": DocumentType }`.
 
 #### Add contacts to a document
 ```json
@@ -411,6 +462,7 @@ only active/non-expired entries.
 | `GET /casetype` | `{ "CaseTypes": [{Id, Name, PrimaryParticipant, Expired}, ...] }` |
 | `GET /contactroles` | `{ "ContactRoles": [{Id, Name, Expired}, ...] }` |
 | `GET /documentcategory` | `{ "DocumentCategories": [{Id, Name, Expired}, ...] }` |
+| `GET /documentrelationtype` | `{ "DocumentRelationTypes": [{Id, Name, Expired}, ...] }` |
 | `GET /documentstatus` | `{ "DocumentStatuses": [{Id, Name, IsFinal, Expired}, ...] }` |
 | `GET /insightlevel` | `{ "InsightLevels": [{Id, Name, Description}, ...] }` |
 | `GET /participantroles` | `{ "ParticipantRoles": [{Id, Name, Expired}, ...] }` |

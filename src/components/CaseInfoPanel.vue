@@ -62,8 +62,29 @@
 				<label>{{ t('opencase', 'Sidst opdateret') }}</label>
 				<span>{{ formatDate(caseData.updated_at) }}</span>
 			</div>
-			<div class="opencase-case-info__field">
+			<div v-if="caseData.updated_in_sapa" class="opencase-case-info__field">
+				<label>{{ t('opencase', 'Overført til SAPA') }}</label>
+				<span>{{ formatDate(caseData.updated_in_sapa) }}</span>
 			</div>
+			<div class="opencase-case-info__field">
+				<label>{{ t('opencase', 'Kassationskode') }}</label>
+				<span>{{ caseData.disposalcode_name || '–' }}</span>
+			</div>
+
+			<template v-if="caseData.status_is_closed">
+				<div class="opencase-case-info__field">
+					<label>{{ t('opencase', 'Lukket') }}</label>
+					<span>{{ formatDate(caseData.closed_date) || '–' }}</span>
+				</div>
+				<div class="opencase-case-info__field">
+					<label>{{ t('opencase', 'Kassationsdato') }}</label>
+					<span>{{ formatDay(caseData.disposal_date) || '–' }}</span>
+				</div>
+				<div class="opencase-case-info__field">
+					<label>{{ t('opencase', 'Slettefrist') }}</label>
+					<span>{{ formatDay(caseData.deletion_date) || '–' }}</span>
+				</div>
+			</template>
 
 			<div v-if="caseData.summary" class="opencase-case-info__field opencase-case-info__field--full">
 				<label>{{ t('opencase', 'Sagsresume') }}</label>
@@ -88,6 +109,12 @@ export default {
 			if (!dateStr) return ''
 			return new Date(dateStr).toLocaleDateString('da-DK', {
 				year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit',
+			})
+		},
+		formatDay(dateStr) {
+			if (!dateStr) return ''
+			return new Date(dateStr).toLocaleDateString('da-DK', {
+				year: 'numeric', month: 'long', day: 'numeric',
 			})
 		},
 	},

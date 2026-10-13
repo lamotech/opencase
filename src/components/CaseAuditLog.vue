@@ -59,9 +59,11 @@ import FileDocumentIcon from 'vue-material-design-icons/FileDocument.vue'
 import NoteTextIcon from 'vue-material-design-icons/NoteText.vue'
 import LockIcon from 'vue-material-design-icons/Lock.vue'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
+import RestoreIcon from 'vue-material-design-icons/Restore.vue'
 import FileEyeOutlineIcon from 'vue-material-design-icons/FileEyeOutline.vue'
 import GavelIcon from 'vue-material-design-icons/Gavel.vue'
 import SendIcon from 'vue-material-design-icons/Send.vue'
+import EraserVariantIcon from 'vue-material-design-icons/EraserVariant.vue'
 import BellIcon from 'vue-material-design-icons/Bell.vue'
 import ReceiptSendOutlineIcon from 'vue-material-design-icons/ReceiptSendOutline.vue'
 import AlertCircleOutlineIcon from 'vue-material-design-icons/AlertCircleOutline.vue'
@@ -81,6 +83,7 @@ const ACCESS_STATUS_LABELS = {
 	reviewing:  'Vurderer',
 	redacting:  'Maskerer',
 	approval:   'Til godkendelse',
+	approved:   'Godkendt',
 	sent:       'Afsendt',
 	rejected:   'Afvist',
 	partly_rejected: 'Delvist afvist',
@@ -121,6 +124,7 @@ export default {
 		FileEyeOutlineIcon,
 		GavelIcon,
 		SendIcon,
+		EraserVariantIcon,
 		BellIcon,
 		ReceiptSendOutlineIcon,
 		AlertCircleOutlineIcon,
@@ -172,6 +176,8 @@ export default {
 			case 'case_metadata_changed': return PencilIcon
 			case 'case_status_changed': return SwapHorizontalIcon
 			case 'document_created':    return FileDocumentIcon
+			case 'document_deleted':    return DeleteIcon
+			case 'document_restored':   return RestoreIcon
 			case 'case_access_granted':    return AccountCheckIcon
 			case 'case_access_revoked':    return AccountRemoveIcon
 			case 'case_participant_added':   return AccountPlusOutlineIcon
@@ -189,6 +195,7 @@ export default {
 			case 'access_request_updated':       return PencilIcon
 			case 'access_request_decision':      return GavelIcon
 			case 'access_request_sent':          return SendIcon
+			case 'access_request_masked':        return EraserVariantIcon
 			case 'reminder_created':         return BellIcon
 			case 'reminder_updated':         return BellIcon
 			case 'reminder_deleted':         return DeleteIcon
@@ -229,6 +236,16 @@ export default {
 			}
 			case 'document_created':
 				return t('opencase', 'Dokument oprettet: {number} – {title}', {
+					number: d.document_number || '',
+					title:  d.title || '',
+				})
+			case 'document_deleted':
+				return t('opencase', 'Dokument slettet: {number} – {title}', {
+					number: d.document_number || '',
+					title:  d.title || '',
+				})
+			case 'document_restored':
+				return t('opencase', 'Dokument gendannet: {number} – {title}', {
 					number: d.document_number || '',
 					title:  d.title || '',
 				})
@@ -292,6 +309,11 @@ export default {
 				const method = d.delivery_method ?? ''
 				return t('opencase', 'Aktindsigt afsendt ({method})', { method })
 			}
+			case 'access_request_masked':
+				return n('opencase',
+					'Fil maskeret: {file} ({count} område)',
+					'Fil maskeret: {file} ({count} områder)',
+					d.area_count ?? 0, { file: d.file_name ?? '', count: d.area_count ?? 0 })
 			case 'reminder_created':
 				return t('opencase', 'Påmindelse oprettet: {title}', { title: d.title || '' })
 			case 'reminder_updated': {

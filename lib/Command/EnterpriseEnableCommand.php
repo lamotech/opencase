@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace OCA\OpenCase\Command;
 
 use OCA\OpenCase\BackgroundJob\DispatchDigitalPostJob;
+use OCA\OpenCase\BackgroundJob\ProcessCaseDocumentIndexJob;
 use OCA\OpenCase\BackgroundJob\ProcessDigitalPostReceivementsJob;
 use OCA\OpenCase\BackgroundJob\ProcessDistributionReceivementsJob;
 use OCA\OpenCase\BackgroundJob\ProcessMessageReceivementsJob;
@@ -18,6 +19,8 @@ use OCA\OpenCase\Service\AiActionService;
 use OCA\OpenCase\Service\ClassificationSyncService;
 use OCA\OpenCase\Service\Datafordeler\CitizenClient;
 use OCA\OpenCase\Service\Datafordeler\CompanyClient;
+use OCA\OpenCase\Service\Serviceplatformen\CaseDocumentIndexClient;
+use OCA\OpenCase\Service\Serviceplatformen\CaseDocumentIndexWrapper;
 use OCA\OpenCase\Service\Serviceplatformen\ClassificationClient;
 use OCA\OpenCase\Service\Serviceplatformen\ClassificationWrapper;
 use OCA\OpenCase\Service\Serviceplatformen\DigitalPostSendClient;
@@ -37,8 +40,9 @@ use Symfony\Component\Console\Output\OutputInterface;
  * DigitalPostSendClient; Datafordeler CPR: CitizenClient; Datafordeler CVR:
  * CompanyClient; AI: AiController, AiActionService, AiPromptController;
  * Classification sync: SyncClassificationsJob, ClassificationSyncService,
- * ClassificationClient, ClassificationWrapper) are actually present on
- * disk — these classes only exist after the Enterprise install script has
+ * ClassificationClient, ClassificationWrapper; SagDokumentIndeks:
+ * ProcessCaseDocumentIndexJob, CaseDocumentIndexClient,
+ * CaseDocumentIndexWrapper) are actually present on disk — these classes only exist after the Enterprise install script has
  * copied them into apps/opencase/lib/. Referencing them here via `use` and
  * class_exists() is safe even when the files are absent: a `use` import
  * never triggers autoloading by itself.
@@ -65,6 +69,9 @@ class EnterpriseEnableCommand extends Command {
 		ClassificationSyncService::class,
 		ClassificationClient::class,
 		ClassificationWrapper::class,
+		ProcessCaseDocumentIndexJob::class,
+		CaseDocumentIndexClient::class,
+		CaseDocumentIndexWrapper::class,
 	];
 
 	public function __construct(

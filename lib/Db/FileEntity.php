@@ -37,6 +37,10 @@ use OCP\AppFramework\Db\Entity;
  * @method void setLastModifiedBy(?string $lastModifiedBy)
  * @method string getUuid()
  * @method void setUuid(string $uuid)
+ * @method bool|null getIsDeleted()
+ * @method void setIsDeleted(bool $isDeleted)
+ * @method \DateTime|null getDeletedDate()
+ * @method void setDeletedDate(?\DateTime $deletedDate)
  */
 class FileEntity extends Entity {
 
@@ -54,6 +58,8 @@ class FileEntity extends Entity {
     protected string $createdBy = '';
     protected ?string $lastModifiedBy = null;
     protected string $uuid = '';
+    protected ?bool $isDeleted = false;
+    protected ?\DateTime $deletedDate = null;
 
     public function __construct() {
         $this->addType('id', 'integer');
@@ -71,5 +77,11 @@ class FileEntity extends Entity {
         $this->addType('createdBy', 'string');
         $this->addType('lastModifiedBy', 'string');
         $this->addType('uuid', 'string');
+        $this->addType('isDeleted', 'boolean');
+        $this->addType('deletedDate', 'datetime');
+    }
+
+    public function isSoftDeleted(): bool {
+        return (bool)$this->isDeleted;
     }
 }

@@ -100,8 +100,25 @@
 								<p>
 									{{ item.data.document_title }}
 									<template v-if="item.data.step_deadline">
-										· {{ t('opencase', 'Frist: {date}', { date: formatDeadline(item.data.step_deadline) }) }}
+										· <span :class="{ 'opencase-home__deadline--overdue': isPastDeadline(item.data.step_deadline) }">{{ t('opencase', 'Frist: {date}', { date: formatDeadline(item.data.step_deadline) }) }}</span>
 									</template>
+								</p>
+							</div>
+						</router-link>
+					</li>
+					<!-- Access request -->
+					<li v-else-if="item.type === 'access_request'"
+						:key="'ar-' + item.data.id"
+						class="opencase-home__suggestion opencase-home__suggestion--access"
+						:class="{ 'opencase-home__suggestion--overdue': item.data.deadline_colour === 'red' }">
+						<router-link :to="{ name: 'access-request-detail', params: { id: item.data.id } }">
+							<FileEyeOutlineIcon :size="20" />
+							<div>
+								<strong>{{ t('opencase', 'Aktindsigt: {subject}', { subject: item.data.subject }) }}</strong>
+								<p>
+									<template v-if="item.data.case_number">{{ item.data.case_number }} · </template>
+									<AccessRequestStatusBadge :status="item.data.status" />
+									· <span :class="{ 'opencase-home__deadline--overdue': item.data.deadline_colour === 'red' || isPastDeadline(item.data.effective_deadline_at) }">{{ t('opencase', 'Frist: {date}', { date: formatDeadline(item.data.effective_deadline_at) }) }}</span>
 								</p>
 							</div>
 						</router-link>
@@ -117,7 +134,7 @@
 								<strong>{{ item.data.title }}</strong>
 								<p>
 									<template v-if="item.data.deadline">
-										{{ t('opencase', 'Frist: {date}', { date: formatDeadline(item.data.deadline) }) }}
+										<span :class="{ 'opencase-home__deadline--overdue': isOverdue(item.data) }">{{ t('opencase', 'Frist: {date}', { date: formatDeadline(item.data.deadline) }) }}</span>
 									</template>
 								</p>
 							</div>
@@ -187,6 +204,8 @@ import InboxArrowDownIcon from 'vue-material-design-icons/InboxArrowDown.vue'
 import ShareVariantIcon from 'vue-material-design-icons/ShareVariant.vue'
 import SitemapIcon from 'vue-material-design-icons/Sitemap.vue'
 import BellAlertIcon from 'vue-material-design-icons/BellAlert.vue'
+import FileEyeOutlineIcon from 'vue-material-design-icons/FileEyeOutline.vue'
+import AccessRequestStatusBadge from '../components/AccessRequestStatusBadge.vue'
 
 import NewCaseDialog from '../components/NewCaseDialog.vue'
 import NotificationsDialog from '../components/NotificationsDialog.vue'
@@ -212,6 +231,8 @@ export default {
 		ShareVariantIcon,
 		SitemapIcon,
 		BellAlertIcon,
+		FileEyeOutlineIcon,
+		AccessRequestStatusBadge,
 		NewCaseDialog,
 		NotificationsDialog,
 	},
@@ -223,6 +244,7 @@ export default {
 			showNotificationsDialog: false,
 			workflowTasks: [],
 			myReminders: [],
+			myAccessRequests: [],
 			aiEnabled: loadState('opencase', 'ai_enabled', false),
 		}
 	},
@@ -242,7 +264,12 @@ export default {
 				deadline: r.deadline ?? null,
 				data: r,
 			}))
-			return [...tasks, ...reminders].sort((a, b) => {
+			const accessRequests = (this.myAccessRequests ?? []).map(r => ({
+				type: 'access_request',
+				deadline: r.effective_deadline_at ?? null,
+				data: r,
+			}))
+			return [...tasks, ...reminders, ...accessRequests].sort((a, b) => {
 				if (!a.deadline && !b.deadline) return 0
 				if (!a.deadline) return 1
 				if (!b.deadline) return -1
@@ -253,6 +280,7 @@ export default {
 
 	mounted() {
 		api.getMyWorkflowTasks().then(tasks => { this.workflowTasks = tasks ?? [] }).catch(() => {})
+		api.getMyAccessRequests().then(requests => { this.myAccessRequests = requests ?? [] }).catch(() => {})
 		api.getMyActiveReminders().then(reminders => { this.myReminders = reminders ?? [] }).catch(() => {})
 		this.$store.dispatch('fetchCaseTypes').catch(() => {})
 	},
@@ -275,8 +303,12 @@ export default {
 		},
 
 		isOverdue(reminder) {
-			if (!reminder.deadline) return false
-			return new Date(reminder.deadline) < new Date()
+			return this.isPastDeadline(reminder.deadline)
+		},
+
+		isPastDeadline(dateStr) {
+			if (!dateStr) return false
+			return new Date(dateStr) < new Date()
 		},
 	},
 }
@@ -422,6 +454,15 @@ export default {
 }
 
 /* Suggested work list */
+.opencase-home__suggestion--access a {
+	border-color: #7e57c2;
+	background: color-mix(in srgb, #7e57c2 6%, var(--color-main-background));
+}
+
+.opencase-home__suggestion--access .material-design-icon {
+	color: #5e35b1;
+}
+
 .opencase-home__suggestions {
 	list-style: none;
 	margin: 0;
@@ -450,12 +491,17 @@ export default {
 }
 
 .opencase-home__suggestion--overdue a {
-	border-color: var(--color-error);
-	background: color-mix(in srgb, var(--color-error) 6%, var(--color-main-background));
+	border-color: #c62828;
+	background: color-mix(in srgb, #c62828 6%, var(--color-main-background));
 }
 
 .opencase-home__suggestion--overdue .material-design-icon {
-	color: var(--color-error);
+	color: #c62828;
+}
+
+.opencase-home__deadline--overdue {
+	color: #c62828;
+	font-weight: 600;
 }
 
 .opencase-home__suggestion a {

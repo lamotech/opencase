@@ -11,6 +11,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setDocumentId(int $documentId)
  * @method bool getCanBeReplied()
  * @method void setCanBeReplied(bool $canBeReplied)
+ * @method bool getIncludeAttachments()
+ * @method void setIncludeAttachments(bool $includeAttachments)
  * @method string|null getCaseUuid()
  * @method void setCaseUuid(?string $caseUuid)
  * @method string|null getDocumentUuid()
@@ -28,6 +30,7 @@ class DpShipment extends Entity {
 
     protected int $documentId = 0;
     protected bool $canBeReplied = true;
+    protected bool $includeAttachments = false;
     protected ?string $caseUuid = null;
     protected ?string $documentUuid = null;
     protected ?\DateTime $createdAt = null;
@@ -39,6 +42,7 @@ class DpShipment extends Entity {
         $this->addType('id', 'integer');
         $this->addType('documentId', 'integer');
         $this->addType('canBeReplied', 'boolean');
+        $this->addType('includeAttachments', 'boolean');
         $this->addType('caseUuid', 'string');
         $this->addType('documentUuid', 'string');
         $this->addType('createdAt', 'datetime');

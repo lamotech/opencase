@@ -55,6 +55,23 @@ class CaseStatusMapper extends QBMapper {
         return $map;
     }
 
+    /**
+     * Whether the given status counts as closed. is_closed is the same for
+     * every language row of a status, so any row will do.
+     */
+    public function isClosed(int $id): bool {
+        $qb = $this->db->getQueryBuilder();
+        $qb->select('is_closed')
+            ->from($this->getTableName())
+            ->where($qb->expr()->eq('id', $qb->createNamedParameter($id, IQueryBuilder::PARAM_INT)))
+            ->setMaxResults(1);
+
+        $result = $qb->executeQuery();
+        $value  = $result->fetchOne();
+        $result->closeCursor();
+        return (bool)$value;
+    }
+
     // ---------------------------------------------------------------
     // Private helpers
     // ---------------------------------------------------------------

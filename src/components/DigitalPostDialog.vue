@@ -44,6 +44,39 @@
 						</tr>
 					</tbody>
 				</table>
+
+				<!-- Bilag -->
+				<div class="opencase-dp-dialog__option opencase-dp-dialog__attachments-toggle">
+					<NcCheckboxRadioSwitch v-model="includeAttachments">
+						{{ t('opencase', 'Inkluder bilag') }}
+					</NcCheckboxRadioSwitch>
+				</div>
+
+				<template v-if="includeAttachments">
+					<NcLoadingIcon v-if="attachmentsLoading" :size="32" class="opencase-dp-dialog__loading" />
+
+					<p v-else-if="attachmentFiles.length === 0" class="opencase-dp-dialog__empty">
+						{{ t('opencase', 'Ingen bilag med filer') }}
+					</p>
+
+					<table v-else class="opencase-dp-dialog__table">
+						<thead>
+							<tr>
+								<th>{{ t('opencase', 'Bilag') }}</th>
+								<th>{{ t('opencase', 'Filnavn') }}</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr v-for="file in attachmentFiles" :key="file.id">
+								<td>
+									<span class="opencase-dp-dialog__mono">{{ file.attachment.document_number || '–' }}</span>
+									{{ file.attachment.document_title }}
+								</td>
+								<td>{{ file.virtual_filename || file.original_filename }}</td>
+							</tr>
+						</tbody>
+					</table>
+				</template>
 			</div>
 
 			<!-- Modtagere -->
@@ -136,6 +169,9 @@ import CprDisplay from './CprDisplay.vue'
 // Contact role ID for "Receiver" / "Modtager" (seeded with id=2)
 const RECEIVER_ROLE_ID = 2
 
+// Document relation type ID for "Bilag" (seeded with id=1)
+const RELATION_TYPE_ATTACHMENT = 1
+
 export default {
 	name: 'DigitalPostDialog',
 
@@ -161,6 +197,9 @@ export default {
 			files: [],
 			filesLoading: true,
 			mainFileId: null,
+			includeAttachments: true,
+			attachmentFiles: [],
+			attachmentsLoading: true,
 			receivers: [],
 			receiversLoading: true,
 			sending: false,
@@ -170,6 +209,7 @@ export default {
 
 	mounted() {
 		this.loadFiles()
+		this.loadAttachments()
 		this.loadReceivers()
 	},
 
@@ -185,6 +225,24 @@ export default {
 				showError(t('opencase', 'Kunne ikke indlæse filer'))
 			} finally {
 				this.filesLoading = false
+			}
+		},
+
+		// Files of the documents this document has as Bilag. The server
+		// resolves the same set when the shipment is created.
+		async loadAttachments() {
+			this.attachmentsLoading = true
+			try {
+				const relations = (await api.getDocumentRelations(this.documentId))
+					.filter(r => r.direction === 'to' && r.documentrelationtype_id === RELATION_TYPE_ATTACHMENT && r.can_read)
+				const perDocument = await Promise.all(relations.map(async r =>
+					(await api.getFilesByDocument(r.document_id)).map(f => ({ ...f, attachment: r })),
+				))
+				this.attachmentFiles = perDocument.flat()
+			} catch (e) {
+				showError(t('opencase', 'Kunne ikke indlæse bilag'))
+			} finally {
+				this.attachmentsLoading = false
 			}
 		},
 
@@ -234,6 +292,7 @@ export default {
 			try {
 				const payload = {
 					can_be_replied: this.canBeAnswered,
+					include_attachments: this.includeAttachments,
 					main_file_id: this.mainFileId,
 					receivers: this.receivers.map(r => ({
 						document_contact_id: r.id,
@@ -266,6 +325,10 @@ export default {
 .opencase-dp-dialog__option {
 	display: flex;
 	align-items: center;
+}
+
+.opencase-dp-dialog__attachments-toggle {
+	margin: 12px 0;
 }
 
 .opencase-dp-dialog__section-title {

@@ -160,5 +160,5 @@ export default {
 .oc-redaction__table th,
 .oc-redaction__table td { padding: 8px 12px; border-bottom: 1px solid var(--color-border); text-align: left; }
 .oc-redaction__table th { font-weight: 600; background: var(--color-background-hover); }
-.oc-redaction__original { font-family: monospace; color: var(--color-error); }
+.oc-redaction__original { font-family: monospace; color: #c62828; }
 </style>

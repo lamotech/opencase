@@ -31,6 +31,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setUpdatedAt(\DateTime $updatedAt)
  * @method string getCreatedBy()
  * @method void setCreatedBy(string $createdBy)
+ * @method string|null getUpdatedBy()
+ * @method void setUpdatedBy(?string $updatedBy)
  * @method string|null getResponsibleUserId()
  * @method void setResponsibleUserId(?string $responsibleUserId)
  * @method int|null getInsightLevelId()
@@ -47,6 +49,20 @@ use OCP\AppFramework\Db\Entity;
  * @method void setExportedAt(?\DateTime $exportedAt)
  * @method string|null getSummary()
  * @method void setSummary(?string $summary)
+ * @method \DateTime|null getClosedDate()
+ * @method void setClosedDate(?\DateTime $closedDate)
+ * @method int|null getDisposalcodeId()
+ * @method void setDisposalcodeId(?int $disposalcodeId)
+ * @method \DateTime|null getDisposalDate()
+ * @method void setDisposalDate(?\DateTime $disposalDate)
+ * @method \DateTime|null getDeletedDate()
+ * @method void setDeletedDate(?\DateTime $deletedDate)
+ * @method int|null getDeletionDeadlineId()
+ * @method void setDeletionDeadlineId(?int $deletionDeadlineId)
+ * @method \DateTime|null getDeletionDate()
+ * @method void setDeletionDate(?\DateTime $deletionDate)
+ * @method \DateTime|null getUpdatedInSapa()
+ * @method void setUpdatedInSapa(?\DateTime $updatedInSapa)
  */
 class CaseEntity extends Entity {
 
@@ -60,6 +76,7 @@ class CaseEntity extends Entity {
     protected ?\DateTime $createdAt = null;
     protected ?\DateTime $updatedAt = null;
     protected string $createdBy = '';
+    protected ?string $updatedBy = null;
     protected ?string $responsibleUserId = null;
     protected ?int $insightLevelId = null;
     protected ?string $classificationFacetUuid = null;
@@ -68,6 +85,13 @@ class CaseEntity extends Entity {
     protected ?int $parentCaseId = null;
     protected ?\DateTime $exportedAt = null;
     protected ?string $summary = null;
+    protected ?\DateTime $closedDate = null;
+    protected ?int $disposalcodeId = null;
+    protected ?\DateTime $disposalDate = null;
+    protected ?\DateTime $deletedDate = null;
+    protected ?int $deletionDeadlineId = null;
+    protected ?\DateTime $deletionDate = null;
+    protected ?\DateTime $updatedInSapa = null;
 
     public function __construct() {
         $this->addType('id', 'integer');
@@ -81,6 +105,7 @@ class CaseEntity extends Entity {
         $this->addType('createdAt', 'datetime');
         $this->addType('updatedAt', 'datetime');
         $this->addType('createdBy', 'string');
+        $this->addType('updatedBy', 'string');
         $this->addType('responsibleUserId', 'string');
         $this->addType('insightLevelId', 'integer');
         $this->addType('classificationFacetUuid', 'string');
@@ -89,6 +114,13 @@ class CaseEntity extends Entity {
         $this->addType('parentCaseId', 'integer');
         $this->addType('exportedAt', 'datetime');
         $this->addType('summary', 'string');
+        $this->addType('closedDate', 'datetime');
+        $this->addType('disposalcodeId', 'integer');
+        $this->addType('disposalDate', 'datetime');
+        $this->addType('deletedDate', 'datetime');
+        $this->addType('deletionDeadlineId', 'integer');
+        $this->addType('deletionDate', 'datetime');
+        $this->addType('updatedInSapa', 'datetime');
     }
 
     // ---------------------------------------------------------------

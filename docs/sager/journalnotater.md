@@ -95,6 +95,46 @@ PDF'en samler journalnotaterne i kronologisk rækkefølge og kan eksempelvis anv
 
 ![Journalark PDF](../images/sager/journalark-pdf.png)
 
+### Download eller gem på sagen
+
+Når du klikker på **Dan journalark**, åbnes en dialog, hvor du vælger, hvad der skal ske med journalarket:
+
+- **Download fil** – journalarket hentes som en PDF-fil til din computer.
+- **Gem som nyt dokument på sagen** – journalarket gemmes som et nyt dokument på sagen.
+
+![Dialog Dan journalark](../images/sager/dan-journalark-dialog.png)
+
+Hvis du har skriveadgang til sagen, er **Gem som nyt dokument på sagen** valgt på forhånd. Har du kun læseadgang, kan journalarket kun downloades.
+
+### Gem journalark som dokument
+
+Når du vælger **Gem som nyt dokument på sagen**, skal du angive en **Dokumenttitel**. Titlen er på forhånd udfyldt med *Journalark - dd.mm.åååå* med dagens dato, men kan ændres.
+
+Klik på **Gem** for at gemme journalarket.
+
+Der oprettes et nyt dokument på sagen med følgende oplysninger:
+
+| Felt | Værdi |
+|------|-------|
+| Titel | Den angivne dokumenttitel |
+| Dokumentkategori | Intern |
+| Indsigtsniveau | Intern |
+| Status | Endelig |
+| Dokumentdato | Dagens dato |
+| Registreringsdato | Dagens dato |
+
+Journalarket vedhæftes dokumentet som en PDF-fil med dokumenttitlen som filnavn. Da dokumentet får status *Endelig*, er filen skrivebeskyttet. Dokumentet vises straks i sagens dokumentliste.
+
+![Journalark gemt som dokument på sagen](../images/sager/journalark-dokument.png)
+
+!!! tip "Dokumentation af sagens historik"
+
+    Et journalark, der er gemt på sagen, viser journalnotaterne, som de så ud på det tidspunkt, journalarket blev dannet. Det gør det muligt at dokumentere sagens forløb på et bestemt tidspunkt, også selvom der senere tilføjes nye journalnotater.
+
+!!! info
+
+    Et journalark gemt som dokument opdateres ikke automatisk. Dan et nyt journalark, hvis du har brug for en opdateret udgave.
+
 ---
 
 ## Næste skridt

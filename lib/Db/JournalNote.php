@@ -20,6 +20,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void         setCreatedAt(?\DateTime $createdAt)
  * @method string|null  getCreatedBy()
  * @method void         setCreatedBy(?string $createdBy)
+ * @method string|null  getUpdatedBy()
+ * @method void         setUpdatedBy(?string $updatedBy)
  * @method \DateTime|null getUpdatedAt()
  * @method void         setUpdatedAt(?\DateTime $updatedAt)
  * @method int          getIsLocked()
@@ -32,6 +34,7 @@ class JournalNote extends Entity {
     protected ?string $text = null;
     protected ?\DateTime $createdAt = null;
     protected ?string $createdBy = null;
+    protected ?string $updatedBy = null;
     protected ?\DateTime $updatedAt = null;
     protected int $isLocked = 0;
 
@@ -42,6 +45,7 @@ class JournalNote extends Entity {
         $this->addType('text', 'string');
         $this->addType('createdAt', 'datetime');
         $this->addType('createdBy', 'string');
+        $this->addType('updatedBy', 'string');
         $this->addType('updatedAt', 'datetime');
         $this->addType('isLocked', 'integer');
     }

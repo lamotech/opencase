@@ -80,6 +80,7 @@ Afhængigt af den installerede løsning kan dette omfatte:
 - Digital Post
 - Klassifikationstjenester
 - Distributionstjenester
+- Maskeringstjenesten til aktindsigt (se [Konfiguration](konfiguration.md#maskeringstjeneste))
 - øvrige Enterprise-integrationer
 
 Det anbefales desuden at gennemføre en funktionstest af alle aktiverede integrationer.

@@ -21,7 +21,11 @@
 						<span class="oc-ar-detail__type">{{ typeLabel(request.type) }}</span>
 					</div>
 				</div>
-				<NcActions>
+				<NcActions ref="headerActions">
+					<NcActionButton @click="openEditDialog">
+						<template #icon><PencilIcon :size="20" /></template>
+						{{ t('opencase', 'Rediger') }}
+					</NcActionButton>
 					<NcActionButton v-for="s in availableStatusTransitions" :key="s.status" @click="changeStatus(s.status)">
 						{{ s.label }}
 					</NcActionButton>
@@ -61,7 +65,7 @@
 					<dt>{{ t('opencase', 'Beskrivelse') }}</dt>
 					<dd>{{ request.description ?? '—' }}</dd>
 					<dt>{{ t('opencase', 'Sagsbehandler') }}</dt>
-					<dd>{{ request.assigned_user ?? '—' }}</dd>
+					<dd>{{ request.assigned_user_display_name ?? request.assigned_user ?? '—' }}</dd>
 					<dt>{{ t('opencase', 'Modtaget') }}</dt>
 					<dd>{{ formatDate(request.received_at) }}</dd>
 					<dt>{{ t('opencase', 'Ordinær frist') }}</dt>
@@ -76,7 +80,7 @@
 				<div class="oc-ar-detail__content-header">
 					<p class="oc-ar-detail__hint">{{ t('opencase', 'Søg og vælg de dokumenter der indgår i aktindsigten') }}</p>
 				</div>
-				<AccessDocumentTable ref="docTable" :request-id="request.id" @item-added="onItemAdded" @open-item="openItem" />
+				<AccessDocumentTable ref="docTable" :request-id="request.id" @item-added="onItemAdded" />
 
 				<!-- Items list with decisions -->
 				<div v-if="items.length > 0" class="oc-ar-detail__items">
@@ -161,7 +165,7 @@
 						<tr v-for="row in maskingFiles" :key="row.item_id + ':' + row.file_id">
 							<td class="oc-ar-detail__masking-status-col">
 								<EraserVariantIcon v-if="row.has_masked" :size="18" class="oc-ar-detail__masked-icon"
-									:title="t('opencase', 'Maskeret version uploadet')" />
+									:title="t('opencase', 'Maskeret version findes')" />
 							</td>
 							<td class="oc-ar-detail__doc-number">{{ row.document_number ?? '—' }}</td>
 							<td>{{ row.document_title }}</td>
@@ -172,10 +176,20 @@
 									<template #icon><DownloadIcon :size="16" /></template>
 									{{ t('opencase', 'Download') }}
 								</NcButton>
+								<NcButton v-if="row.can_auto_mask" size="small" type="tertiary"
+									@click="maskingRow = row">
+									<template #icon><AutoFixIcon :size="16" /></template>
+									{{ t('opencase', 'Foreslå maskering') }}
+								</NcButton>
 								<NcButton size="small" type="tertiary"
 									@click="triggerMaskedUpload(row)">
 									<template #icon><UploadIcon :size="16" /></template>
 									{{ t('opencase', 'Upload maskeret') }}
+								</NcButton>
+								<NcButton v-if="row.has_masked && row.masked_mime === 'application/pdf'" size="small" type="tertiary"
+									@click="viewMasked(row)">
+									<template #icon><EyeIcon :size="16" /></template>
+									{{ t('opencase', 'Vis maskeret') }}
 								</NcButton>
 								<NcButton v-if="row.has_masked" size="small" type="tertiary"
 									@click="downloadMasked(row)">
@@ -194,7 +208,7 @@
 
 			<!-- Afgørelse -->
 			<div v-if="activeTab === 'decision'" class="oc-ar-detail__content">
-				<AccessDecisionEditor :request-id="request.id" :decision="decision" @saved="onDecisionSaved" />
+				<AccessDecisionEditor :request-id="request.id" :decision="decision" @saved="onDecisionSaved" @approved="onDecisionApproved" />
 			</div>
 
 			<!-- Auditlog -->
@@ -202,6 +216,16 @@
 				<CaseAuditLog :case-id="request.case_id" />
 			</div>
 		</template>
+
+		<AccessMaskingDialog v-if="maskingRow"
+			:row="maskingRow"
+			@close="maskingRow = null"
+			@applied="onMaskingApplied" />
+
+		<NewAccessRequestDialog v-if="showEditDialog && request"
+			:request="request"
+			@close="showEditDialog = false"
+			@updated="onRequestUpdated" />
 	</div>
 </template>
 
@@ -213,6 +237,9 @@ import NcActions from '@nextcloud/vue/components/NcActions'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
+import PencilIcon from 'vue-material-design-icons/Pencil.vue'
+import AutoFixIcon from 'vue-material-design-icons/AutoFix.vue'
+import EyeIcon from 'vue-material-design-icons/Eye.vue'
 import DownloadIcon from 'vue-material-design-icons/Download.vue'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
 import EraserVariantIcon from 'vue-material-design-icons/EraserVariant.vue'
@@ -222,6 +249,8 @@ import AccessRequestStatusBadge from '../components/AccessRequestStatusBadge.vue
 import AccessDeadlineBadge from '../components/AccessDeadlineBadge.vue'
 import AccessDocumentTable from '../components/AccessDocumentTable.vue'
 import AccessDecisionEditor from '../components/AccessDecisionEditor.vue'
+import NewAccessRequestDialog from '../components/NewAccessRequestDialog.vue'
+import AccessMaskingDialog from '../components/AccessMaskingDialog.vue'
 import CaseAuditLog from '../components/CaseAuditLog.vue'
 import OverflowTabs from '../components/OverflowTabs.vue'
 import InformationOutlineIcon from 'vue-material-design-icons/InformationOutline.vue'
@@ -244,9 +273,9 @@ export default {
 	components: {
 		NcBreadcrumbs, NcBreadcrumb, NcLoadingIcon, NcActions, NcActionButton, NcButton,
 		NcSelect,
-		DownloadIcon, DeleteIcon, EraserVariantIcon, UploadIcon,
+		PencilIcon, AutoFixIcon, EyeIcon, DownloadIcon, DeleteIcon, EraserVariantIcon, UploadIcon,
 		AccessRequestStatusBadge, AccessDeadlineBadge, AccessDocumentTable,
-		AccessDecisionEditor, CaseAuditLog, OverflowTabs,
+		AccessDecisionEditor, CaseAuditLog, OverflowTabs, NewAccessRequestDialog, AccessMaskingDialog,
 	},
 	props: {
 		id: { type: [String, Number], required: true },
@@ -270,6 +299,9 @@ export default {
 			bulkDecisionSelection: null,
 			maskingFiles: [],
 			maskingFilesLoading: false,
+			autoAdvancing: false,
+			showEditDialog: false,
+			maskingRow: null,
 		}
 	},
 	computed: {
@@ -295,6 +327,7 @@ export default {
 				reviewing:      [{ status: 'redacting',  label: t('opencase', 'Start maskering') }],
 				redacting:      [{ status: 'approval',   label: t('opencase', 'Send til godkendelse') }],
 				approval:       [{ status: 'sent',       label: t('opencase', 'Markér afsendt') }, { status: 'redacting', label: t('opencase', 'Retur til maskering') }],
+				approved:       [{ status: 'sent',       label: t('opencase', 'Markér afsendt') }, { status: 'redacting', label: t('opencase', 'Retur til maskering') }],
 			}
 			return map[this.request?.status] ?? []
 		},
@@ -304,6 +337,12 @@ export default {
 		activeTab(tab) {
 			if (tab === 'redactions' && this.items.length > 0 && this.maskingFiles.length === 0) {
 				this.loadMaskingFiles()
+			}
+			if (tab === 'documents' && this.request?.status === 'received') {
+				this.changeStatus('collecting')
+			}
+			if (tab === 'redactions' && this.request?.status === 'reviewing') {
+				this.changeStatus('redacting')
 			}
 		},
 	},
@@ -358,6 +397,23 @@ export default {
 			if (!iso) return '—'
 			return new Date(iso).toLocaleDateString('da-DK', { day: '2-digit', month: '2-digit', year: 'numeric' })
 		},
+		onMaskingApplied(row) {
+			const target = this.maskingFiles.find(r => r.item_id === row.item_id && r.file_id === row.file_id)
+			if (target) {
+				target.has_masked = true
+				target.masked_mime = 'application/pdf'
+			}
+			this.maskingRow = null
+		},
+		openEditDialog() {
+			this.$refs.headerActions?.closeMenu()
+			this.showEditDialog = true
+		},
+		onRequestUpdated(req) {
+			this.request = req
+			this.showEditDialog = false
+			showSuccess(t('opencase', 'Aktindsigtssagen er opdateret'))
+		},
 		async changeStatus(status) {
 			try {
 				const result = await api.changeAccessRequestStatus(this.request.id, status)
@@ -378,7 +434,9 @@ export default {
 		},
 		async updateItemReason(item, reason) {
 			try {
-				await api.updateAccessItem(item.id, { exclusion_reason: reason })
+				const updated = await api.updateAccessItem(item.id, { exclusion_reason: reason })
+				const idx = this.items.findIndex(i => i.id === item.id)
+				if (idx >= 0) this.items.splice(idx, 1, { ...item, ...updated, exclusion_reason: reason })
 			} catch {
 				showError(t('opencase', 'Opdatering fejlede'))
 			}
@@ -416,9 +474,10 @@ export default {
 			if (!this.items.find(i => i.id === item.id)) {
 				this.items.push(item)
 			}
-		},
-		openItem(itemId) {
-			this.activeTab = 'redactions'
+			if (this.request?.status === 'collecting' && !this.autoAdvancing) {
+				this.autoAdvancing = true
+				this.changeStatus('reviewing').finally(() => { this.autoAdvancing = false })
+			}
 		},
 		downloadOriginal(row) {
 			api.downloadFile(row.file_id, row.file_name)
@@ -434,17 +493,37 @@ export default {
 			try {
 				await api.uploadAccessMasked(row.item_id, row.file_id, file)
 				row.has_masked = true
+				row.masked_mime = file.type === 'application/pdf' ? 'application/pdf' : row.mime_type
 				showSuccess(t('opencase', 'Maskeret fil uploadet'))
 			} catch {
 				showError(t('opencase', 'Upload fejlede'))
 			}
 			event.target.value = ''
 		},
-		downloadMasked(row) {
-			api.downloadAccessMasked(row.item_id, row.file_id, row.file_name)
+		async downloadMasked(row) {
+			try {
+				await api.downloadAccessMasked(row.item_id, row.file_id, row.file_name)
+			} catch {
+				showError(t('opencase', 'Kunne ikke hente den maskerede fil'))
+			}
+		},
+		async viewMasked(row) {
+			try {
+				await api.viewAccessMasked(row.item_id, row.file_id, row.file_name)
+			} catch {
+				showError(t('opencase', 'Kunne ikke hente den maskerede fil'))
+			}
 		},
 		onDecisionSaved(dec) {
 			this.decision = dec
+			if (['received', 'collecting', 'reviewing', 'redacting'].includes(this.request?.status)) {
+				this.changeStatus('approval')
+			}
+		},
+		onDecisionApproved(dec) {
+			this.decision = dec
+			// The approve endpoint sets the request status server-side
+			this.request = { ...this.request, status: 'approved' }
 		},
 		async exportZip() {
 			try {

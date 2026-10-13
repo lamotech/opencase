@@ -44,4 +44,14 @@ class DocumentNoteMapper extends QBMapper {
 
         return $this->findEntities($qb);
     }
+
+    /**
+     * Delete all notes of a document (used when it is hard-deleted).
+     */
+    public function deleteByDocument(int $documentId): void {
+        $qb = $this->db->getQueryBuilder();
+        $qb->delete($this->getTableName())
+            ->where($qb->expr()->eq('document_id', $qb->createNamedParameter($documentId, IQueryBuilder::PARAM_INT)));
+        $qb->executeStatement();
+    }
 }

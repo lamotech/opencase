@@ -335,7 +335,7 @@ export default {
 
 .wf-panel__step--approved { border-left: 3px solid #28a745; }
 .wf-panel__step--reviewed { border-left: 3px solid #28a745; }
-.wf-panel__step--rejected { border-left: 3px solid var(--color-error); }
+.wf-panel__step--rejected { border-left: 3px solid #c62828; }
 .wf-panel__step--pending  { border-left: 3px solid var(--color-border-dark); }
 
 .wf-panel__step-icon {
@@ -345,7 +345,7 @@ export default {
 
 .wf-panel__step--approved .wf-panel__step-icon,
 .wf-panel__step--reviewed .wf-panel__step-icon { color: #28a745; }
-.wf-panel__step--rejected .wf-panel__step-icon { color: var(--color-error); }
+.wf-panel__step--rejected .wf-panel__step-icon { color: #c62828; }
 .wf-panel__step--pending  .wf-panel__step-icon { color: var(--color-text-lighter); }
 
 .wf-panel__step-body {
@@ -421,6 +421,6 @@ export default {
 
 .wf-panel__history-step--approved,
 .wf-panel__history-step--reviewed { color: #28a745; }
-.wf-panel__history-step--rejected  { color: var(--color-error); }
+.wf-panel__history-step--rejected  { color: #c62828; }
 .wf-panel__history-step--pending   { color: var(--color-text-lighter); }
 </style>

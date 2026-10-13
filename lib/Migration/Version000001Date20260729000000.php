@@ -7,8 +7,6 @@ namespace OCA\OpenCase\Migration;
 use Closure;
 use OCP\DB\ISchemaWrapper;
 use OCP\DB\Types;
-use OCP\IConfig;
-use OCP\IDBConnection;
 use OCP\Migration\IOutput;
 use OCP\Migration\SimpleMigrationStep;
 
@@ -20,12 +18,11 @@ use OCP\Migration\SimpleMigrationStep;
  * in exactly the same state as one that ran every historical migration in
  * sequence.
  *
- * Config-key seeding and the access-exclusion-reasons lookup data live in
- * postSchemaChange(), which Nextcloud skips on a fresh install — same
- * behaviour as before the merge. General reference/lookup data (statuses,
- * sensitivities, roles, case_number_mask, contact types, CPR events, …) is
- * seeded by SeedReferenceData, an IRepairStep registered in appinfo/info.xml
- * that runs on both fresh installs and upgrades.
+ * All seed data (statuses, sensitivities, roles, config keys, contact types,
+ * CPR events, access exclusion reasons, …) is inserted by SeedReferenceData,
+ * an IRepairStep registered in appinfo/info.xml that runs on both fresh
+ * installs and upgrades. Nextcloud skips postSchemaChange() on a fresh
+ * install, so no seeding happens in this migration.
  *
  * Tables:
  *   opencase_org                      — organisations (UUID-keyed)
@@ -92,11 +89,6 @@ use OCP\Migration\SimpleMigrationStep;
  *   opencase_history                     — per-user recently accessed cases/documents
  */
 class Version000001Date20260729000000 extends SimpleMigrationStep {
-
-    public function __construct(
-        private IDBConnection $db,
-        private IConfig $config,
-    ) {}
 
     public function changeSchema(IOutput $output, Closure $schemaClosure, array $options): ?ISchemaWrapper {
         /** @var ISchemaWrapper $schema */
@@ -1022,7 +1014,7 @@ class Version000001Date20260729000000 extends SimpleMigrationStep {
             $table->addColumn('case_id', Types::BIGINT, ['notnull' => true, 'unsigned' => true]);
             $table->addColumn('type', Types::STRING, ['notnull' => true, 'length' => 32]); // public_access | party_access | gdpr_access
             $table->addColumn('status', Types::STRING, ['notnull' => true, 'length' => 32, 'default' => 'received']);
-            // received | collecting | reviewing | redacting | approval | sent | rejected | partly_rejected | closed
+            // received | collecting | reviewing | redacting | approval | approved | sent | rejected | partly_rejected | closed
             $table->addColumn('requester_name', Types::STRING, ['notnull' => false, 'length' => 255, 'default' => null]);
             $table->addColumn('requester_email', Types::STRING, ['notnull' => false, 'length' => 255, 'default' => null]);
             $table->addColumn('requester_phone', Types::STRING, ['notnull' => false, 'length' => 50, 'default' => null]);
@@ -1174,166 +1166,5 @@ class Version000001Date20260729000000 extends SimpleMigrationStep {
         }
 
         return $schema;
-    }
-
-    /**
-     * Seeds config entries that used to be seeded by individual migrations'
-     * postSchemaChange(). Like before the merge, Nextcloud skips this
-     * entirely on a fresh install; general reference data for fresh installs
-     * is seeded by the SeedReferenceData repair step instead.
-     */
-    public function postSchemaChange(IOutput $output, Closure $schemaClosure, array $options): void {
-        $this->seedConfigEntry(
-            'search_max_result_count',
-            '500',
-            'Maksimalt antal søgeresultater',
-            'Det maksimale antal rækker der returneres på tværs af søgninger (Fritekst, Sager, Dokumenter og Alle sager). Brugeren kan bladre i resultater op til denne grænse.',
-            $output,
-        );
-
-        $this->seedConfigEntry(
-            'search_page_size',
-            '50',
-            'Sidevisning – søgeresultater',
-            'Antal rækker pr. side i søgeresultater og sagslister.',
-            $output,
-        );
-
-        $this->seedConfigEntry(
-            'msoffice_addin_port',
-            '1443',
-            'MS Office add-in port',
-            'nginx port used to serve the MS Office add-in backend (Outlook/Word/Excel/PowerPoint task panes), read by msoffice/nginx/deploy.sh.',
-            $output,
-        );
-
-        $this->seedConfigEntry(
-            'msoffice_graph_client_id',
-            '',
-            'MS Office Graph app (client) ID',
-            'Application (client) ID of the Entra ID app registration used by the MS Office add-ins to call Microsoft Graph (downloading real file/email content when running in a browser). Register a Single-page application (SPA) with redirect URI https://<addin host>/shared/graph-auth.html and delegated Microsoft Graph permission Files.Read (mail add-in also needs Mail.Read), with admin consent granted.',
-            $output,
-        );
-
-        $this->seedConfigEntry(
-            'msoffice_graph_tenant_id',
-            '',
-            'MS Office Graph tenant ID',
-            'Directory (tenant) ID of the Entra ID tenant that owns the app registration above.',
-            $output,
-        );
-
-        $this->seedConfigEntry(
-            'enterprise_version',
-            '0',
-            'Enterprise version enabled',
-            'Set to 1 only when the Enterprise deployment package (which installs the Distribution components) has been installed. Leave at 0 for the public App Store release.',
-            $output,
-        );
-
-        $defaultExportFolder = rtrim($this->config->getSystemValueString('datadirectory', ''), '/')
-            . '/opencase_storage/_export';
-        $this->seedConfigEntry(
-            'export_folder',
-            $defaultExportFolder,
-            'Eksportmappe',
-            'Sti hvor lukkede sager eksporteres til (XML-metadata, dokumentfiler og logs), én undermappe pr. sagsnummer. Skrives til hver time af ExportClosedCasesJob.',
-            $output,
-        );
-
-        $this->seedConfigEntry(
-            'export_enabled',
-            '0',
-            'Eksport aktiveret',
-            'Om ExportClosedCasesJob skal eksportere lukkede sager. Deaktiveret som standard.',
-            $output,
-        );
-
-        $this->seedConfigEntry(
-            'entity_id_opencase_api',
-            'http://opencase.dk/service/api/1',
-            'Audience for OpenCase API',
-            'Den Audience-værdi som bearer-tokens til den offentlige data-API skal matche.',
-            $output,
-        );
-
-        $this->seedConfigEntry(
-            'history_count',
-            '20',
-            'Antal elementer i seneste',
-            'Angiv antal elementer i seneste sager og dokumenter.',
-            $output,
-        );
-
-        $this->seedExclusionReasons($output);
-    }
-
-    private function seedConfigEntry(
-        string $key,
-        string $defaultValue,
-        string $name,
-        string $description,
-        IOutput $output,
-    ): void {
-        $qb = $this->db->getQueryBuilder();
-        $qb->select('config_key')
-            ->from('opencase_config')
-            ->where($qb->expr()->eq('config_key', $qb->createNamedParameter($key)));
-        $result = $qb->executeQuery();
-        $exists = $result->fetchOne();
-        $result->closeCursor();
-
-        if ($exists === false) {
-            $qb->resetQueryParts();
-            $qb->insert('opencase_config')->values([
-                'config_key'   => $qb->createNamedParameter($key),
-                'config_value' => $qb->createNamedParameter($defaultValue),
-                'name'         => $qb->createNamedParameter($name),
-                'description'  => $qb->createNamedParameter($description),
-            ])->executeStatement();
-            $output->info("Seeded config: {$key}.");
-        } else {
-            $qb->resetQueryParts();
-            $qb->update('opencase_config')
-                ->set('name', $qb->createNamedParameter($name))
-                ->set('description', $qb->createNamedParameter($description))
-                ->where($qb->expr()->eq('config_key', $qb->createNamedParameter($key)))
-                ->executeStatement();
-            $output->info("Updated metadata for config: {$key}.");
-        }
-    }
-
-    private function seedExclusionReasons(IOutput $output): void {
-        $qb = $this->db->getQueryBuilder();
-        $count = (int) $qb->select($qb->createFunction('COUNT(*)'))
-            ->from('opencase_access_exclusion_reasons')
-            ->executeQuery()
-            ->fetchOne();
-
-        if ($count > 0) {
-            return;
-        }
-
-        $labels = [
-            'Interne arbejdsdokumenter (§23)',
-            'Ministerbetjening (§24)',
-            'Personfølsomme oplysninger',
-            'Fortrolige oplysninger',
-            'CPR-numre',
-            'Helbredsoplysninger',
-            'Straffesager',
-            'Beskyttede adresser',
-            'Tredjepartsoplysninger',
-            'Forretningshemmeligheder',
-        ];
-
-        foreach ($labels as $label) {
-            $qb = $this->db->getQueryBuilder();
-            $qb->insert('opencase_access_exclusion_reasons')
-                ->values(['label' => $qb->createNamedParameter($label)])
-                ->executeStatement();
-        }
-
-        $output->info('Seeded opencase_access_exclusion_reasons with ' . count($labels) . ' rows.');
     }
 }

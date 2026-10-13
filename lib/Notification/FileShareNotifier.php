@@ -220,7 +220,96 @@ class FileShareNotifier implements INotifier {
                 $l->t('Opdateret på %1$s', [implode(' ' . $l->t('og') . ' ', $parts)])
             );
 
-            $notification->setLink($this->urlGenerator->linkToRoute('opencase.page.index'));
+            $notification->setLink($this->urlGenerator->linkToRouteAbsolute('opencase.page.index'));
+
+            return $notification;
+        }
+
+        if ($notification->getSubject() === 'access_deadline_yellow'
+            || $notification->getSubject() === 'access_deadline_red') {
+            $params    = $notification->getSubjectParameters();
+            $requestId = $params['request_id'] ?? $notification->getObjectId();
+            $title     = $params['subject'] ?? '';
+            $deadline  = $params['deadline'] ?? '';
+
+            if ($notification->getSubject() === 'access_deadline_red') {
+                $notification->setParsedSubject($l->t('Aktindsigt – fristen er overskredet'));
+                $msg = $title !== ''
+                    ? $l->t('Fristen for aktindsigtsanmodningen "%1$s" udløb %2$s', [$title, $deadline])
+                    : $l->t('Fristen for en aktindsigtsanmodning udløb %1$s', [$deadline]);
+            } else {
+                $notification->setParsedSubject($l->t('Aktindsigt – fristen nærmer sig'));
+                $msg = $title !== ''
+                    ? $l->t('Fristen for aktindsigtsanmodningen "%1$s" udløber %2$s', [$title, $deadline])
+                    : $l->t('Fristen for en aktindsigtsanmodning udløber %1$s', [$deadline]);
+            }
+            $notification->setParsedMessage($msg);
+
+            $notification->setLink($this->urlGenerator->linkToRouteAbsolute(
+                'opencase.page.catch_all',
+                ['path' => 'access-request/' . $requestId]
+            ));
+
+            return $notification;
+        }
+
+        if ($notification->getSubject() === 'reminder_deadline_yellow'
+            || $notification->getSubject() === 'reminder_deadline_red') {
+            $params    = $notification->getSubjectParameters();
+            $title     = $params['reminder_title'] ?? '';
+            $entity    = $params['entity'] ?? 'case';
+            $entityKey = $params['entity_key'] ?? '';
+            $deadline  = $params['deadline'] ?? '';
+
+            if ($notification->getSubject() === 'reminder_deadline_red') {
+                $notification->setParsedSubject($l->t('Påmindelse – fristen er overskredet'));
+                $notification->setParsedMessage(
+                    $l->t('Fristen for påmindelsen "%1$s" udløb %2$s', [$title, $deadline])
+                );
+            } else {
+                $notification->setParsedSubject($l->t('Påmindelse – fristen nærmer sig'));
+                $notification->setParsedMessage(
+                    $l->t('Fristen for påmindelsen "%1$s" udløber %2$s', [$title, $deadline])
+                );
+            }
+
+            $path = ($entity === 'case' ? 'case/' : 'document/') . $entityKey;
+            $notification->setLink($this->urlGenerator->linkToRouteAbsolute(
+                'opencase.page.catch_all',
+                ['path' => $path]
+            ) . '#tab-info');
+
+            return $notification;
+        }
+
+        if ($notification->getSubject() === 'workflow_deadline_yellow'
+            || $notification->getSubject() === 'workflow_deadline_red') {
+            $params   = $notification->getSubjectParameters();
+            $docTitle = $params['document_title'] ?? '';
+            $docId    = $params['document_id'] ?? '';
+            $wfType   = $params['workflow_type'] ?? '';
+            $deadline = $params['deadline'] ?? '';
+
+            $typeLabel = $wfType === 'review'
+                ? $l->t('gennemse')
+                : $l->t('godkende/afvise');
+
+            if ($notification->getSubject() === 'workflow_deadline_red') {
+                $notification->setParsedSubject($l->t('Workflow – fristen er overskredet'));
+                $notification->setParsedMessage(
+                    $l->t('Fristen for at %1$s dokumentet "%2$s" udløb %3$s', [$typeLabel, $docTitle, $deadline])
+                );
+            } else {
+                $notification->setParsedSubject($l->t('Workflow – fristen nærmer sig'));
+                $notification->setParsedMessage(
+                    $l->t('Fristen for at %1$s dokumentet "%2$s" udløber %3$s', [$typeLabel, $docTitle, $deadline])
+                );
+            }
+
+            $notification->setLink($this->urlGenerator->linkToRouteAbsolute(
+                'opencase.page.catch_all',
+                ['path' => 'document/' . $docId]
+            ) . '#tab-workflow');
 
             return $notification;
         }

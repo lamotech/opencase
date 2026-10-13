@@ -21,6 +21,7 @@ use OCA\OpenCase\Service\AuditService;
 use OCA\OpenCase\Service\CaseExportService;
 use OCA\OpenCase\Service\CaseService;
 use OCA\OpenCase\Service\CprCvrLookupService;
+use OCA\OpenCase\Service\CustomFieldService;
 use OCA\OpenCase\Service\DocumentService;
 use OCA\OpenCase\Service\EstateLinkService;
 use OCA\OpenCase\Service\NotFoundException;
@@ -56,6 +57,10 @@ use OCP\IUserSession;
  *       ClassificationFacetUuid   (required) — see GET .../classification-facets
  *       ResponsibleUserId, InsightLevelId, CasetypeId, ParentCaseId (optional)
  *       Summary                   (optional) — case summary as rich-text HTML
+ *       CustomFields              (optional) — list of {FieldKey, Value}; see
+ *         GET .../custom-fields/applicable for which fields apply to a case
+ *         (by casetype/organisation/KLE-nummer). Rejected as a whole (before
+ *         the case is created) if any value is invalid for its field.
  *     The lowercase/snake_case equivalents (organisation, classification_code,
  *     sensitivity, classification_facet_uuid, responsible_user_id, ...) are
  *     also accepted, where organisation/classification_code/sensitivity are
@@ -65,7 +70,8 @@ use OCP\IUserSession;
  *     (required, identifies the case) plus any subset of the Create fields
  *     above — omitted fields are left unchanged; ClassificationFacetUuid,
  *     InsightLevelId and Summary can be explicitly cleared by sending them
- *     empty.
+ *     empty. CustomFields, if present, replaces the value of each listed
+ *     field only — fields not mentioned keep their existing value.
  * POST /index.php/apps/opencase/public/v1/api/cases/participants
  *   — add one or more participants to a case. Body:
  *       Uuid or CaseNumber (required, one of)
@@ -99,7 +105,7 @@ use OCP\IUserSession;
  *       DocumentCategoryId    (required) — see GET .../documentcategory
  *       DocumentType, InsightLevelId, DocumentDate, ReceivedDate, RegisteredDate (optional)
  *     Returns the created document as DocumentType (same shape as
- *     GET .../documents), with empty Files/Contacts/Notes/WorkflowHistory —
+ *     GET .../documents), with empty Files/Contacts/Notes/Relations/WorkflowHistory —
  *     this only creates the metadata record, not an attached file.
  *
  * See AbstractPublicDataApiController for auth and response-format handling.
@@ -125,6 +131,7 @@ class PublicCaseApiController extends AbstractPublicDataApiController {
         private CprCvrLookupService $cprCvrLookupService,
         private EstateLinkService $estateLinkService,
         private EstateRoleMapper $estateRoleMapper,
+        private CustomFieldService $customFieldService,
         IUserSession $userSession,
     ) {
         parent::__construct($appName, $request, $userSession);
@@ -137,7 +144,8 @@ class PublicCaseApiController extends AbstractPublicDataApiController {
     #[NoAdminRequired]
     #[NoCSRFRequired]
     public function create(): Response {
-        $params = $this->requestBodyParams();
+        ['fields' => $params, 'items' => $customFieldsInput] = $this->requestBodyWithList('CustomFields', 'CustomField');
+        $customFieldValues = $this->customFieldValuesFromInput($customFieldsInput);
 
         $title                   = $this->bodyValue($params, 'Title', 'title');
         $summary                 = $this->bodyValue($params, 'Summary', 'summary');
@@ -198,6 +206,15 @@ class PublicCaseApiController extends AbstractPublicDataApiController {
             return $this->errorResponse('No acting user resolved', Http::STATUS_FORBIDDEN);
         }
 
+        // Validated up front, before the case is created, so a bad custom
+        // field value doesn't leave behind a case whose custom fields were
+        // silently rejected.
+        try {
+            $this->customFieldService->validateValuesForFields($customFieldValues);
+        } catch (\InvalidArgumentException $e) {
+            return $this->errorResponse($e->getMessage(), Http::STATUS_BAD_REQUEST);
+        }
+
         try {
             $entity = $this->caseService->create(
                 $title,
@@ -218,15 +235,21 @@ class PublicCaseApiController extends AbstractPublicDataApiController {
             return $this->errorResponse($e->getMessage(), Http::STATUS_FORBIDDEN);
         }
 
+        if (!empty($customFieldValues)) {
+            $this->customFieldService->setValuesForCase($entity->getId(), $customFieldValues, $userId);
+        }
+
         $fields       = $this->caseExportService->caseFields($entity, $entity->getExportedAt());
         $participants = $this->caseExportService->participantFields($entity->getId());
         $caseworkers  = $this->caseExportService->caseworkerFields($entity->getId());
         $estates      = $this->caseExportService->estateFields($entity->getId());
+        $customFields = $this->caseExportService->customFieldFields($entity);
 
         $payload = $fields + [
             'Participants' => $participants,
             'Caseworkers'  => $caseworkers,
             'Estates'      => $estates,
+            'CustomFields' => $customFields,
         ];
 
         return $this->respond('Case', $payload, Http::STATUS_CREATED);
@@ -240,7 +263,8 @@ class PublicCaseApiController extends AbstractPublicDataApiController {
     #[NoAdminRequired]
     #[NoCSRFRequired]
     public function update(): Response {
-        $params = $this->requestBodyParams();
+        ['fields' => $params, 'items' => $customFieldsInput] = $this->requestBodyWithList('CustomFields', 'CustomField');
+        $customFieldValues = $this->customFieldValuesFromInput($customFieldsInput);
 
         $uuid       = $this->bodyValue($params, 'Uuid', 'uuid');
         $caseNumber = $this->bodyValue($params, 'CaseNumber', 'case_number');
@@ -301,6 +325,14 @@ class PublicCaseApiController extends AbstractPublicDataApiController {
             return $this->errorResponse('No acting user resolved', Http::STATUS_FORBIDDEN);
         }
 
+        // Validated up front, before the case update is applied, so a bad
+        // custom field value doesn't leave the case partially updated.
+        try {
+            $this->customFieldService->validateValuesForFields($customFieldValues);
+        } catch (\InvalidArgumentException $e) {
+            return $this->errorResponse($e->getMessage(), Http::STATUS_BAD_REQUEST);
+        }
+
         try {
             $entity = $this->caseService->update(
                 $caseEntity->getId(),
@@ -323,15 +355,21 @@ class PublicCaseApiController extends AbstractPublicDataApiController {
             return $this->errorResponse($e->getMessage(), Http::STATUS_FORBIDDEN);
         }
 
+        if (!empty($customFieldValues)) {
+            $this->customFieldService->setValuesForCase($entity->getId(), $customFieldValues, $userId);
+        }
+
         $fields       = $this->caseExportService->caseFields($entity, $entity->getExportedAt());
         $participants = $this->caseExportService->participantFields($entity->getId());
         $caseworkers  = $this->caseExportService->caseworkerFields($entity->getId());
         $estates      = $this->caseExportService->estateFields($entity->getId());
+        $customFields = $this->caseExportService->customFieldFields($entity);
 
         $payload = $fields + [
             'Participants' => $participants,
             'Caseworkers'  => $caseworkers,
             'Estates'      => $estates,
+            'CustomFields' => $customFields,
         ];
 
         return $this->respond('Case', $payload);
@@ -735,11 +773,13 @@ class PublicCaseApiController extends AbstractPublicDataApiController {
         $participants = $this->caseExportService->participantFields($entity->getId());
         $caseworkers  = $this->caseExportService->caseworkerFields($entity->getId());
         $estates      = $this->caseExportService->estateFields($entity->getId());
+        $customFields = $this->caseExportService->customFieldFields($entity);
 
         $payload = $fields + [
             'Participants' => $participants,
             'Caseworkers'  => $caseworkers,
             'Estates'      => $estates,
+            'CustomFields' => $customFields,
         ];
 
         return $this->respond('Case', $payload);
@@ -915,5 +955,25 @@ class PublicCaseApiController extends AbstractPublicDataApiController {
         } catch (NotFoundException $e) {
             throw new PublicCaseApiError('Case not found', Http::STATUS_NOT_FOUND);
         }
+    }
+
+    /**
+     * Reduces the parsed `CustomFields: [{FieldKey, Value}, ...]` request
+     * items (from requestBodyWithList()) to the flat field_key => value map
+     * CustomFieldService expects. Items without a FieldKey are skipped.
+     *
+     * @param list<array<string, string>> $items
+     * @return array<string, string>
+     */
+    private function customFieldValuesFromInput(array $items): array {
+        $values = [];
+        foreach ($items as $item) {
+            $fieldKey = $this->bodyValue($item, 'FieldKey', 'field_key');
+            if ($fieldKey === null) {
+                continue;
+            }
+            $values[$fieldKey] = $this->bodyValue($item, 'Value', 'value') ?? '';
+        }
+        return $values;
     }
 }

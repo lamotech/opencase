@@ -57,6 +57,7 @@ import AccountPlusOutlineIcon from 'vue-material-design-icons/AccountPlusOutline
 import AccountMinusIcon from 'vue-material-design-icons/AccountMinus.vue'
 import NoteTextIcon from 'vue-material-design-icons/NoteText.vue'
 import DeleteIcon from 'vue-material-design-icons/Delete.vue'
+import RestoreIcon from 'vue-material-design-icons/Restore.vue'
 import EmailArrowRightIcon from 'vue-material-design-icons/EmailArrowRight.vue'
 import EmailAlertIcon from 'vue-material-design-icons/EmailAlert.vue'
 import EmailFastOutlineIcon from 'vue-material-design-icons/EmailFastOutline.vue'
@@ -161,15 +162,22 @@ export default {
 			case 'file_uploaded':             return PaperclipIcon
 			case 'file_viewed':               return EyeIcon
 			case 'file_edited':               return PencilIcon
+			case 'file_renamed':              return PencilIcon
 			case 'file_downloaded':           return DownloadIcon
 			case 'file_version_viewed':       return EyeIcon
 			case 'file_version_downloaded':   return DownloadIcon
 			case 'file_version_restored':          return HistoryIcon
+			case 'file_deleted':                   return DeleteIcon
+			case 'document_deleted':               return DeleteIcon
+			case 'document_restored':              return RestoreIcon
+			case 'file_restored':                  return RestoreIcon
 			case 'document_contact_added':         return AccountPlusOutlineIcon
 			case 'document_contact_deleted':       return AccountMinusIcon
 			case 'document_note_created':          return NoteTextIcon
 			case 'document_note_updated':          return PencilIcon
 			case 'document_note_deleted':          return DeleteIcon
+			case 'document_relation_added':        return PaperclipIcon
+			case 'document_relation_deleted':      return DeleteIcon
 			case 'digital_post_sent':              return EmailArrowRightIcon
 			case 'digital_post_failed':            return EmailAlertIcon
 			case 'document_sent_by_email':         return EmailFastOutlineIcon
@@ -203,6 +211,9 @@ export default {
 				if (d.document_type) {
 					parts.push(t('opencase', 'Dokumenttype ændret fra "{from}" til "{to}"', d.document_type))
 				}
+				if (d.summary) {
+					parts.push(t('opencase', 'Dokumentresume ændret'))
+				}
 				return parts.length ? parts.join('; ') : t('opencase', 'Metadata ændret')
 			}
 			case 'document_status_changed': {
@@ -216,6 +227,8 @@ export default {
 				return t('opencase', 'Fil åbnet: {filename}', { filename: d.filename || '' })
 			case 'file_edited':
 				return t('opencase', 'Fil redigeret: {filename}', { filename: d.filename || '' })
+			case 'file_renamed':
+				return t('opencase', 'Fil omdøbt: {from} → {to}', { from: d.from_filename || '', to: d.filename || '' })
 			case 'file_downloaded':
 				return t('opencase', 'Fil downloadet: {filename}', { filename: d.filename || '' })
 			case 'file_version_viewed':
@@ -224,6 +237,14 @@ export default {
 				return t('opencase', 'Fil version downloadet: {filename}', { filename: d.filename || '' })
 			case 'file_version_restored':
 				return t('opencase', 'Fil version gendannet: {filename}', { filename: d.filename || '' })
+			case 'file_deleted':
+				return t('opencase', 'Fil slettet: {filename}', { filename: d.filename || '' })
+			case 'file_restored':
+				return t('opencase', 'Fil gendannet: {filename}', { filename: d.filename || '' })
+			case 'document_deleted':
+				return t('opencase', 'Dokument slettet')
+			case 'document_restored':
+				return t('opencase', 'Dokument gendannet')
 			case 'document_contact_added':
 				return t('opencase', 'Kontakt tilføjet: {role} – {name} ({cprCvr})', {
 					role: d.role || '',
@@ -242,6 +263,18 @@ export default {
 				return t('opencase', 'Note opdateret: {title}', { title: d.title || '' })
 			case 'document_note_deleted':
 				return t('opencase', 'Note slettet: {title}', { title: d.title || '' })
+			case 'document_relation_added':
+				return t('opencase', 'Dokumentrelation tilføjet: {type} – {number} {title}', {
+					type: d.type || '',
+					number: d.related_document_number || '',
+					title: d.related_title || '',
+				})
+			case 'document_relation_deleted':
+				return t('opencase', 'Dokumentrelation fjernet: {type} – {number} {title}', {
+					type: d.type || '',
+					number: d.related_document_number || '',
+					title: d.related_title || '',
+				})
 			case 'digital_post_sent':
 				return t('opencase', 'Digital post sendt til {name}', { name: d.receiver_name || maskCpr(d.cpr_cvr) || '' })
 			case 'digital_post_failed':

@@ -102,8 +102,10 @@ class AccessExportService {
                 try {
                     $maskedPath = $this->maskedPath($requestId, $itemId, $file->getId(), $file->getOriginalFilename());
 
+                    $name = $file->getOriginalFilename();
                     if (file_exists($maskedPath)) {
                         $content = file_get_contents($maskedPath);
+                        [$name]  = AccessMaskingService::maskedDownloadInfo($maskedPath, $name, $file->getMimeType());
                     } else {
                         $result  = $this->fileService->downloadInternal($file->getId());
                         $stream  = $result['stream'];
@@ -124,7 +126,7 @@ class AccessExportService {
                         }
                     }
 
-                    $filename = $this->safeFilename($documentId, $file->getOriginalFilename());
+                    $filename = $this->safeFilename($documentId, $name);
                     $zip->addFromString($filename, $content);
                 } catch (\Throwable) {
                     // Skip unreadable files

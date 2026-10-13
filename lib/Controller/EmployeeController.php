@@ -4,12 +4,17 @@ declare(strict_types=1);
 
 namespace OCA\OpenCase\Controller;
 
+use OCA\OpenCase\Db\CaseMapper;
 use OCA\OpenCase\Db\CaseParticipantMapper;
 use OCA\OpenCase\Db\CaseStatusMapper;
 use OCA\OpenCase\Db\CaseUserMapper;
+use OCA\OpenCase\Db\DocumentMapper;
 use OCA\OpenCase\Db\OrganisationMapper;
 use OCA\OpenCase\Db\ParticipantRoleMapper;
+use OCA\OpenCase\Db\ReminderMapper;
 use OCA\OpenCase\Db\UserInfoMapper;
+use OCA\OpenCase\Service\PermissionService;
+use OCA\OpenCase\Service\WorkflowService;
 use OCP\AppFramework\ApiController;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\ApiRoute;
@@ -33,6 +38,11 @@ class EmployeeController extends ApiController {
         private CaseStatusMapper $caseStatusMapper,
         private ParticipantRoleMapper $participantRoleMapper,
         private UserInfoMapper $userInfoMapper,
+        private CaseMapper $caseMapper,
+        private DocumentMapper $documentMapper,
+        private ReminderMapper $reminderMapper,
+        private WorkflowService $workflowService,
+        private PermissionService $permissionService,
         private IUserManager $userManager,
         private IFactory $l10nFactory,
         private ?string $userId,
@@ -165,16 +175,147 @@ class EmployeeController extends ApiController {
         if ($userId === null) {
             return new DataResponse(['error' => 'User not found'], Http::STATUS_NOT_FOUND);
         }
-        $rows   = $this->caseUserMapper->findGrantedCasesByUserId($userId);
+        $rows = $this->caseUserMapper->findGrantedCasesByUserId($userId);
+
+        // Resolve the granting users' display names once per distinct uid.
+        $grantedByNames = [];
+        foreach (array_unique(array_filter(array_column($rows, 'granted_by'))) as $uid) {
+            $grantedByNames[$uid] = $this->userManager->get($uid)?->getDisplayName() ?? $uid;
+        }
+
         $grants = array_map(fn($r) => [
-            'case_id'     => (int)$r['case_id'],
-            'case_number' => $r['case_number'],
-            'title'       => $r['title'],
-            'can_write'   => (bool)(int)$r['can_write'],
-            'granted_at'  => $r['granted_at'],
-            'expires_at'  => $r['expires_at'],
+            'case_id'                 => (int)$r['case_id'],
+            'case_number'             => $r['case_number'],
+            'title'                   => $r['title'],
+            'can_write'               => (bool)(int)$r['can_write'],
+            'granted_at'              => $r['granted_at'],
+            'granted_by'              => $r['granted_by'],
+            'granted_by_display_name' => $grantedByNames[$r['granted_by']] ?? '',
+            'expires_at'              => $r['expires_at'],
         ], $rows);
         return new DataResponse(['grants' => $grants]);
+    }
+
+    /**
+     * Returns the open tasks assigned to the given employee: pending document
+     * workflow steps where it is their turn to act, plus active reminders.
+     * Ordered by due date ascending, undated tasks last.
+     *
+     * Tasks are filtered against the *calling* user's read access to the
+     * related case or document, so the list never reveals work on cases the
+     * caller cannot see.
+     */
+    #[NoAdminRequired]
+    #[ApiRoute(verb: 'GET', url: '/api/v1/employees/{uuid}/tasks')]
+    public function userTasks(string $uuid): DataResponse {
+        $userInfo = $this->userInfoMapper->findByUuid($uuid);
+        $userId   = $userInfo?->getUserId();
+        if ($userId === null) {
+            return new DataResponse(['error' => 'User not found'], Http::STATUS_NOT_FOUND);
+        }
+        if ($this->userId === null) {
+            return new DataResponse(['tasks' => []]);
+        }
+
+        $tasks = [];
+
+        // --- Document workflow steps awaiting the employee ---
+        foreach ($this->workflowService->getMyPendingTasks($userId) as $row) {
+            $documentId = (int)$row['document_id'];
+            if (!$this->permissionService->userHasReadAccessToDocument($this->userId, $documentId)) {
+                continue;
+            }
+            $document = $this->documentMapper->findById($documentId);
+            $case     = $document !== null ? $this->caseMapper->findById($document->getCaseId()) : null;
+
+            $tasks[] = [
+                'type'           => 'workflow',
+                'key'            => 'wf-' . (int)$row['workflow_id'],
+                'title'          => null,
+                'workflow_id'    => (int)$row['workflow_id'],
+                'workflow_type'  => $row['workflow_type'],
+                'deadline'       => $this->toIsoDate($row['step_deadline'] ?? null),
+                'document_id'    => $documentId,
+                'document_title' => $document?->getTitle() ?? ($row['document_title'] ?? ''),
+                'case_id'        => $case?->getId(),
+                'case_number'    => $case?->getCaseNumber() ?? '',
+                'case_title'     => $case?->getTitle() ?? '',
+            ];
+        }
+
+        // --- Active reminders assigned to the employee ---
+        foreach ($this->reminderMapper->findActiveByUser($userId) as $reminder) {
+            $entityKey     = $reminder->getEntityKey();
+            $documentId    = null;
+            $documentTitle = '';
+            $caseId        = null;
+
+            switch ($reminder->getEntity()) {
+                case 'document':
+                    if (!$this->permissionService->userHasReadAccessToDocument($this->userId, $entityKey)) {
+                        continue 2;
+                    }
+                    $documentId    = $entityKey;
+                    $document      = $this->documentMapper->findById($entityKey);
+                    $documentTitle = $document?->getTitle() ?? '';
+                    $caseId        = $document?->getCaseId();
+                    break;
+                case 'case':
+                    if (!$this->permissionService->userHasReadAccessToCase($this->userId, $entityKey)) {
+                        continue 2;
+                    }
+                    $caseId = $entityKey;
+                    break;
+                default:
+                    // Unknown entity type — no way to authorise it, so skip.
+                    continue 2;
+            }
+
+            $case = $caseId !== null ? $this->caseMapper->findById($caseId) : null;
+
+            $tasks[] = [
+                'type'           => 'reminder',
+                'key'            => 'rm-' . $reminder->getId(),
+                'title'          => $reminder->getTitle(),
+                'reminder_id'    => $reminder->getId(),
+                'entity'         => $reminder->getEntity(),
+                'entity_key'     => $entityKey,
+                'deadline'       => $reminder->getDeadline()?->format('c'),
+                'document_id'    => $documentId,
+                'document_title' => $documentTitle,
+                'case_id'        => $case?->getId(),
+                'case_number'    => $case?->getCaseNumber() ?? '',
+                'case_title'     => $case?->getTitle() ?? '',
+            ];
+        }
+
+        // Due date ascending, undated tasks last.
+        usort($tasks, function (array $a, array $b): int {
+            if ($a['deadline'] === $b['deadline']) {
+                return 0;
+            }
+            if ($a['deadline'] === null) {
+                return 1;
+            }
+            if ($b['deadline'] === null) {
+                return -1;
+            }
+            return strcmp($a['deadline'], $b['deadline']);
+        });
+
+        return new DataResponse(['tasks' => $tasks]);
+    }
+
+    /** Normalise a raw DB datetime string to ISO 8601, or null if unusable. */
+    private function toIsoDate(?string $raw): ?string {
+        if ($raw === null || $raw === '') {
+            return null;
+        }
+        try {
+            return (new \DateTime($raw))->format('c');
+        } catch (\Exception) {
+            return null;
+        }
     }
 
     /**

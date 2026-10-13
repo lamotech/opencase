@@ -103,6 +103,35 @@
       "required": ["UserId"]
     },
 
+    "EstateType": {
+      "$anchor": "EstateType",
+      "title": "Case-linked estate (fast ejendom)",
+      "description": "Shared shape for CaseType.Estates[]. Populated from the local opencase_estate/opencase_caseestates tables — see EstateController/EstateLinkService.",
+      "type": "object",
+      "properties": {
+        "RoleId": { "$ref": "#NumericString", "description": "opencase_estateroles.id — not currently exposed via a dedicated lookup endpoint (unlike ParticipantRoleId/ContactRoleId)." },
+        "RoleName": { "type": ["string", "null"] },
+        "Type": { "type": "string", "description": "\"Samlet fast ejendom\", \"Ejerlejlighed\", or \"Bygning på fremmed grund\"." },
+        "BfeNumber": { "$ref": "#NumericString" },
+        "LocationAddress": { "type": ["string", "null"] }
+      },
+      "required": ["Type"]
+    },
+
+    "CustomFieldType": {
+      "$anchor": "CustomFieldType",
+      "title": "Custom field value (tillægsfelt)",
+      "description": "Shared shape for CaseDetail.CustomFields[], and for the CustomFields list accepted on POST/PUT /cases. Which fields apply to a case is admin-defined and depends on the case's casetype/organisation/KLE-nummer — see GET .../custom-fields/applicable.",
+      "type": "object",
+      "properties": {
+        "FieldKey": { "type": "string", "description": "Stable machine key identifying the field, e.g. \"byggesagsnummer\"." },
+        "Label": { "type": ["string", "null"], "description": "Admin-defined display label. Not present when submitting a value on create/update — only FieldKey and Value are read." },
+        "FieldType": { "type": ["string", "null"], "enum": ["text", "dropdown", "checkbox", "date", null], "description": "Not present when submitting a value on create/update." },
+        "Value": { "type": ["string", "null"], "description": "Omitted/null when the field has not been filled in. For checkbox fields, the literal string \"true\"/\"false\". For date fields, YYYY-MM-DD." }
+      },
+      "required": ["FieldKey"]
+    },
+
     "FileType": {
       "$anchor": "FileType",
       "title": "Document file",
@@ -203,7 +232,7 @@
     "CaseFields": {
       "$anchor": "CaseFields",
       "title": "Case, scalar fields only",
-      "description": "The flat field set shared by every case shape. Used standalone (no Participants/Caseworkers/Documents) as each item of CaseSearchResult.Cases.",
+      "description": "The flat field set shared by every case shape. Used standalone (no Participants/Caseworkers/Estates/CustomFields/Documents) as each item of CaseSearchResult.Cases.",
       "type": "object",
       "properties": {
         "Id": { "$ref": "#NumericString" },
@@ -238,16 +267,18 @@
     "CaseDetail": {
       "$anchor": "CaseDetail",
       "title": "Case, full detail",
-      "description": "Response shape of GET/POST/PUT /cases: CaseFields plus Participants and Caseworkers (but NOT Documents/JournalNotes — fetch those via the dedicated /cases/documents and /cases/journal-notes endpoints).",
+      "description": "Response shape of GET/POST/PUT /cases: CaseFields plus Participants, Caseworkers, Estates and CustomFields (but NOT Documents/JournalNotes — fetch those via the dedicated /cases/documents and /cases/journal-notes endpoints). On POST/PUT /cases, a CustomFields list (FieldKey + Value only) may also be sent in the request body to set custom field values — invalid values reject the whole request before the case is created/updated.",
       "allOf": [
         { "$ref": "#CaseFields" },
         {
           "type": "object",
           "properties": {
             "Participants": { "type": "array", "items": { "$ref": "#PartyType" } },
-            "Caseworkers": { "type": "array", "items": { "$ref": "#CaseworkerType" } }
+            "Caseworkers": { "type": "array", "items": { "$ref": "#CaseworkerType" } },
+            "Estates": { "type": "array", "items": { "$ref": "#EstateType" } },
+            "CustomFields": { "type": "array", "items": { "$ref": "#CustomFieldType" } }
           },
-          "required": ["Participants", "Caseworkers"]
+          "required": ["Participants", "Caseworkers", "Estates", "CustomFields"]
         }
       ]
     },

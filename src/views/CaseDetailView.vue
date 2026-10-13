@@ -87,7 +87,7 @@
 						</NcActionButton>
 						<template v-if="canWrite">
 							<NcActionCaption :name="t('opencase', 'Aktindsigt')" />
-							<NcActionButton @click="showAccessRequestDialog = true">
+							<NcActionButton @click="openAccessRequestDialog">
 								<template #icon>
 									<FileEyeOutlineIcon :size="20" />
 								</template>
@@ -130,8 +130,14 @@
 					</NcButton>
 				</div>
 
+				<NcCheckboxRadioSwitch v-if="deletedDocuments.length > 0"
+					v-model="showDeletedDocuments"
+					class="opencase-case-detail__show-deleted">
+					{{ t('opencase', 'Vis slettede dokumenter') }}
+				</NcCheckboxRadioSwitch>
+
 				<NcLoadingIcon v-if="documentsLoading" :size="32" />
-				<NcEmptyContent v-else-if="documents.length === 0"
+				<NcEmptyContent v-else-if="visibleDocuments.length === 0"
 					:title="t('opencase', 'Ingen dokumenter')">
 					<template #icon>
 						<FileDocumentIcon :size="48" />
@@ -139,9 +145,11 @@
 				</NcEmptyContent>
 
 				<DocumentList v-else
-					:documents="documents"
+					:documents="visibleDocuments"
+					:can-restore="canWrite && !caseData.status_is_closed"
 					@open="openDocument"
-					@delete="deleteDocument" />
+					@delete="deleteDocument"
+					@restore="restoreDocument" />
 			</div>
 
 			<!-- Files tab -->
@@ -164,12 +172,14 @@
 					:files="files"
 					:show-document-number="true"
 					:is-read-only="!canWrite"
-					@delete="deleteFile" />
+					@delete="deleteFile"
+					@renamed="onFileRenamed" />
 			</div>
 
 			<!-- Info tab -->
 			<div v-if="activeTab === 'info'" class="opencase-case-detail__content">
 				<CaseInfoPanel :case-data="caseData" />
+				<CustomFieldsPanel ref="customFieldsPanel" :case-id="caseData.id" />
 				<ReminderList
 					:reminders="reminders"
 					:loading="remindersLoading"
@@ -186,13 +196,15 @@
 				<JournalNoteList
 					:notes="journalNotes"
 					:loading="journalNotesLoading"
+					:case-id="caseData.id"
 					:case-title="caseData && caseData.title"
 					:can-write="canWrite"
 					@new="showJournalNoteDialog = true"
 					@edit="openEditJournalNote"
 					@delete="deleteJournalNote"
 					@lock="lockJournalNote"
-					@view="openViewJournalNote" />
+					@view="openViewJournalNote"
+					@document-created="onFileUploaded" />
 
 				<JournalNoteDialog v-if="showJournalNoteDialog"
 					:case-id="caseData.id"
@@ -286,6 +298,7 @@ import NcActionCaption from '@nextcloud/vue/components/NcActionCaption'
 import AutoFixIcon from 'vue-material-design-icons/AutoFix.vue'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
+import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 
 import PlusIcon from 'vue-material-design-icons/Plus.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
@@ -314,6 +327,7 @@ import DocumentList from '../components/DocumentList.vue'
 import FileList from '../components/FileList.vue'
 import FileUploadButton from '../components/FileUploadButton.vue'
 import CaseInfoPanel from '../components/CaseInfoPanel.vue'
+import CustomFieldsPanel from '../components/CustomFieldsPanel.vue'
 import CaseAuditLog from '../components/CaseAuditLog.vue'
 import NewDocumentDialog from '../components/NewDocumentDialog.vue'
 import EditCaseDialog from '../components/EditCaseDialog.vue'
@@ -351,6 +365,7 @@ export default {
 		NcActionCaption,
 		NcEmptyContent,
 		NcLoadingIcon,
+		NcCheckboxRadioSwitch,
 		PlusIcon,
 		PencilIcon,
 		FileDocumentIcon,
@@ -361,6 +376,7 @@ export default {
 		FileList,
 		FileUploadButton,
 		CaseInfoPanel,
+		CustomFieldsPanel,
 		CaseAuditLog,
 		NewDocumentDialog,
 		EditCaseDialog,
@@ -404,6 +420,7 @@ export default {
 		return {
 			loading: true,
 			activeTab: validCaseTabs.includes(hashTab) ? hashTab : 'info',
+			showDeletedDocuments: false,
 			showNewDocDialog: false,
 			showEditDialog: false,
 			showCopyCaseDialog: false,
@@ -432,6 +449,10 @@ export default {
 	computed: {
 		caseData() { return this.$store.state.currentCase },
 		documents() { return this.$store.state.documents },
+		deletedDocuments() { return this.$store.state.deletedDocuments },
+		visibleDocuments() {
+			return this.showDeletedDocuments ? [...this.documents, ...this.deletedDocuments] : this.documents
+		},
 		documentsLoading() { return this.$store.state.documentsLoading },
 		files() { return this.$store.state.files },
 		filesLoading() { return this.$store.state.filesLoading },
@@ -579,10 +600,28 @@ export default {
 		async deleteDocument(docId) {
 			try {
 				await this.$store.dispatch('deleteDocument', docId)
+				// The document's files leave the case file list with it
+				this.$store.dispatch('fetchFiles', this.id).catch(() => {})
 				showSuccess(t('opencase', 'Dokument slettet'))
 			} catch (e) {
 				showError(e.response?.data?.ocs?.data?.error || t('opencase', 'Kunne ikke slette dokument'))
 			}
+		},
+
+		async restoreDocument(docId) {
+			try {
+				await this.$store.dispatch('restoreDocument', docId)
+				this.$store.dispatch('fetchFiles', this.id).catch(() => {})
+				if (this.deletedDocuments.length === 0) this.showDeletedDocuments = false
+				showSuccess(t('opencase', 'Dokument gendannet'))
+			} catch (e) {
+				showError(e.response?.data?.ocs?.data?.error || t('opencase', 'Kunne ikke gendanne dokument'))
+			}
+		},
+
+		onFileRenamed(file) {
+			this.$store.commit('UPDATE_FILE', file)
+			showSuccess(t('opencase', 'Fil omdøbt'))
 		},
 
 		async deleteFile(fileId) {
@@ -605,6 +644,7 @@ export default {
 
 		onCaseSaved() {
 			this.showEditDialog = false
+			this.$refs.customFieldsPanel?.fetchFields()
 		},
 
 		onCaseCopied(newCase) {
@@ -681,6 +721,10 @@ export default {
 			}
 		},
 
+		openAccessRequestDialog() {
+			this.$refs.headerActions?.closeMenu()
+			this.showAccessRequestDialog = true
+		},
 		openAccessList() {
 			this.activeTab = 'access_requests'
 		},
@@ -778,8 +822,8 @@ export default {
 
 .opencase-case-detail__reminder-banner--overdue {
 	background: var(--color-error-hover, #fce4ec);
-	border-color: var(--color-error, #c62828);
-	color: var(--color-error, #c62828);
+	border-color: #c62828;
+	color: #c62828;
 	font-weight: 600;
 }
 
@@ -858,6 +902,10 @@ export default {
 
 .opencase-case-detail__content-header {
 	margin-bottom: 16px;
+}
+
+.opencase-case-detail__show-deleted {
+	margin-bottom: 8px;
 }
 
 .opencase-case-detail__protected-badge {

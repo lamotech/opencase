@@ -23,6 +23,8 @@ use OCP\AppFramework\Db\Entity;
  * @method void setDescription(?string $description)
  * @method int getActive()
  * @method void setActive(int $active)
+ * @method string|null getEnumeration()
+ * @method void setEnumeration(?string $enumeration)
  */
 class Sensitivity extends Entity {
 
@@ -31,6 +33,7 @@ class Sensitivity extends Entity {
     protected string $title = '';
     protected ?string $description = null;
     protected int $active = 1;
+    protected ?string $enumeration = null;
 
     public function __construct() {
         $this->addType('uuid', 'string');
@@ -38,5 +41,6 @@ class Sensitivity extends Entity {
         $this->addType('title', 'string');
         $this->addType('description', 'string');
         $this->addType('active', 'integer');
+        $this->addType('enumeration', 'string');
     }
 }

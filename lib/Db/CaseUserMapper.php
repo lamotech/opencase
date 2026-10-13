@@ -128,7 +128,7 @@ class CaseUserMapper extends QBMapper {
      * All grants for a given user, joined with basic case info.
      *
      * Returns plain associative arrays with keys:
-     *   case_id, case_number, title, can_write, granted_at, expires_at
+     *   case_id, case_number, title, can_write, granted_at, granted_by, expires_at
      */
     public function findGrantedCasesByUserId(string $userId): array {
         $qb = $this->db->getQueryBuilder();
@@ -136,6 +136,7 @@ class CaseUserMapper extends QBMapper {
                 'cu.case_id',
                 'cu.can_write',
                 'cu.granted_at',
+                'cu.granted_by',
                 'cu.expires_at',
                 'c.case_number',
                 'c.title',

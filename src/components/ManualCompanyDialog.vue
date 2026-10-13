@@ -169,7 +169,7 @@ export default {
 }
 
 .add-company__error {
-	color: var(--color-error);
+	color: #c62828;
 	font-size: 0.85em;
 	margin: 0;
 }

@@ -113,6 +113,11 @@ class FileMapper extends QBMapper {
                 )
             )
             ->where($qb->expr()->eq('f.case_id', $qb->createNamedParameter($caseId, IQueryBuilder::PARAM_INT)))
+            ->andWhere($this->notDeleted($qb, 'f'))
+            ->andWhere($qb->expr()->orX(
+                $qb->expr()->isNull('d.is_deleted'),
+                $qb->expr()->eq('d.is_deleted', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL))
+            ))
             ->andWhere($qb->expr()->orX(
                 $qb->expr()->isNull('dua.access_level'),             // No override → inherits case access
                 $qb->expr()->neq('dua.access_level', $qb->createNamedParameter('deny'))  // Override is not deny
@@ -152,6 +157,8 @@ class FileMapper extends QBMapper {
             )
             ->where($qb->expr()->eq('f.case_id', $qb->createNamedParameter($caseId, IQueryBuilder::PARAM_INT)))
             ->andWhere($qb->expr()->eq('f.virtual_filename', $qb->createNamedParameter($virtualFilename)))
+            ->andWhere($this->notDeleted($qb, 'f'))
+            ->andWhere($this->documentNotDeleted($qb, 'f'))
             ->andWhere($qb->expr()->orX(
                 $qb->expr()->isNull('dua.access_level'),
                 $qb->expr()->neq('dua.access_level', $qb->createNamedParameter('deny'))
@@ -183,8 +190,10 @@ class FileMapper extends QBMapper {
     public function findByCaseId(int $caseId): array {
         $qb = $this->db->getQueryBuilder();
         $qb->select('*')
-            ->from($this->getTableName())
+            ->from($this->getTableName(), 'f')
             ->where($qb->expr()->eq('case_id', $qb->createNamedParameter($caseId, IQueryBuilder::PARAM_INT)))
+            ->andWhere($this->notDeleted($qb))
+            ->andWhere($this->documentNotDeleted($qb, 'f'))
             ->orderBy('virtual_filename', 'ASC');
 
         return $this->findEntities($qb);
@@ -199,9 +208,11 @@ class FileMapper extends QBMapper {
     public function findByVirtualNameNoAuth(int $caseId, string $virtualFilename): ?FileEntity {
         $qb = $this->db->getQueryBuilder();
         $qb->select('*')
-            ->from($this->getTableName())
+            ->from($this->getTableName(), 'f')
             ->where($qb->expr()->eq('case_id', $qb->createNamedParameter($caseId, IQueryBuilder::PARAM_INT)))
-            ->andWhere($qb->expr()->eq('virtual_filename', $qb->createNamedParameter($virtualFilename)));
+            ->andWhere($qb->expr()->eq('virtual_filename', $qb->createNamedParameter($virtualFilename)))
+            ->andWhere($this->notDeleted($qb))
+            ->andWhere($this->documentNotDeleted($qb, 'f'));
 
         $result = $qb->executeQuery();
         $row = $result->fetch();
@@ -217,14 +228,20 @@ class FileMapper extends QBMapper {
     /**
      * Get all files belonging to a document.
      *
+     * Soft-deleted files are left out unless $includeDeleted is set.
+     *
      * @return FileEntity[]
      */
-    public function findByDocument(int $documentId): array {
+    public function findByDocument(int $documentId, bool $includeDeleted = false): array {
         $qb = $this->db->getQueryBuilder();
         $qb->select('*')
             ->from($this->getTableName())
             ->where($qb->expr()->eq('document_id', $qb->createNamedParameter($documentId, IQueryBuilder::PARAM_INT)))
             ->orderBy('virtual_filename', 'ASC');
+
+        if (!$includeDeleted) {
+            $qb->andWhere($this->notDeleted($qb));
+        }
 
         return $this->findEntities($qb);
     }
@@ -236,7 +253,8 @@ class FileMapper extends QBMapper {
         $qb = $this->db->getQueryBuilder();
         $qb->select($qb->func()->count('*', 'cnt'))
             ->from($this->getTableName())
-            ->where($qb->expr()->eq('document_id', $qb->createNamedParameter($documentId, IQueryBuilder::PARAM_INT)));
+            ->where($qb->expr()->eq('document_id', $qb->createNamedParameter($documentId, IQueryBuilder::PARAM_INT)))
+            ->andWhere($this->notDeleted($qb));
 
         $result = $qb->executeQuery();
         $count = (int)$result->fetchOne();
@@ -298,7 +316,8 @@ class FileMapper extends QBMapper {
     /**
      * Check if a virtual filename already exists within a case.
      * Used when adding a new file to ensure unique names in the
-     * virtual directory listing.
+     * virtual directory listing. Soft-deleted files are counted too, so a
+     * restored file never collides with a file added after it was deleted.
      */
     public function virtualFilenameExists(int $caseId, string $virtualFilename): bool {
         $qb = $this->db->getQueryBuilder();
@@ -361,6 +380,8 @@ class FileMapper extends QBMapper {
                 'f.size',
                 'f.created_at AS file_created_at',
                 'f.updated_at AS file_updated_at',
+                'f.is_deleted',
+                'd.is_deleted AS document_is_deleted',
                 'd.title AS document_title',
                 'd.document_type',
                 'c.case_number',
@@ -391,7 +412,9 @@ class FileMapper extends QBMapper {
     public function getAllFileIds(int $limit, int $offset): array {
         $qb = $this->db->getQueryBuilder();
         $qb->select('id')
-            ->from($this->getTableName())
+            ->from($this->getTableName(), 'f')
+            ->where($this->notDeleted($qb))
+            ->andWhere($this->documentNotDeleted($qb, 'f'))
             ->orderBy('id', 'ASC')
             ->setMaxResults($limit)
             ->setFirstResult($offset);
@@ -414,8 +437,10 @@ class FileMapper extends QBMapper {
     public function getFileIdsByCase(int $caseId): array {
         $qb = $this->db->getQueryBuilder();
         $qb->select('id')
-            ->from($this->getTableName())
-            ->where($qb->expr()->eq('case_id', $qb->createNamedParameter($caseId, IQueryBuilder::PARAM_INT)));
+            ->from($this->getTableName(), 'f')
+            ->where($qb->expr()->eq('case_id', $qb->createNamedParameter($caseId, IQueryBuilder::PARAM_INT)))
+            ->andWhere($this->notDeleted($qb))
+            ->andWhere($this->documentNotDeleted($qb, 'f'));
 
         $result = $qb->executeQuery();
         $ids = [];
@@ -425,5 +450,60 @@ class FileMapper extends QBMapper {
         $result->closeCursor();
 
         return $ids;
+    }
+
+    // ---------------------------------------------------------------
+    // Soft delete
+    // ---------------------------------------------------------------
+
+    /**
+     * Flag a file as deleted (is_deleted=1, deleted_date=now).
+     */
+    public function markDeleted(int $fileId): void {
+        $qb = $this->db->getQueryBuilder();
+        $qb->update($this->getTableName())
+            ->set('is_deleted', $qb->createNamedParameter(true, IQueryBuilder::PARAM_BOOL))
+            ->set('deleted_date', $qb->createNamedParameter(new \DateTime(), IQueryBuilder::PARAM_DATE))
+            ->where($qb->expr()->eq('id', $qb->createNamedParameter($fileId, IQueryBuilder::PARAM_INT)));
+
+        $qb->executeStatement();
+    }
+
+    /**
+     * Clear the soft-delete flag (is_deleted=0, deleted_date=NULL).
+     */
+    public function markRestored(int $fileId): void {
+        $qb = $this->db->getQueryBuilder();
+        $qb->update($this->getTableName())
+            ->set('is_deleted', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL))
+            ->set('deleted_date', $qb->createNamedParameter(null, IQueryBuilder::PARAM_NULL))
+            ->where($qb->expr()->eq('id', $qb->createNamedParameter($fileId, IQueryBuilder::PARAM_INT)));
+
+        $qb->executeStatement();
+    }
+
+    /**
+     * WHERE clause matching files that are not soft-deleted.
+     */
+    private function notDeleted(IQueryBuilder $qb, string $alias = ''): \OCP\DB\QueryBuilder\ICompositeExpression {
+        $column = ($alias !== '' ? $alias . '.' : '') . 'is_deleted';
+        return $qb->expr()->orX(
+            $qb->expr()->isNull($column),
+            $qb->expr()->eq($column, $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL))
+        );
+    }
+
+    /**
+     * WHERE clause matching files whose parent document is not soft-deleted.
+     * The outer query must alias opencase_files as $fileAlias.
+     */
+    private function documentNotDeleted(IQueryBuilder $qb, string $fileAlias): string {
+        $sub = $this->db->getQueryBuilder();
+        $sub->select($sub->expr()->literal(1))
+            ->from('opencase_documents', 'dd')
+            ->where($sub->expr()->eq('dd.id', $fileAlias . '.document_id'))
+            ->andWhere($sub->expr()->eq('dd.is_deleted', $qb->createNamedParameter(true, IQueryBuilder::PARAM_BOOL)));
+
+        return 'NOT EXISTS (' . $sub->getSQL() . ')';
     }
 }

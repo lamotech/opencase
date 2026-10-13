@@ -51,6 +51,8 @@ import PaperclipIcon from 'vue-material-design-icons/Paperclip.vue'
 import EyeIcon from 'vue-material-design-icons/Eye.vue'
 import PencilIcon from 'vue-material-design-icons/Pencil.vue'
 import DownloadIcon from 'vue-material-design-icons/Download.vue'
+import DeleteIcon from 'vue-material-design-icons/Delete.vue'
+import RestoreIcon from 'vue-material-design-icons/Restore.vue'
 
 import api from '../services/api.js'
 
@@ -111,10 +113,13 @@ export default {
 			case 'file_uploaded':           return PaperclipIcon
 			case 'file_viewed':             return EyeIcon
 			case 'file_edited':             return PencilIcon
+			case 'file_renamed':            return PencilIcon
 			case 'file_downloaded':         return DownloadIcon
 			case 'file_version_viewed':     return EyeIcon
 			case 'file_version_downloaded': return DownloadIcon
 			case 'file_version_restored':   return HistoryIcon
+			case 'file_deleted':            return DeleteIcon
+			case 'file_restored':           return RestoreIcon
 			default:                        return HistoryIcon
 			}
 		},
@@ -127,6 +132,8 @@ export default {
 				return t('opencase', 'Fil åbnet: {filename}', { filename: d.filename || '' })
 			case 'file_edited':
 				return t('opencase', 'Fil redigeret: {filename}', { filename: d.filename || '' })
+			case 'file_renamed':
+				return t('opencase', 'Fil omdøbt: {from} → {to}', { from: d.from_filename || '', to: d.filename || '' })
 			case 'file_downloaded':
 				return t('opencase', 'Fil downloadet: {filename}', { filename: d.filename || '' })
 			case 'file_version_viewed':
@@ -135,6 +142,10 @@ export default {
 				return t('opencase', 'Fil version downloadet: {filename}', { filename: d.filename || '' })
 			case 'file_version_restored':
 				return t('opencase', 'Fil version gendannet: {filename}', { filename: d.filename || '' })
+			case 'file_deleted':
+				return t('opencase', 'Fil slettet: {filename}', { filename: d.filename || '' })
+			case 'file_restored':
+				return t('opencase', 'Fil gendannet: {filename}', { filename: d.filename || '' })
 			default:
 				return entry.event_type
 			}

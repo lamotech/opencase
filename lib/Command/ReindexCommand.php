@@ -142,6 +142,10 @@ class ReindexCommand extends Command {
             return 'skipped';
         }
 
+        if (!empty($meta['is_deleted']) || !empty($meta['document_is_deleted'])) {
+            return 'skipped';
+        }
+
         $case = $this->caseMapper->findById((int)$meta['case_id']);
         if ($case === null) {
             $this->logger->warning('OpenCase ReindexCommand: case not found for file {id}', ['id' => $fileId]);

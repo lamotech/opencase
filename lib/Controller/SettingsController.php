@@ -9,6 +9,7 @@ use OCA\OpenCase\Db\ImportItemRepository;
 use OCA\OpenCase\Db\ImportLocationRepository;
 use OCA\OpenCase\Db\UserInfoMapper;
 use OCA\OpenCase\Db\UserOrgMapper;
+use OCA\OpenCase\Service\AccessMaskingService;
 use OCA\OpenCase\Service\AddinOriginService;
 use OCA\OpenCase\Service\ApiClientPresenterService;
 use OCA\OpenCase\Service\CaseExportService;
@@ -102,6 +103,7 @@ class SettingsController extends Controller {
         private TraceLogger $traceLogger,
         private IAppManager $appManager,
         private IConfig $systemConfig,
+        private AccessMaskingService $maskingService,
         private AddinOriginService $addinOriginService,
     ) {
         parent::__construct($appName, $request);
@@ -221,6 +223,25 @@ class SettingsController extends Controller {
         $this->configuration->setConfigValue($key, $value);
 
         return new JSONResponse(['saved' => true]);
+    }
+
+    /**
+     * Check the connection to the redaction service with the saved URL and
+     * API key. Response: { ok: true } or { ok: false, error: string }
+     */
+    public function testRedactionService(): JSONResponse {
+        if (!$this->maskingService->isEnterprise()) {
+            return new JSONResponse(['ok' => false, 'error' => 'Integrationen er kun tilgængelig i Enterprise versionen']);
+        }
+        if (!$this->maskingService->isConfigured()) {
+            return new JSONResponse(['ok' => false, 'error' => 'Angiv tjenestens URL først.']);
+        }
+        try {
+            $this->maskingService->checkService();
+            return new JSONResponse(['ok' => true]);
+        } catch (\RuntimeException $e) {
+            return new JSONResponse(['ok' => false, 'error' => $e->getMessage()]);
+        }
     }
 
     /**

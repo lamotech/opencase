@@ -49,6 +49,10 @@
 				<label>{{ t('opencase', 'Registreret dato') }}</label>
 				<input v-model="registeredDate" type="date" class="ndd-date-input" />
 			</div>
+			<div class="ndd-field">
+				<label>{{ t('opencase', 'Dokumentresume') }}</label>
+				<RichTextEditor ref="summaryEditor" />
+			</div>
 		</div>
 
 		<!-- Files tab -->
@@ -85,17 +89,76 @@
 				<p v-else-if="templates.length === 0" class="ndd-files-section__empty">
 					{{ t('opencase', 'Ingen skabeloner tilgængelige') }}
 				</p>
-				<ul v-else class="ndd-template-list">
-					<li v-for="tpl in templates"
-						:key="tpl.id"
-						class="ndd-template-list__item"
-						:class="{ 'ndd-template-list__item--selected': isTemplateSelected(tpl.id) }"
-						@click="toggleTemplate(tpl)">
-						<component :is="mimeIcon(tpl.mime_type)" :size="20" class="ndd-template-list__icon" />
-						<span class="ndd-template-list__name">{{ tpl.name }}</span>
-						<CheckIcon v-if="isTemplateSelected(tpl.id)" :size="18" class="ndd-template-list__check" />
-					</li>
-				</ul>
+				<template v-else>
+					<!-- Filenames for the picked templates — one per staged file -->
+					<div v-if="pendingTemplates.length > 0" class="ndd-template-names">
+						<span class="ndd-template-names__title">{{ t('opencase', 'Filnavne') }}</span>
+						<div v-for="tpl in pendingTemplates" :key="'n' + tpl.id" class="ndd-template-names__row">
+							<NcButton type="tertiary"
+								class="ndd-template-names__remove"
+								:aria-label="t('opencase', 'Fravælg {name}', { name: tpl.name })"
+								:title="t('opencase', 'Fravælg skabelonen')"
+								@click="removeTemplate(tpl.id)">
+								<template #icon><CloseIcon :size="16" /></template>
+							</NcButton>
+							<component :is="mimeIcon(tpl.mime_type)" :size="18" class="ndd-template-list__icon" />
+							<NcTextField v-model="tpl.filename"
+								:label="tpl.name"
+								:placeholder="baseNameOf(tpl.original_filename)" />
+							<span class="ndd-template-names__ext">.{{ extensionOf(tpl.original_filename) }}</span>
+						</div>
+					</div>
+					<p v-else class="ndd-files-section__empty">
+						{{ t('opencase', 'Vælg en eller flere skabeloner nedenfor — så kan du navngive filerne her') }}
+					</p>
+
+					<!-- Filter -->
+					<NcTextField v-model="templateFilter"
+						class="ndd-template-filter"
+						:label="t('opencase', 'Filtrer efter navn')"
+						:placeholder="t('opencase', 'Filtrer efter navn…')"
+						trailing-button-icon="close"
+						:show-trailing-button="templateFilter !== ''"
+						@trailing-button-click="templateFilter = ''" />
+
+					<!-- Template list -->
+					<p v-if="filteredTemplates.length === 0" class="ndd-files-section__empty">
+						{{ t('opencase', 'Ingen skabeloner matcher filteret') }}
+					</p>
+					<ul v-else class="ndd-template-list">
+						<li v-for="tpl in pagedTemplates"
+							:key="tpl.id"
+							class="ndd-template-list__item"
+							:class="{ 'ndd-template-list__item--selected': isTemplateSelected(tpl.id) }"
+							@click="toggleTemplate(tpl)">
+							<component :is="mimeIcon(tpl.mime_type)" :size="20" class="ndd-template-list__icon" />
+							<div class="ndd-template-list__info">
+								<span class="ndd-template-list__name">{{ tpl.name }}</span>
+								<span class="ndd-template-list__meta">
+									{{ tpl.original_filename }} · {{ formatSize(tpl.size) }}
+								</span>
+							</div>
+							<CheckIcon v-if="isTemplateSelected(tpl.id)" :size="18" class="ndd-template-list__check" />
+						</li>
+					</ul>
+
+					<!-- Pagination -->
+					<div v-if="filteredTemplates.length > templatePageSize" class="ndd-template-pagination">
+						<NcButton :disabled="templatePage === 1" @click="templatePage--">
+							{{ t('opencase', 'Forrige') }}
+						</NcButton>
+						<span class="ndd-template-pagination__info">
+							{{ t('opencase', '{start}–{end} af {total}', {
+								start: (templatePage - 1) * templatePageSize + 1,
+								end: Math.min(templatePage * templatePageSize, filteredTemplates.length),
+								total: filteredTemplates.length,
+							}) }}
+						</span>
+						<NcButton :disabled="templatePage >= templateTotalPages" @click="templatePage++">
+							{{ t('opencase', 'Næste') }}
+						</NcButton>
+					</div>
+				</template>
 			</div>
 		</div>
 
@@ -135,6 +198,7 @@ import FolderOutlineIcon from 'vue-material-design-icons/FolderOutline.vue'
 import EmailOutlineIcon from 'vue-material-design-icons/EmailOutline.vue'
 import OverflowTabs from './OverflowTabs.vue'
 import DocumentContactList from './DocumentContactList.vue'
+import RichTextEditor from './RichTextEditor.vue'
 import api from '../services/api.js'
 
 const MIME_ICONS = {
@@ -154,7 +218,7 @@ export default {
 	components: {
 		NcDialog, NcButton, NcTextField, NcSelect, NcLoadingIcon,
 		UploadIcon, CloseIcon, CheckIcon, FileIcon, FileWordIcon, FileExcelIcon, FilePdfIcon,
-		OverflowTabs, DocumentContactList,
+		OverflowTabs, DocumentContactList, RichTextEditor,
 	},
 	props: {
 		caseId: { type: Number, required: true },
@@ -189,12 +253,30 @@ export default {
 			pendingTemplates: [],
 			templates: [],
 			templatesLoading: true,
+			templateFilter: '',
+			templatePage: 1,
+			templatePageSize: 20,
 
 			// Contacts tab
 			contactsCount: null,
 		}
 	},
 	computed: {
+		filteredTemplates() {
+			const query = this.templateFilter.trim().toLowerCase()
+			if (!query) return this.templates
+			return this.templates.filter(tpl => tpl.name?.toLowerCase().includes(query))
+		},
+
+		templateTotalPages() {
+			return Math.max(1, Math.ceil(this.filteredTemplates.length / this.templatePageSize))
+		},
+
+		pagedTemplates() {
+			const start = (this.templatePage - 1) * this.templatePageSize
+			return this.filteredTemplates.slice(start, start + this.templatePageSize)
+		},
+
 		insightLevelOptions() {
 			return this.$store.state.insightLevels.map(l => ({ id: l.id, label: l.name }))
 		},
@@ -207,6 +289,16 @@ export default {
 		},
 	},
 	watch: {
+		templateFilter() {
+			this.templatePage = 1
+		},
+
+		templateTotalPages(newTotal) {
+			if (this.templatePage > newTotal) {
+				this.templatePage = newTotal
+			}
+		},
+
 		insightLevelOptions(options) {
 			if (!this.insightLevelInitialized && options.length > 0) {
 				this.initInsightLevel(options)
@@ -271,8 +363,27 @@ export default {
 			if (idx >= 0) {
 				this.pendingTemplates.splice(idx, 1)
 			} else {
-				this.pendingTemplates.push(tpl)
+				// Staged copy, so the user can name the file that gets created
+				// without touching the template itself
+				this.pendingTemplates.push({ ...tpl, filename: this.baseNameOf(tpl.original_filename) })
 			}
+		},
+
+		// Unselect a staged template — also clears its tick in the list below,
+		// since the selection is derived from pendingTemplates
+		removeTemplate(id) {
+			const idx = this.pendingTemplates.findIndex(t => t.id === id)
+			if (idx >= 0) this.pendingTemplates.splice(idx, 1)
+		},
+
+		baseNameOf(filename) {
+			const dot = (filename || '').lastIndexOf('.')
+			return dot > 0 ? filename.slice(0, dot) : (filename || '')
+		},
+
+		extensionOf(filename) {
+			const dot = (filename || '').lastIndexOf('.')
+			return dot > 0 ? filename.slice(dot + 1) : ''
 		},
 
 		async save() {
@@ -303,6 +414,7 @@ export default {
 						received_date: this.receivedDate || null,
 						registered_date: this.registeredDate || null,
 						document_category_id: this.selectedCategory.id,
+						summary: this.$refs.summaryEditor.getHtml(),
 					},
 				})
 
@@ -322,7 +434,7 @@ export default {
 				// 3. Create staged template files
 				for (const tpl of this.pendingTemplates) {
 					try {
-						await api.createFileFromTemplate(doc.id, tpl.id)
+						await api.createFileFromTemplate(doc.id, tpl.id, (tpl.filename || '').trim())
 					} catch (e) {
 						showError(t('opencase', 'Kunne ikke oprette fil fra skabelon {name}', { name: tpl.name }))
 					}
@@ -385,7 +497,7 @@ export default {
 }
 
 .ndd-field__error {
-	color: var(--color-error);
+	color: #c62828;
 	font-size: 0.85em;
 }
 
@@ -505,11 +617,75 @@ export default {
 	color: var(--color-primary-element);
 }
 
-.ndd-template-list__name {
+.ndd-template-list__info {
 	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+}
+
+.ndd-template-list__name {
 	font-size: 0.9em;
 	overflow: hidden;
 	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ndd-template-list__meta {
+	font-size: 0.8em;
+	color: var(--color-text-lighter);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ndd-template-filter {
+	margin-bottom: 4px;
+}
+
+.ndd-template-pagination {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 16px;
+	margin-top: 8px;
+}
+
+.ndd-template-pagination__info {
+	color: var(--color-text-lighter);
+	font-size: 0.85em;
+}
+
+.ndd-template-names {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin-bottom: 4px;
+	padding-bottom: 10px;
+	border-bottom: 1px solid var(--color-border);
+}
+
+.ndd-template-names__title {
+	font-weight: 600;
+	font-size: 0.9em;
+}
+
+.ndd-template-names__row {
+	display: flex;
+	align-items: flex-end;
+	gap: 8px;
+}
+
+.ndd-template-names__remove {
+	flex-shrink: 0;
+	margin-bottom: 2px;
+}
+
+.ndd-template-names__ext {
+	font-size: 0.85em;
+	color: var(--color-text-lighter);
+	padding-bottom: 6px;
 	white-space: nowrap;
 }
 

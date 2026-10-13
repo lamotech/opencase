@@ -6,58 +6,60 @@ namespace OCA\OpenCase\BackgroundJob;
 
 use OCA\OpenCase\Db\AccessRequestMapper;
 use OCA\OpenCase\Service\AccessDeadlineService;
+use OCA\OpenCase\Service\Configuration;
 use OCP\AppFramework\Utility\ITimeFactory;
-use OCP\BackgroundJob\TimedJob;
+use OCP\IConfig;
 use OCP\IUserManager;
 use OCP\Notification\IManager as INotificationManager;
 use Psr\Log\LoggerInterface;
 
 /**
- * Daily job: sends Nextcloud notifications for access requests approaching
+ * Daily job (≈05:00): sends Nextcloud notifications for access requests approaching
  * or past their effective deadline.
  *
  * yellow: effective deadline within 2 days
  * red:    effective deadline is today or past
  */
-class AccessDeadlineNotificationJob extends TimedJob {
+class AccessDeadlineNotificationJob extends MorningNotificationJob {
 
     public function __construct(
         ITimeFactory $time,
+        Configuration $configuration,
+        IConfig $config,
+        LoggerInterface $logger,
         private AccessRequestMapper $requestMapper,
         private AccessDeadlineService $deadlineService,
         private INotificationManager $notificationManager,
         private IUserManager $userManager,
-        private LoggerInterface $logger,
     ) {
-        parent::__construct($time);
-        $this->setInterval(24 * 3600); // once per day
+        parent::__construct($time, $configuration, $config, $logger);
     }
 
-    protected function run($argument): void {
-        try {
-            $requests = $this->requestMapper->findApproachingDeadlines(3);
-            foreach ($requests as $req) {
-                if (empty($req->getAssignedUser())) {
-                    continue;
-                }
+    protected function lastRunKey(): string {
+        return 'access_deadline_notification_last_run';
+    }
 
-                $effective = $this->deadlineService->effectiveDeadline(
-                    $req->getExtendedDeadlineAt(),
-                    $req->getDeadlineAt(),
-                );
-                $colour = $this->deadlineService->deadlineColour($effective);
-                if (!in_array($colour, ['yellow', 'red'], true)) {
-                    continue;
-                }
-
-                $this->notify($req->getAssignedUser(), $req->getId(), $colour, $effective);
+    protected function sendNotifications(\DateTimeZone $tz): void {
+        $requests = $this->requestMapper->findApproachingDeadlines(3);
+        foreach ($requests as $req) {
+            if (empty($req->getAssignedUser())) {
+                continue;
             }
-        } catch (\Throwable $e) {
-            $this->logger->error('[AccessDeadlineNotificationJob] ' . $e->getMessage());
+
+            $effective = $this->deadlineService->effectiveDeadline(
+                $req->getExtendedDeadlineAt(),
+                $req->getDeadlineAt(),
+            );
+            $colour = $this->deadlineService->deadlineColour($effective);
+            if (!in_array($colour, ['yellow', 'red'], true)) {
+                continue;
+            }
+
+            $this->notify($req->getAssignedUser(), $req->getId(), $req->getSubject(), $colour, $effective);
         }
     }
 
-    private function notify(string $userId, int $requestId, string $colour, \DateTime $deadline): void {
+    private function notify(string $userId, int $requestId, string $subject, string $colour, \DateTime $deadline): void {
         if ($this->userManager->get($userId) === null) {
             return;
         }
@@ -68,7 +70,9 @@ class AccessDeadlineNotificationJob extends TimedJob {
             ->setUser($userId)
             ->setObject('access_request', (string)$requestId)
             ->setSubject('access_deadline_' . $colour, [
-                'deadline' => $deadline->format('d-m-Y'),
+                'request_id' => $requestId,
+                'subject'    => $subject,
+                'deadline'   => $deadline->format('d-m-Y'),
             ])
             ->setDateTime(new \DateTime());
 

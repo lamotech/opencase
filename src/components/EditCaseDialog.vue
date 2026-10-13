@@ -127,6 +127,26 @@
 					<editor-content class="opencase-edit-case__editor-content" :editor="editor" />
 				</div>
 			</div>
+
+			<div v-for="field in customFields" :key="field.id" class="opencase-edit-case__field">
+				<label>{{ field.label }}<span v-if="field.required"> *</span></label>
+
+				<NcSelect v-if="field.field_type === 'dropdown'"
+					:model-value="customFieldValues[field.field_key] ? { id: customFieldValues[field.field_key], label: customFieldValues[field.field_key] } : null"
+					:options="field.options.map(o => ({ id: o, label: o }))"
+					:placeholder="t('opencase', 'Vælg')"
+					@update:model-value="v => customFieldValues[field.field_key] = v?.id || ''" />
+
+				<NcCheckboxRadioSwitch v-else-if="field.field_type === 'checkbox'"
+					v-model="customFieldValues[field.field_key]"
+					type="switch" />
+
+				<input v-else-if="field.field_type === 'date'"
+					v-model="customFieldValues[field.field_key]"
+					type="date">
+
+				<NcTextField v-else v-model="customFieldValues[field.field_key]" />
+			</div>
 		</div>
 		<template #actions>
 			<NcButton @click="$emit('close')">{{ t('opencase', 'Annuller') }}</NcButton>
@@ -142,6 +162,7 @@ import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
+import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import { showError, showSuccess } from '@nextcloud/dialogs'
 
 import FormatBoldIcon from 'vue-material-design-icons/FormatBold.vue'
@@ -167,6 +188,7 @@ export default {
 		NcButton,
 		NcTextField,
 		NcSelect,
+		NcCheckboxRadioSwitch,
 		EditorContent,
 		FormatBoldIcon,
 		FormatItalicIcon,
@@ -245,6 +267,8 @@ export default {
 			userSearchTimeout: null,
 			saving: false,
 			editor: null,
+			customFields: [],
+			customFieldValues: {},
 		}
 	},
 	computed: {
@@ -319,6 +343,15 @@ export default {
 		this.$store.dispatch('fetchSensitivities')
 		this.$store.dispatch('fetchInsightLevels')
 		this.$store.dispatch('fetchClassificationFacets')
+
+		try {
+			this.customFields = await api.getCaseCustomFields(this.caseData.id)
+			for (const field of this.customFields) {
+				this.customFieldValues[field.field_key] = field.field_type === 'checkbox' ? !!field.value : (field.value ?? '')
+			}
+		} catch (e) {
+			this.customFields = []
+		}
 	},
 	beforeUnmount() {
 		this.editor?.destroy()
@@ -369,6 +402,16 @@ export default {
 					id: this.caseData.id,
 					payload: { ...this.form, summary: this.summaryHtml() },
 				})
+
+				if (this.customFields.length) {
+					try {
+						await api.updateCaseCustomFields(this.caseData.id, this.customFieldValues)
+					} catch (e) {
+						const msg = e.response?.data?.ocs?.data?.error
+						showError(msg ? t('opencase', 'Sag opdateret, men tillægsfelterne kunne ikke gemmes: {msg}', { msg }) : t('opencase', 'Sag opdateret, men tillægsfelterne kunne ikke gemmes'))
+					}
+				}
+
 				showSuccess(t('opencase', 'Sag opdateret'))
 				this.$emit('saved', updated)
 			} catch (e) {

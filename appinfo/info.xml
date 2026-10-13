@@ -18,7 +18,7 @@ Features:
 - Per-user document access overrides
 - Comprehensive REST API
     ]]></description>
-	<version>1.1.0</version>
+	<version>1.1.20</version>
 	<licence>agpl</licence>
 	<author mail="dev@lamotech.dk" homepage="https://lamotech.dk">Lamotech Solutions ApS</author>
 	<namespace>OpenCase</namespace>
@@ -43,7 +43,7 @@ Features:
     <screenshot>https://raw.githubusercontent.com/lamotech/opencase/main/readme/AI.png</screenshot>
 
 	<dependencies>
-		<nextcloud min-version="34" max-version="34"/>
+		<nextcloud min-version="34" max-version="35"/>
 	</dependencies>
 
 	<repair-steps>
@@ -69,6 +69,15 @@ Features:
 		<command>OCA\OpenCase\Command\FetchOrganisationsCommand</command>
 		<command>OCA\OpenCase\Command\SyncOrganisationsCommand</command>
 		<command>OCA\OpenCase\Command\FetchClassificationsCommand</command>
+		<command>OCA\OpenCase\Command\GetCaseDocumentIndexCommand</command>
+		<command>OCA\OpenCase\Command\FremsoegCaseDocumentIndexCommand</command>
+		<command>OCA\OpenCase\Command\CreateCaseDocumentIndexCommand</command>
+		<command>OCA\OpenCase\Command\CreateDocumentDocumentIndexCommand</command>
+		<command>OCA\OpenCase\Command\AddDocumentToCaseDocumentIndexCommand</command>
+		<command>OCA\OpenCase\Command\AddJournalnoteToCaseDocumentIndexCommand</command>
+		<command>OCA\OpenCase\Command\GetDocumentDocumentIndexCommand</command>
+		<command>OCA\OpenCase\Command\RemoveDocumentDocumentIndexCommand</command>
+		<command>OCA\OpenCase\Command\RemoveCaseDocumentIndexCommand</command>
 		<command>OCA\OpenCase\Command\TraceEnableCommand</command>
 		<command>OCA\OpenCase\Command\TraceDisableCommand</command>
 		<command>OCA\OpenCase\Command\SyncClassificationsCommand</command>

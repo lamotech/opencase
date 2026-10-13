@@ -118,7 +118,7 @@ class WidgetController extends ApiController {
                 ];
             } elseif ($fav->getEntity() === 'document') {
                 $doc = $this->documentMapper->findById((int)$fav->getEntityKey());
-                if ($doc === null) {
+                if ($doc === null || $doc->isSoftDeleted()) {
                     continue;
                 }
                 $items[] = [
@@ -167,7 +167,7 @@ class WidgetController extends ApiController {
                 ];
             } elseif ($entry->getEntity() === 'document') {
                 $doc = $this->documentMapper->findById($entry->getEntityKey());
-                if ($doc === null) {
+                if ($doc === null || $doc->isSoftDeleted()) {
                     continue;
                 }
                 $items[] = [

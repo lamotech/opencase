@@ -88,7 +88,7 @@ class FavoritesWidget implements IWidget, IIconWidget, IAPIWidgetV2, IButtonWidg
                 );
             } elseif ($fav->getEntity() === 'document') {
                 $doc = $this->documentMapper->findById((int)$fav->getEntityKey());
-                if ($doc === null) {
+                if ($doc === null || $doc->isSoftDeleted()) {
                     continue;
                 }
                 $items[] = new WidgetItem(

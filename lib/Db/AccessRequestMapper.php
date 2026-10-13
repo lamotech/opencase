@@ -48,7 +48,7 @@ class AccessRequestMapper extends QBMapper {
     public function findApproachingDeadlines(int $withinDays): array {
         $qb = $this->db->getQueryBuilder();
         $cutoff = new \DateTime("+{$withinDays} days");
-        $openStatuses = ['received', 'collecting', 'reviewing', 'redacting', 'approval'];
+        $openStatuses = ['received', 'collecting', 'reviewing', 'redacting', 'approval', 'approved'];
         $qb->select('*')->from($this->getTableName())
             ->where($qb->expr()->in('status', $qb->createNamedParameter($openStatuses, IQueryBuilder::PARAM_STR_ARRAY)))
             ->andWhere($qb->expr()->lte('deadline_at', $qb->createNamedParameter($cutoff, IQueryBuilder::PARAM_DATE)))

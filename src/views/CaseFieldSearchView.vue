@@ -76,6 +76,45 @@
 						@search="onUserSearch" />
 				</div>
 			</div>
+
+			<div class="ocfs-cases__custom-fields">
+				<div v-for="(row, index) in customFieldFilters" :key="index" class="ocfs-cases__form-grid">
+					<div class="ocfs-cases__field">
+						<label class="ocfs-cases__label">{{ t('opencase', 'Tillægsfelt') }}</label>
+						<NcSelect v-model="row.field"
+							:placeholder="t('opencase', 'Vælg felt')"
+							:options="customFieldOptions"
+							:clearable="true"
+							@update:model-value="onCustomFieldFilterChanged(index)" />
+					</div>
+					<template v-if="row.field && row.field.field_type === 'date'">
+						<div class="ocfs-cases__field">
+							<label class="ocfs-cases__label">{{ t('opencase', 'Fra dato') }}</label>
+							<input v-model="row.dateFromValue" type="date" class="ocfs-cases__date-input">
+						</div>
+						<div class="ocfs-cases__field">
+							<label class="ocfs-cases__label">{{ t('opencase', 'Til dato') }}</label>
+							<input v-model="row.dateToValue" type="date" class="ocfs-cases__date-input">
+						</div>
+					</template>
+					<div v-else-if="row.field" class="ocfs-cases__field">
+						<label class="ocfs-cases__label">{{ t('opencase', 'Værdi') }}</label>
+						<NcSelect v-if="row.field.field_type === 'dropdown'"
+							v-model="row.dropdownValue"
+							:placeholder="t('opencase', 'Vælg værdi')"
+							:options="row.field.options.map(o => ({ id: o, label: o }))"
+							:clearable="true" />
+						<NcCheckboxRadioSwitch v-else-if="row.field.field_type === 'checkbox'"
+							v-model="row.checkboxValue"
+							type="switch" />
+						<NcTextField v-else
+							v-model="row.textValue"
+							:placeholder="t('opencase', 'Søgetekst…')"
+							@keyup.enter="doSearch" />
+					</div>
+				</div>
+			</div>
+
 			<div class="ocfs-cases__form-actions">
 				<NcButton type="primary" @click="doSearch">
 					<template #icon>
@@ -158,6 +197,7 @@
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
+import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import MagnifyIcon from 'vue-material-design-icons/Magnify.vue'
@@ -172,6 +212,7 @@ export default {
 		NcButton,
 		NcSelect,
 		NcTextField,
+		NcCheckboxRadioSwitch,
 		NcEmptyContent,
 		NcLoadingIcon,
 		MagnifyIcon,
@@ -192,8 +233,10 @@ export default {
 				insightLevel: null,
 				responsible: null,
 			},
+			customFieldFilters: [this.newCustomFieldFilterRow()],
 			userOptions: [],
 			userSearchLoading: false,
+			customFields: [],
 			cases: [],
 			total: 0,
 			offset: 0,
@@ -230,6 +273,14 @@ export default {
 		insightLevelOptions() {
 			return this.$store.state.insightLevels.map(l => ({ id: l.id, label: l.name }))
 		},
+		customFieldOptions() {
+			return this.customFields.map(f => ({
+				id: f.field_key,
+				label: f.label,
+				field_type: f.field_type,
+				options: f.options,
+			}))
+		},
 		hasActiveFilters() {
 			return this.form.search.trim() !== ''
 				|| this.form.organisation !== null
@@ -241,15 +292,21 @@ export default {
 				|| this.form.classificationFacet !== null
 				|| this.form.insightLevel !== null
 				|| this.form.responsible !== null
+				|| this.customFieldFilters.some(row => row.field !== null)
 		},
 	},
 
-	mounted() {
+	async mounted() {
 		this.$store.dispatch('fetchCaseStatuses').catch(() => {})
 		this.$store.dispatch('fetchCaseTypes').catch(() => {})
 		this.$store.dispatch('fetchSensitivities').catch(() => {})
 		this.$store.dispatch('fetchClassificationFacets').catch(() => {})
 		this.$store.dispatch('fetchInsightLevels').catch(() => {})
+		try {
+			this.customFields = await api.getCustomFields()
+		} catch (e) {
+			this.customFields = []
+		}
 	},
 
 	methods: {
@@ -274,11 +331,80 @@ export default {
 				if (this.form.insightLevel) params.insight_level_id = this.form.insightLevel.id
 				if (this.form.responsible) params.responsible_user_id = this.form.responsible.id
 
+				let cfIndex = 0
+				for (const row of this.customFieldFilters) {
+					if (!row.field) continue
+					if (row.field.field_type === 'date') {
+						if (!row.dateFromValue && !row.dateToValue) continue
+						params[`custom_fields[${cfIndex}][key]`] = row.field.id
+						params[`custom_fields[${cfIndex}][type]`] = row.field.field_type
+						if (row.dateFromValue) params[`custom_fields[${cfIndex}][value_from]`] = row.dateFromValue
+						if (row.dateToValue) params[`custom_fields[${cfIndex}][value_to]`] = row.dateToValue
+						cfIndex++
+						continue
+					}
+					const value = this.customFieldFilterValue(row)
+					if (value === null) continue
+					params[`custom_fields[${cfIndex}][key]`] = row.field.id
+					params[`custom_fields[${cfIndex}][type]`] = row.field.field_type
+					params[`custom_fields[${cfIndex}][value]`] = value
+					cfIndex++
+				}
+
 				const result = await api.getCases(params)
 				this.cases = result.cases || []
 				this.total = result.total || 0
 			} finally {
 				this.loading = false
+			}
+		},
+
+		newCustomFieldFilterRow() {
+			return {
+				field: null,
+				textValue: '',
+				dropdownValue: null,
+				checkboxValue: false,
+				dateFromValue: '',
+				dateToValue: '',
+			}
+		},
+
+		/**
+		 * Keeps the filter row list self-managing: selecting a field on the
+		 * trailing row opens a new empty row below it; clearing a field on
+		 * a non-trailing row removes that row entirely.
+		 */
+		onCustomFieldFilterChanged(index) {
+			const row = this.customFieldFilters[index]
+			row.textValue = ''
+			row.dropdownValue = null
+			row.checkboxValue = false
+			row.dateFromValue = ''
+			row.dateToValue = ''
+
+			const isLast = index === this.customFieldFilters.length - 1
+			if (row.field && isLast) {
+				this.customFieldFilters.push(this.newCustomFieldFilterRow())
+			} else if (!row.field && !isLast) {
+				this.customFieldFilters.splice(index, 1)
+			}
+		},
+
+		/**
+		 * The search value for a non-date filter row, shaped for the
+		 * field's type, or null if nothing has been entered yet (checkbox
+		 * is the exception — it always has a value, on or off). Date
+		 * fields are handled separately as a from/to range.
+		 */
+		customFieldFilterValue(row) {
+			switch (row.field.field_type) {
+			case 'dropdown':
+				return row.dropdownValue?.id || null
+			case 'checkbox':
+				return row.checkboxValue ? '1' : '0'
+			default:
+				return row.textValue.trim() || null
 			}
 		},
 
@@ -311,6 +437,7 @@ export default {
 				insightLevel: null,
 				responsible: null,
 			}
+			this.customFieldFilters = [this.newCustomFieldFilterRow()]
 			this.cases = []
 			this.total = 0
 			this.searched = false
@@ -378,10 +505,27 @@ export default {
 	color: var(--color-text-maxcontrast);
 }
 
+.ocfs-cases__custom-fields {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	padding-top: 12px;
+	border-top: 1px solid var(--color-border);
+}
+
 .ocfs-cases__form-actions {
 	display: flex;
 	gap: 8px;
 	align-items: center;
+}
+
+.ocfs-cases__date-input {
+	height: 34px;
+	padding: 0 8px;
+	border: 2px solid var(--color-border-maxcontrast);
+	border-radius: var(--border-radius);
+	background: var(--color-main-background);
+	color: var(--color-main-text);
 }
 
 .ocfs-cases__loading {

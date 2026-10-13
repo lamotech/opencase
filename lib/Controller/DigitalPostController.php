@@ -15,6 +15,7 @@ use OCA\OpenCase\Db\DpShipmentMapper;
 use OCA\OpenCase\Db\FileMapper;
 use OCA\OpenCase\Service\CaseService;
 use OCA\OpenCase\Service\Configuration;
+use OCA\OpenCase\Service\DocumentRelationService;
 use OCA\OpenCase\Service\Serviceplatformen\PostForespoergClient;
 use OCP\AppFramework\ApiController;
 use OCP\AppFramework\Http;
@@ -45,6 +46,7 @@ class DigitalPostController extends ApiController {
         private DpShipmentMapper $dpShipmentMapper,
         private DpFileMapper $dpFileMapper,
         private DpReceiverMapper $dpReceiverMapper,
+        private DocumentRelationService $documentRelationService,
         private ?string $userId,
     ) {
         parent::__construct($appName, $request);
@@ -111,7 +113,8 @@ class DigitalPostController extends ApiController {
             $this->documentMapper->update($document);
         }
 
-        $canBeReplied = (bool)($params['can_be_replied'] ?? true);
+        $canBeReplied       = (bool)($params['can_be_replied'] ?? true);
+        $includeAttachments = (bool)($params['include_attachments'] ?? false);
         $mainFileId   = isset($params['main_file_id']) ? (int)$params['main_file_id'] : null;
         $receiversIn  = is_array($params['receivers'] ?? null) ? $params['receivers'] : [];
 
@@ -119,6 +122,7 @@ class DigitalPostController extends ApiController {
         $shipment = new DpShipment();
         $shipment->setDocumentId($documentId);
         $shipment->setCanBeReplied($canBeReplied);
+        $shipment->setIncludeAttachments($includeAttachments);
         $shipment->setCaseUuid($case->getUuid());
         $shipment->setDocumentUuid($document->getUuid());
         $shipment->setCreatedAt(new \DateTime());
@@ -129,15 +133,25 @@ class DigitalPostController extends ApiController {
         $shipment = $this->dpShipmentMapper->insert($shipment);
         $shipmentId = $shipment->getId();
 
-        // --- Create dp_files records (all files for the document) ---
+        // --- Create dp_files records (all files for the document, plus the
+        // files of its attachments when include_attachments is set) ---
         $files = $this->fileMapper->findByDocument($documentId);
+        if ($includeAttachments && $this->userId !== null) {
+            foreach ($this->documentRelationService->readableAttachmentIds($documentId, $this->userId) as $attachmentId) {
+                array_push($files, ...$this->fileMapper->findByDocument($attachmentId));
+            }
+        }
+
+        // The dispatch job writes every additional file as <name>.pdf into
+        // one folder, so display names must be unique per shipment.
+        $usedNames = [];
         foreach ($files as $file) {
             $dpFile = new DpFile();
             $dpFile->setDpShipmentId($shipmentId);
             $dpFile->setFileId($file->getId());
-            $dpFile->setFileName($file->getVirtualFilename() ?: $file->getOriginalFilename());
+            $dpFile->setFileName($this->uniqueFileName($file->getVirtualFilename() ?: $file->getOriginalFilename(), $usedNames));
             $dpFile->setStorageFilename(null);
-            $dpFile->setIsMain($mainFileId !== null && $file->getId() === $mainFileId);
+            $dpFile->setIsMain($mainFileId !== null && $file->getId() === $mainFileId && $file->getDocumentId() === $documentId);
             $this->dpFileMapper->insert($dpFile);
         }
 
@@ -182,11 +196,12 @@ class DigitalPostController extends ApiController {
 
         return new DataResponse([
             'shipment' => [
-                'id'             => $shipmentId,
-                'status'         => $shipment->getStatus(),
-                'can_be_replied' => $shipment->getCanBeReplied(),
-                'created_at'     => $shipment->getCreatedAt()?->format('c'),
-                'updated_at'     => $shipment->getUpdatedAt()?->format('c'),
+                'id'                  => $shipmentId,
+                'status'              => $shipment->getStatus(),
+                'can_be_replied'      => $shipment->getCanBeReplied(),
+                'include_attachments' => $shipment->getIncludeAttachments(),
+                'created_at'          => $shipment->getCreatedAt()?->format('c'),
+                'updated_at'          => $shipment->getUpdatedAt()?->format('c'),
             ],
             'files' => array_map(fn($f) => [
                 'id'               => $f->getId(),
@@ -241,5 +256,22 @@ class DigitalPostController extends ApiController {
             basename($path),
             'application/pdf'
         );
+    }
+
+    /**
+     * Return $name, or "<base> (2).<ext>", "<base> (3).<ext>", … if the base
+     * name (case-insensitive, extension ignored) is already in $used.
+     *
+     * @param array<string, true> $used
+     */
+    private function uniqueFileName(string $name, array &$used): string {
+        $base = pathinfo($name, PATHINFO_FILENAME);
+        $ext  = pathinfo($name, PATHINFO_EXTENSION);
+        $candidate = $name;
+        for ($i = 2; isset($used[mb_strtolower(pathinfo($candidate, PATHINFO_FILENAME))]); $i++) {
+            $candidate = "{$base} ({$i})" . ($ext !== '' ? ".{$ext}" : '');
+        }
+        $used[mb_strtolower(pathinfo($candidate, PATHINFO_FILENAME))] = true;
+        return $candidate;
     }
 }

@@ -30,6 +30,29 @@ Vælg den ønskede skabelon for at oprette en ny fil.
 
 ---
 
+## Navngiv filen
+
+Når du har valgt en skabelon, kan du selv angive et **filnavn** til den nye fil.
+
+![Vælg skabelon](../images/dokumenter/navngiv-fil-fra-skabelon.png)
+
+Feltet udfyldes på forhånd med skabelonens navn, så du blot kan rette det til.
+
+Filtypen (fx `.docx`) bevares altid, uanset hvad du skriver i feltet.
+
+Opretter du et nyt dokument med filer fra skabeloner, angives filnavnene på fanen
+**Filer** i dialogen **Opret nyt dokument**.
+
+!!! tip "Genkendelige filnavne"
+
+    Giv filen et navn, der beskriver indholdet — fx `Afgørelse om aktindsigt` —
+    frem for skabelonens standardnavn. Det gør filen lettere at finde igen.
+
+Har filen allerede fået et forkert navn, kan den omdøbes fra filens menu på
+fanen **Filer**. Læs mere i [Rediger fil](../dokumenter/rediger-fil.md).
+
+---
+
 ## Automatisk udfyldelse
 
 Når filen oprettes, indsætter OpenCase automatisk oplysninger fra sagen og dokumentet i de flettefelter, der er defineret i skabelonen.

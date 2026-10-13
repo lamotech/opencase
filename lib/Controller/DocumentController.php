@@ -219,12 +219,15 @@ class DocumentController extends ApiController {
 
     /**
      * List all documents in a case.
+     *
+     * Query: include_deleted=1 — also return soft-deleted documents (is_deleted=true).
      */
     #[NoAdminRequired]
     #[ApiRoute(verb: 'GET', url: '/api/v1/cases/{caseId}/documents')]
     public function index(int $caseId): DataResponse {
+        $includeDeleted = filter_var($this->request->getParam('include_deleted', false), FILTER_VALIDATE_BOOLEAN);
         try {
-            $documents     = $this->documentService->listByCase($caseId, $this->userId);
+            $documents     = $this->documentService->listByCase($caseId, $this->userId, $includeDeleted);
             $lang          = $this->getUserLanguage();
             $statusNames   = $this->documentStatusMapper->getNameMap($lang);
             $statusFinals  = $this->documentStatusMapper->getIsFinalMap();
@@ -270,6 +273,7 @@ class DocumentController extends ApiController {
         $receivedDate       = isset($params['received_date']) ? (string)$params['received_date'] : null;
         $registeredDate     = isset($params['registered_date']) ? (string)$params['registered_date'] : null;
         $documentCategoryId = isset($params['document_category_id']) ? (int)$params['document_category_id'] : null;
+        $summary            = !empty($params['summary']) ? (string)$params['summary'] : null;
 
         try {
             $entity       = $this->documentService->create(
@@ -282,6 +286,7 @@ class DocumentController extends ApiController {
                 $receivedDate,
                 $registeredDate,
                 $documentCategoryId,
+                $summary,
             );
             $lang          = $this->getUserLanguage();
             $statusNames   = $this->documentStatusMapper->getNameMap($lang);
@@ -350,6 +355,8 @@ class DocumentController extends ApiController {
         $receivedDate           = $receivedDateProvided ? ($params['received_date'] !== '' ? (string)$params['received_date'] : null) : null;
         $registeredDateProvided = array_key_exists('registered_date', $params);
         $registeredDate         = $registeredDateProvided ? ($params['registered_date'] !== '' ? (string)$params['registered_date'] : null) : null;
+        $summaryProvided        = array_key_exists('summary', $params);
+        $summary                = $summaryProvided ? ($params['summary'] ?: null) : null;
 
         try {
             $entity       = $this->documentService->update(
@@ -366,6 +373,8 @@ class DocumentController extends ApiController {
                 $receivedDateProvided,
                 $registeredDate,
                 $registeredDateProvided,
+                $summary,
+                $summaryProvided,
             );
             $statusFinals = $this->documentStatusMapper->getIsFinalMap();
 
@@ -396,19 +405,45 @@ class DocumentController extends ApiController {
     }
 
     /**
-     * Delete a draft document and its files.
+     * Delete a draft document and its files (soft delete when use_softdelete=1).
      */
     #[NoAdminRequired]
     #[ApiRoute(verb: 'DELETE', url: '/api/v1/documents/{id}')]
     public function destroy(int $id): DataResponse {
         try {
-            $this->documentService->delete($id, $this->userId);
-            return new DataResponse(['deleted' => true]);
+            $softDeleted = $this->documentService->delete($id, $this->userId);
+            return new DataResponse(['deleted' => true, 'soft_deleted' => $softDeleted]);
         } catch (\InvalidArgumentException $e) {
             return new DataResponse(
                 ['error' => $e->getMessage()],
                 Http::STATUS_BAD_REQUEST
             );
+        } catch (NotFoundException $e) {
+            return new DataResponse(
+                ['error' => 'Document not found'],
+                Http::STATUS_NOT_FOUND
+            );
+        }
+    }
+
+    /**
+     * Restore a soft-deleted document.
+     */
+    #[NoAdminRequired]
+    #[ApiRoute(verb: 'POST', url: '/api/v1/documents/{id}/restore')]
+    public function restore(int $id): DataResponse {
+        try {
+            $entity        = $this->documentService->restore($id, $this->userId);
+            $lang          = $this->getUserLanguage();
+            $statusNames   = $this->documentStatusMapper->getNameMap($lang);
+            $statusFinals  = $this->documentStatusMapper->getIsFinalMap();
+            $ilId          = $entity->getInsightLevelId();
+            $insightNames  = $ilId ? $this->insightLevelMapper->getNamesByIds([$ilId], $lang) : [];
+            $categoryNames = $this->documentCategoryMapper->getNameMap($lang);
+            $canWrite      = $this->documentService->canWrite($id, $this->userId);
+            return new DataResponse(['document' => $this->serializeDocument($entity, $statusNames, $statusFinals, $insightNames, $categoryNames, $canWrite)]);
+        } catch (\DomainException $e) {
+            return new DataResponse(['error' => $e->getMessage()], Http::STATUS_BAD_REQUEST);
         } catch (NotFoundException $e) {
             return new DataResponse(
                 ['error' => 'Document not found'],
@@ -506,6 +541,8 @@ class DocumentController extends ApiController {
         $documentCategoryId = $entity->getDocumentCategoryId();
         $createdByUid       = $entity->getCreatedBy();
         $createdByUser      = $createdByUid ? $this->userManager->get($createdByUid) : null;
+        $updatedByUid       = $entity->getUpdatedBy() ?: $createdByUid;
+        $updatedByUser      = $updatedByUid ? $this->userManager->get($updatedByUid) : null;
         return [
             'id'                     => $entity->getId(),
             'uuid'                   => $entity->getUuid(),
@@ -522,12 +559,18 @@ class DocumentController extends ApiController {
             'document_category_name' => $documentCategoryId ? ($categoryNames[$documentCategoryId] ?? '') : '',
             'created_at'             => $entity->getCreatedAt()?->format('c'),
             'updated_at'             => $entity->getUpdatedAt()?->format('c'),
+            'updated_in_sapa'        => $entity->getUpdatedInSapa()?->format('c'),
             'created_by'             => $entity->getCreatedBy(),
             'created_by_display_name' => $createdByUser?->getDisplayName() ?? $createdByUid ?? '',
+            'updated_by'             => $updatedByUid,
+            'updated_by_display_name' => $updatedByUser?->getDisplayName() ?? $updatedByUid ?? '',
             'document_date'          => $entity->getDocumentDate(),
             'received_date'          => $entity->getReceivedDate(),
             'registered_date'        => $entity->getRegisteredDate(),
+            'summary'                => $entity->getSummary(),
             'can_write'              => $canWrite,
+            'is_deleted'             => $entity->isSoftDeleted(),
+            'deleted_date'           => $entity->getDeletedDate()?->format('c'),
         ];
     }
 }

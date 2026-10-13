@@ -1686,7 +1686,7 @@ export default {
 }
 
 .ai-panel__action-result-icon--ok  { color: var(--color-success); flex-shrink: 0; }
-.ai-panel__action-result-icon--err { color: var(--color-error);   flex-shrink: 0; }
+.ai-panel__action-result-icon--err { color: #c62828;   flex-shrink: 0; }
 
 .ai-panel__error {
 	display: flex;
@@ -1695,7 +1695,7 @@ export default {
 	padding: 8px 12px;
 	border-radius: var(--border-radius);
 	background: rgba(var(--color-error-rgb, 255,0,0), 0.12);
-	color: var(--color-error);
+	color: #c62828;
 	font-size: 0.85em;
 }
 

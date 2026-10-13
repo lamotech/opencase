@@ -47,6 +47,7 @@ class FileService {
         private IDBConnection $db,
         private LoggerInterface $logger,
         private IRootFolder $rootFolder,
+        private Configuration $configuration,
     ) {
         $defaultDir    = rtrim($config->getSystemValueString('datadirectory', ''), '/') . '/opencase_storage';
         $this->baseDir = rtrim($config->getAppValue('opencase', 'storage_base_dir', $defaultDir), '/');
@@ -67,7 +68,7 @@ class FileService {
     ): FileEntity {
         // Resolve document and case
         $document = $this->documentMapper->findById($documentId);
-        if ($document === null) {
+        if ($document === null || $document->isSoftDeleted()) {
             throw new NotFoundException("Document {$documentId} not found");
         }
 
@@ -185,7 +186,7 @@ class FileService {
         string $userId,
     ): FileEntity {
         $entity = $this->fileMapper->findById($fileId);
-        if ($entity === null) {
+        if ($entity === null || $entity->isSoftDeleted()) {
             throw new NotFoundException("File {$fileId} not found");
         }
 
@@ -436,16 +437,17 @@ class FileService {
     }
 
     /**
-     * List all files in a document.
+     * List all files in a document. Soft-deleted files are only included
+     * when $includeDeleted is set.
      *
      * @return FileEntity[]
      */
-    public function listByDocument(int $documentId, string $userId): array {
+    public function listByDocument(int $documentId, string $userId, bool $includeDeleted = false): array {
         if (!$this->permissionService->userHasReadAccessToDocument($userId, $documentId)) {
             throw new NotFoundException('Access denied');
         }
 
-        return $this->fileMapper->findByDocument($documentId);
+        return $this->fileMapper->findByDocument($documentId, $includeDeleted);
     }
 
     /**
@@ -462,11 +464,131 @@ class FileService {
     }
 
     /**
-     * Delete a file (physical + DB + ES index).
+     * Rename a file (display name + virtual filesystem name).
+     *
+     * The physical storage filename is UUID-based and never changes, so a
+     * rename only touches the DB row and the oc_filecache entry. The filecache
+     * row is updated in place so the Nextcloud file ID survives — existing
+     * shares and Collabora sessions keep working.
+     *
+     * The original extension is always preserved: Collabora and the mime type
+     * stored on the row must keep agreeing with the file's actual content.
+     *
+     * @throws NotFoundException if the file is missing or the user cannot write it
+     * @throws \DomainException if the parent document is final (locked)
+     * @throws \InvalidArgumentException if the new name is empty after sanitising
      */
-    public function delete(int $fileId, string $userId): void {
+    public function rename(int $fileId, string $newFilename, string $userId): FileEntity {
         $entity = $this->fileMapper->findById($fileId);
-        if ($entity === null) {
+        if ($entity === null || $entity->isSoftDeleted()) {
+            throw new NotFoundException("File {$fileId} not found");
+        }
+
+        if (!$this->permissionService->userHasWriteAccessToDocument($userId, $entity->getDocumentId())) {
+            throw new NotFoundException('Access denied');
+        }
+
+        if ($this->isDocumentFinal($entity->getDocumentId())) {
+            throw new \DomainException('Document is final and cannot be renamed');
+        }
+
+        $case = $this->caseMapper->findById($entity->getCaseId());
+        if ($case === null) {
+            throw new NotFoundException("Case {$entity->getCaseId()} not found");
+        }
+
+        $oldFilename = $entity->getOriginalFilename();
+        $newFilename = self::sanitiseFilename($newFilename, $oldFilename);
+
+        if ($newFilename === $oldFilename) {
+            return $entity;
+        }
+
+        $oldVirtualFilename = $entity->getVirtualFilename();
+        $newVirtualFilename = $this->fileMapper->generateUniqueVirtualFilename(
+            $entity->getCaseId(), $newFilename
+        );
+
+        $entity->setOriginalFilename($newFilename);
+        $entity->setVirtualFilename($newVirtualFilename);
+        $entity->setUpdatedAt(new \DateTime());
+        $entity->setLastModifiedBy($userId);
+        $entity = $this->fileMapper->update($entity);
+
+        $this->renameFilecacheEntry($entity, $case, $oldVirtualFilename);
+
+        // Re-index so search reflects the new filename
+        $this->eventDispatcher->dispatchTyped(new FileUpdatedEvent($entity->getId()));
+
+        $this->auditService->logFileRenamed(
+            $entity->getCaseId(),
+            $entity->getDocumentId(),
+            $entity->getId(),
+            $userId,
+            $oldFilename,
+            $newFilename,
+        );
+
+        $this->logger->info('OpenCase: File renamed: {fileId} ({from} → {to})', [
+            'fileId' => $fileId,
+            'from'   => $oldFilename,
+            'to'     => $newFilename,
+        ]);
+
+        return $entity;
+    }
+
+    /**
+     * Clean up a user-supplied filename: no path separators, no control
+     * characters, and always the extension of $currentFilename so the stored
+     * mime type keeps matching the file content.
+     *
+     * @throws \InvalidArgumentException if nothing usable is left
+     */
+    public static function sanitiseFilename(string $desired, string $currentFilename): string {
+        // Take the basename only — a user-supplied "../x" must not escape anywhere
+        $desired = str_replace(['/', '\\', "\0"], '', $desired);
+        $desired = preg_replace('/[\x00-\x1F\x7F]/u', '', $desired) ?? '';
+        $desired = trim($desired);
+        // Leading dots would make a hidden file; trailing dots/spaces confuse
+        // Windows clients over WebDAV
+        $desired = trim($desired, ". \t");
+
+        if ($desired === '' || $desired === '.' || $desired === '..') {
+            throw new \InvalidArgumentException('Filename is empty');
+        }
+
+        $extension = pathinfo($currentFilename, PATHINFO_EXTENSION);
+        if ($extension !== '') {
+            $desiredExtension = pathinfo($desired, PATHINFO_EXTENSION);
+            if (strcasecmp($desiredExtension, $extension) !== 0) {
+                $desired .= '.' . $extension;
+            }
+        }
+
+        // original_filename / virtual_filename are 512 chars; keep the extension
+        if (mb_strlen($desired) > 512) {
+            $suffix  = $extension !== '' ? '.' . $extension : '';
+            $desired = mb_substr($desired, 0, 512 - mb_strlen($suffix)) . $suffix;
+        }
+
+        return $desired;
+    }
+
+    /**
+     * Delete a file.
+     *
+     * With opencase_config.use_softdelete = 1 the file is only flagged as
+     * deleted (is_deleted=1, deleted_date=now): it is removed from the ES
+     * index and the virtual filesystem, but the physical file and DB row are
+     * kept so it can be restored. Otherwise the file is removed for good
+     * (physical + DB + ES index).
+     *
+     * @return bool true if the file was soft-deleted, false if removed for good
+     */
+    public function delete(int $fileId, string $userId): bool {
+        $entity = $this->fileMapper->findById($fileId);
+        if ($entity === null || $entity->isSoftDeleted()) {
             throw new NotFoundException("File {$fileId} not found");
         }
 
@@ -479,32 +601,202 @@ class FileService {
             throw new NotFoundException("Case {$entity->getCaseId()} not found");
         }
 
-        // Remove from ES
-        try {
+        $softDelete = $this->isSoftDeleteEnabled();
+
+        if ($softDelete) {
             $this->esService->deleteDocument($fileId);
-        } catch (\Throwable $e) {
-            $this->logger->warning('OpenCase: Failed to delete ES document for file {fileId}: {error}', [
-                'fileId' => $fileId,
-                'error' => $e->getMessage(),
-            ]);
+            $this->fileMapper->markDeleted($fileId);
+            // Remove oc_filecache entry so the file no longer appears anywhere in NC
+            $this->removeFilecacheEntry($entity, $case);
+        } else {
+            $this->purgeFile($entity, $case);
         }
 
-        // Remove physical file
+        $this->auditService->logFileDeleted(
+            $entity->getCaseId(), $entity->getDocumentId(), $fileId, $userId,
+            $entity->getOriginalFilename(), $softDelete,
+        );
+
+        $this->logger->info('OpenCase: File {mode} deleted: {fileId} ({filename})', [
+            'mode' => $softDelete ? 'soft' : 'hard',
+            'fileId' => $fileId,
+            'filename' => $entity->getOriginalFilename(),
+        ]);
+
+        return $softDelete;
+    }
+
+    /**
+     * Restore a soft-deleted file: clear is_deleted/deleted_date, put it back
+     * in the virtual filesystem and queue it for ES indexing.
+     */
+    public function restore(int $fileId, string $userId): FileEntity {
+        $entity = $this->fileMapper->findById($fileId);
+        if ($entity === null) {
+            throw new NotFoundException("File {$fileId} not found");
+        }
+
+        if (!$this->permissionService->userHasWriteAccessToDocument($userId, $entity->getDocumentId())) {
+            throw new NotFoundException('Access denied');
+        }
+
+        if (!$entity->isSoftDeleted()) {
+            throw new \DomainException('File is not deleted');
+        }
+
+        if ($this->documentMapper->findById($entity->getDocumentId())?->isSoftDeleted()) {
+            throw new \DomainException('The document is deleted — restore the document first');
+        }
+
+        $case = $this->caseMapper->findById($entity->getCaseId());
+        if ($case === null) {
+            throw new NotFoundException("Case {$entity->getCaseId()} not found");
+        }
+
+        $this->fileMapper->markRestored($fileId);
+        $entity = $this->fileMapper->findById($fileId);
+
+        // Back into oc_filecache so the file shows up in the virtual filesystem
+        // (its file shares were kept while it was deleted)
+        $this->ensureFilecacheEntry($entity, $case);
+        if ($this->isDocumentFinal($entity->getDocumentId())) {
+            $this->updateFilecachePermissionsForDocument($entity->getDocumentId(), false);
+        }
+
+        // Trigger ES indexing
+        $this->eventDispatcher->dispatchTyped(new FileUpdatedEvent($fileId));
+
+        $this->auditService->logFileRestored(
+            $entity->getCaseId(), $entity->getDocumentId(), $fileId, $userId, $entity->getOriginalFilename(),
+        );
+
+        $this->logger->info('OpenCase: File restored: {fileId} ({filename})', [
+            'fileId' => $fileId,
+            'filename' => $entity->getOriginalFilename(),
+        ]);
+
+        return $entity;
+    }
+
+    /**
+     * Permanently delete a file: ES index entry, stored versions, shares,
+     * physical file, DB row and oc_filecache entry.
+     */
+    private function purgeFile(FileEntity $entity, CaseEntity $case): void {
+        $fileId = $entity->getId();
+
+        $this->esService->deleteDocument($fileId);
+
+        foreach ($this->fileVersionMapper->findByFileId($fileId) as $version) {
+            // Version files are named by timestamp only within the document's
+            // _versions dir — leave one that a sibling file also points to
+            if ($this->versionTimestampSharedBySibling($entity, $version->getTimestamp())) {
+                continue;
+            }
+            $versionPath = $this->buildVersionPath($entity, $case, $version->getTimestamp());
+            if (file_exists($versionPath)) {
+                unlink($versionPath);
+            }
+        }
+        $this->fileVersionMapper->deleteByFileId($fileId);
+        $this->fileShareMapper->deleteByFileId($fileId);
+
         $physicalPath = $this->buildPhysicalPath($entity, $case);
         if (file_exists($physicalPath)) {
             unlink($physicalPath);
         }
 
-        // Remove DB entity
         $this->fileMapper->delete($entity);
 
         // Remove oc_filecache entry so the file no longer appears anywhere in NC
         $this->removeFilecacheEntry($entity, $case);
+    }
 
-        $this->logger->info('OpenCase: File deleted: {fileId} ({filename})', [
-            'fileId' => $fileId,
-            'filename' => $entity->getOriginalFilename(),
-        ]);
+    private function versionTimestampSharedBySibling(FileEntity $entity, int $timestamp): bool {
+        $qb = $this->db->getQueryBuilder();
+        $qb->select($qb->func()->count('*'))
+            ->from('opencase_fileversions', 'v')
+            ->innerJoin('v', 'opencase_files', 'f', $qb->expr()->eq('f.id', 'v.file_id'))
+            ->where($qb->expr()->eq('f.document_id', $qb->createNamedParameter($entity->getDocumentId(), \OCP\DB\QueryBuilder\IQueryBuilder::PARAM_INT)))
+            ->andWhere($qb->expr()->neq('f.id', $qb->createNamedParameter($entity->getId(), \OCP\DB\QueryBuilder\IQueryBuilder::PARAM_INT)))
+            ->andWhere($qb->expr()->eq('v.timestamp', $qb->createNamedParameter($timestamp, \OCP\DB\QueryBuilder\IQueryBuilder::PARAM_INT)));
+        $result = $qb->executeQuery();
+        $count  = (int)$result->fetchOne();
+        $result->closeCursor();
+        return $count > 0;
+    }
+
+    /**
+     * Permanently delete every file of a document (soft-deleted ones too)
+     * and the document's storage directory. Used when a document is
+     * hard-deleted.
+     */
+    public function purgeDocumentFiles(int $documentId): void {
+        $document = $this->documentMapper->findById($documentId);
+        $case     = $document ? $this->caseMapper->findById($document->getCaseId()) : null;
+        if ($case === null) {
+            return;
+        }
+
+        foreach ($this->fileMapper->findByDocument($documentId, true) as $file) {
+            $this->purgeFile($file, $case);
+        }
+
+        // {baseDir}/{year}/{month}/{case_id}/{document_id}[/_versions] — only removed when empty
+        if ($case->getCreatedYear() !== '') {
+            $documentDir = sprintf(
+                '%s/%s/%s/%d/%d',
+                $this->baseDir, $case->getCreatedYear(), $case->getCreatedMonth(), $case->getId(), $documentId
+            );
+            foreach ([$documentDir . '/_versions', $documentDir] as $dir) {
+                if (is_dir($dir) && count(scandir($dir)) === 2) {
+                    @rmdir($dir);
+                }
+            }
+        }
+    }
+
+    /**
+     * Take the files of a (soft-deleted) document out of the ES index and
+     * the virtual filesystem. The files themselves are left untouched.
+     */
+    public function hideDocumentFiles(int $documentId): void {
+        $document = $this->documentMapper->findById($documentId);
+        $case     = $document ? $this->caseMapper->findById($document->getCaseId()) : null;
+        if ($case === null) {
+            return;
+        }
+
+        foreach ($this->fileMapper->findByDocument($documentId) as $file) {
+            $this->esService->deleteDocument($file->getId());
+            $this->removeFilecacheEntry($file, $case);
+        }
+    }
+
+    /**
+     * Put the files of a restored document back into the virtual filesystem
+     * and queue them for ES indexing. Files that were deleted on their own
+     * stay deleted.
+     */
+    public function showDocumentFiles(int $documentId): void {
+        $document = $this->documentMapper->findById($documentId);
+        $case     = $document ? $this->caseMapper->findById($document->getCaseId()) : null;
+        if ($case === null) {
+            return;
+        }
+
+        $files = $this->fileMapper->findByDocument($documentId);
+        foreach ($files as $file) {
+            $this->ensureFilecacheEntry($file, $case);
+            $this->eventDispatcher->dispatchTyped(new FileUpdatedEvent($file->getId()));
+        }
+        if ($files !== [] && $this->isDocumentFinal($documentId)) {
+            $this->updateFilecachePermissionsForDocument($documentId, false);
+        }
+    }
+
+    public function isSoftDeleteEnabled(): bool {
+        return $this->configuration->getConfigValue('use_softdelete', '0') === '1';
     }
 
     /**
@@ -525,6 +817,11 @@ class FileService {
      */
     public function getNextcloudFileId(int $fileId, string $userId): int {
         $entity = $this->get($fileId, $userId); // permission check
+        if ($entity->isSoftDeleted()
+            || $this->documentMapper->findById($entity->getDocumentId())?->isSoftDeleted()
+        ) {
+            throw new NotFoundException("File {$fileId} is deleted");
+        }
 
         $case = $this->caseMapper->findById($entity->getCaseId());
         if ($case === null) {
@@ -1049,6 +1346,48 @@ class FileService {
      * Remove the oc_filecache row for a deleted file, then prune any ancestor
      * directory rows that have become empty (case dir → day → month → year).
      */
+    /**
+     * Move the file's oc_filecache row to its new virtual filename.
+     *
+     * Updated in place (same fileid) so shares, favourites and open Collabora
+     * sessions survive the rename. Only the path/name columns change; the
+     * directory hierarchy above the file is untouched.
+     */
+    private function renameFilecacheEntry(FileEntity $entity, CaseEntity $case, string $oldVirtualFilename): void {
+        try {
+            $storageId = $this->getStorageId();
+            if ($storageId === 0) {
+                return;
+            }
+
+            $caseDir  = $case->getCreatedYear() . '/' . $case->getCreatedMonth() . '/'
+                . $case->getCreatedDay() . '/' . $case->getCaseNumber();
+            $oldPath  = "$caseDir/$oldVirtualFilename";
+            $newPath  = "$caseDir/{$entity->getVirtualFilename()}";
+
+            $qb = $this->db->getQueryBuilder();
+            $updated = $qb->update('filecache')
+                ->set('path',      $qb->createNamedParameter($newPath))
+                ->set('path_hash', $qb->createNamedParameter(md5($newPath)))
+                ->set('name',      $qb->createNamedParameter($entity->getVirtualFilename()))
+                ->set('etag',      $qb->createNamedParameter(bin2hex(random_bytes(8))))
+                ->set('mtime',     $qb->createNamedParameter(time(), \OCP\DB\QueryBuilder\IQueryBuilder::PARAM_INT))
+                ->where($qb->expr()->eq('storage',   $qb->createNamedParameter($storageId, \OCP\DB\QueryBuilder\IQueryBuilder::PARAM_INT)))
+                ->andWhere($qb->expr()->eq('path_hash', $qb->createNamedParameter(md5($oldPath))))
+                ->executeStatement();
+
+            // No row for the old name (file predates filecache sync) — create one
+            if ($updated === 0) {
+                $this->ensureFilecacheEntry($entity, $case);
+            }
+        } catch (\Throwable $e) {
+            $this->logger->warning('OpenCase: filecache rename failed for file {id}: {msg}', [
+                'id'  => $entity->getId(),
+                'msg' => $e->getMessage(),
+            ]);
+        }
+    }
+
     private function removeFilecacheEntry(FileEntity $entity, CaseEntity $case): void {
         try {
             $year   = $case->getCreatedYear();

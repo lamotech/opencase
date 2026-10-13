@@ -88,7 +88,7 @@ class RecentWidget implements IWidget, IIconWidget, IAPIWidgetV2, IButtonWidget 
                 );
             } elseif ($entry->getEntity() === 'document') {
                 $doc = $this->documentMapper->findById($entry->getEntityKey());
-                if ($doc === null) {
+                if ($doc === null || $doc->isSoftDeleted()) {
                     continue;
                 }
                 $items[] = new WidgetItem(

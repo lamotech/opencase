@@ -64,6 +64,13 @@ class IndexFileJob extends QueuedJob {
             return;
         }
 
+        // Soft-deleted files (or files of a soft-deleted document) must not be searchable — make sure they are
+        // gone from the index (the job may have been queued before deletion).
+        if (!empty($meta['is_deleted']) || !empty($meta['document_is_deleted'])) {
+            $this->esService->deleteDocument($fileId);
+            return;
+        }
+
         $case = $this->caseMapper->findById((int)$meta['case_id']);
         if ($case === null) {
             $this->logger->warning('OpenCase IndexFileJob: case not found for file {id}', ['id' => $fileId]);

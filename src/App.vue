@@ -109,6 +109,12 @@
 							<HistoryIcon :size="20" />
 						</template>
 					</NcAppNavigationItem>
+					<NcAppNavigationItem :to="{ name: 'bulkupdate-cases' }"
+						:name="t('opencase', 'Masseredigering')">
+						<template #icon>
+							<PlaylistEditIcon :size="20" />
+						</template>
+					</NcAppNavigationItem>
 				</NcAppNavigationItem>
 
 				<NcAppNavigationItem :name="t('opencase', 'Dokumenter')"
@@ -134,6 +140,12 @@
 						:name="t('opencase', 'Seneste')">
 						<template #icon>
 							<HistoryIcon :size="20" />
+						</template>
+					</NcAppNavigationItem>
+					<NcAppNavigationItem :to="{ name: 'bulkupdate-documents' }"
+						:name="t('opencase', 'Masseredigering')">
+						<template #icon>
+							<PlaylistEditIcon :size="20" />
 						</template>
 					</NcAppNavigationItem>
 				</NcAppNavigationItem>
@@ -265,6 +277,7 @@ import SitemapIcon from 'vue-material-design-icons/Sitemap.vue'
 import PlusIcon from 'vue-material-design-icons/Plus.vue'
 import BookOpenIcon from 'vue-material-design-icons/BookOpen.vue'
 import BellIcon from 'vue-material-design-icons/Bell.vue'
+import PlaylistEditIcon from 'vue-material-design-icons/PlaylistEdit.vue'
 
 import { loadState } from '@nextcloud/initial-state'
 
@@ -306,6 +319,7 @@ export default {
 		PlusIcon,
 		BookOpenIcon,
 		BellIcon,
+		PlaylistEditIcon,
 		AiSidePanel,
 		NewCaseDialog,
 		CreateEstateDialog,
@@ -350,8 +364,8 @@ export default {
 			immediate: true,
 			handler(route) {
 				const searchRoutes = ['search', 'search-cases', 'search-documents', 'search-citizen', 'search-company', 'search-estate', 'search-employees', 'search-organisations']
-				const casesRoutes = ['my-cases', 'favorites-cases', 'recent-cases']
-				const documentsRoutes = ['my-documents', 'favorites-documents', 'recent-documents']
+				const casesRoutes = ['my-cases', 'favorites-cases', 'recent-cases', 'bulkupdate-cases']
+				const documentsRoutes = ['my-documents', 'favorites-documents', 'recent-documents', 'bulkupdate-documents']
 				if (searchRoutes.includes(route.name)) {
 					this.searchGroupOpen = true
 				}
@@ -433,6 +447,8 @@ export default {
 #app-content-vue .opencase-search,
 #app-content-vue .opencase-inbound,
 #app-content-vue .opencase-favorites,
+#app-content-vue .opencase-bulkupdate,
+#app-content-vue .oc-bu-create,
 #app-content-vue .opencase-shared,
 #app-content-vue .opencase-case-field-search,
 #app-content-vue .opencase-doc-field-search,

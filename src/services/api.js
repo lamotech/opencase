@@ -87,6 +87,26 @@ export default {
 		return ocsData(await axios.get(`${baseUrl}/recent`)).recent
 	},
 
+	// ---------------------------------------------------------------
+	// Bulk update (Masseredigering)
+	// ---------------------------------------------------------------
+
+	async getBulkUpdates(entity) {
+		return ocsData(await axios.get(`${baseUrl}/bulkupdates`, { params: { entity } })).bulk_updates
+	},
+
+	async createBulkUpdate(payload) {
+		return ocsData(await axios.post(`${baseUrl}/bulkupdates`, payload)).bulk_update
+	},
+
+	async getFailedBulkUpdateItems(id) {
+		return ocsData(await axios.get(`${baseUrl}/bulkupdates/${id}/failed-items`)).items
+	},
+
+	async cancelBulkUpdate(id) {
+		return ocsData(await axios.put(`${baseUrl}/bulkupdates/${id}/cancel`)).bulk_update
+	},
+
 	async getOrganisations() {
 		return ocsData(await axios.get(`${baseUrl}/cases/organisations`)).organisations
 	},
@@ -131,8 +151,9 @@ export default {
 		return ocsData(await axios.get(`${baseUrl}/inbound-documents`, { params }))
 	},
 
-	async getDocuments(caseId) {
-		return ocsData(await axios.get(`${baseUrl}/cases/${caseId}/documents`)).documents
+	async getDocuments(caseId, { includeDeleted = false } = {}) {
+		const params = includeDeleted ? { include_deleted: 1 } : {}
+		return ocsData(await axios.get(`${baseUrl}/cases/${caseId}/documents`, { params })).documents
 	},
 
 	async getDocument(id, { audit = true } = {}) {
@@ -148,7 +169,11 @@ export default {
 	},
 
 	async deleteDocument(id) {
-		await axios.delete(`${baseUrl}/documents/${id}`)
+		return ocsData(await axios.delete(`${baseUrl}/documents/${id}`))
+	},
+
+	async restoreDocument(id) {
+		return ocsData(await axios.post(`${baseUrl}/documents/${id}/restore`)).document
 	},
 
 	async moveDocumentToCase(id, caseNumber) {
@@ -181,15 +206,20 @@ export default {
 		return ocsData(await axios.post(`${baseUrl}/documents/${sourceDocumentId}/copy-files`, { target_document_id: targetDocumentId })).files
 	},
 
-	async getFilesByDocument(documentId) {
-		return ocsData(await axios.get(`${baseUrl}/documents/${documentId}/files`)).files
+	async getFilesByDocument(documentId, { includeDeleted = false } = {}) {
+		const params = includeDeleted ? { include_deleted: 1 } : {}
+		return ocsData(await axios.get(`${baseUrl}/documents/${documentId}/files`, { params })).files
 	},
 
-	async createFileFromTemplate(documentId, templateId) {
+	async createFileFromTemplate(documentId, templateId, filename = '') {
 		return ocsData(await axios.post(
 			`${baseUrl}/documents/${documentId}/files/from-template`,
-			{ template_id: templateId },
+			{ template_id: templateId, filename },
 		)).file
+	},
+
+	async renameFile(fileId, filename) {
+		return ocsData(await axios.put(`${baseUrl}/files/${fileId}/name`, { filename })).file
 	},
 
 	async getFilesByCase(caseId) {
@@ -273,7 +303,11 @@ export default {
 	},
 
 	async deleteFile(id) {
-		await axios.delete(`${baseUrl}/files/${id}`)
+		return ocsData(await axios.delete(`${baseUrl}/files/${id}`))
+	},
+
+	async restoreFile(id) {
+		return ocsData(await axios.post(`${baseUrl}/files/${id}/restore`)).file
 	},
 
 	// ---------------------------------------------------------------
@@ -418,6 +452,10 @@ export default {
 		return ocsData(await axios.get(`${baseUrl}/employees/${encodeURIComponent(username)}/cases`)).cases
 	},
 
+	async getEmployeeTasks(uuid) {
+		return ocsData(await axios.get(`${baseUrl}/employees/${encodeURIComponent(uuid)}/tasks`)).tasks
+	},
+
 	async getEmployeePrivileges(uuid) {
 		return ocsData(await axios.get(`${baseUrl}/employees/${encodeURIComponent(uuid)}/privileges`)).privileges
 	},
@@ -508,6 +546,29 @@ export default {
 
 	async deleteDocumentNote(id) {
 		await axios.delete(`${baseUrl}/document-notes/${id}`)
+	},
+
+	// ---------------------------------------------------------------
+	// Document relations
+	// ---------------------------------------------------------------
+
+	async getDocumentRelations(documentId) {
+		return ocsData(await axios.get(`${baseUrl}/documents/${documentId}/relations`)).document_relations
+	},
+
+	async createDocumentRelations(documentId, documentIds, typeId) {
+		return ocsData(await axios.post(`${baseUrl}/documents/${documentId}/relations`, {
+			document_ids: documentIds,
+			documentrelationtype_id: typeId,
+		}))
+	},
+
+	async deleteDocumentRelation(documentId, relationId) {
+		await axios.delete(`${baseUrl}/documents/${documentId}/relations/${relationId}`)
+	},
+
+	async getDocumentRelationCandidates(documentId, params = {}) {
+		return ocsData(await axios.get(`${baseUrl}/documents/${documentId}/relation-candidates`, { params }))
 	},
 
 	// ---------------------------------------------------------------
@@ -847,6 +908,10 @@ export default {
 		return ocsData(await axios.post(`${baseUrl}/documents/${documentId}/workflows`, payload)).workflow
 	},
 
+	async getMyAccessRequests() {
+		return ocsData(await axios.get(`${baseUrl}/me/access-requests`)).access_requests
+	},
+
 	async getMyWorkflowTasks() {
 		return ocsData(await axios.get(`${baseUrl}/me/workflow-tasks`)).tasks
 	},
@@ -969,17 +1034,76 @@ export default {
 		return ocsData(await axios.post(`${baseUrl}/access-request-items/${itemId}/files/${fileId}/masked`, form))
 	},
 
-	async downloadAccessMasked(itemId, fileId, filename) {
+	/**
+	 * Fetch the masked version of a file. Automatic masking turns office files
+	 * into PDF, so the name comes from the server's Content-Disposition.
+	 *
+	 * @returns {Promise<{blob: Blob, filename: string}>}
+	 */
+	async fetchAccessMasked(itemId, fileId, fallbackName) {
 		const response = await axios.get(
 			`${baseUrl}/access-request-items/${itemId}/files/${fileId}/masked/download`,
 			{ responseType: 'blob' },
 		)
-		const url  = URL.createObjectURL(response.data)
+		const disposition = response.headers?.['content-disposition'] ?? ''
+		const match = /filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i.exec(disposition)
+		let filename = match ? decodeURIComponent(match[1] ?? match[2]) : 'maskeret_' + fallbackName
+		if (response.data.type === 'application/pdf' && !/\.pdf$/i.test(filename)) {
+			filename = filename.replace(/\.[^.]+$/, '') + '.pdf'
+		}
+		return { blob: response.data, filename }
+	},
+
+	async downloadAccessMasked(itemId, fileId, fallbackName) {
+		const { blob, filename } = await this.fetchAccessMasked(itemId, fileId, fallbackName)
+		const url  = URL.createObjectURL(blob)
 		const link = document.createElement('a')
 		link.href = url
-		link.download = 'maskeret_' + filename
+		link.download = filename
 		link.click()
 		URL.revokeObjectURL(url)
+	},
+
+	/**
+	 * Open the masked version in a new tab. The tab is opened before the
+	 * request so popup blockers treat it as part of the click.
+	 */
+	async viewAccessMasked(itemId, fileId, fallbackName) {
+		const tab = window.open('', '_blank')
+		try {
+			const { blob } = await this.fetchAccessMasked(itemId, fileId, fallbackName)
+			const url = URL.createObjectURL(blob)
+			if (tab) {
+				tab.location.href = url
+			} else {
+				window.open(url, '_blank')
+			}
+			// Keep the URL alive long enough for the tab to load it
+			setTimeout(() => URL.revokeObjectURL(url), 60000)
+		} catch (e) {
+			tab?.close()
+			throw e
+		}
+	},
+
+	async getAccessMaskSuggestions(itemId, fileId) {
+		return ocsData(await axios.get(`${baseUrl}/access-request-items/${itemId}/files/${fileId}/mask-suggestions`)).suggestions
+	},
+
+	async analyzeAccessMasking(itemId, fileId) {
+		return ocsData(await axios.post(`${baseUrl}/access-request-items/${itemId}/files/${fileId}/mask-analyze`))
+	},
+
+	async addAccessMaskTerm(itemId, fileId, term) {
+		return ocsData(await axios.post(`${baseUrl}/access-request-items/${itemId}/files/${fileId}/mask-terms`, { term }))
+	},
+
+	async updateAccessMaskSuggestion(suggestionId, status) {
+		return ocsData(await axios.patch(`${baseUrl}/access-mask-suggestions/${suggestionId}`, { status })).suggestion
+	},
+
+	async applyAccessMasking(itemId, fileId) {
+		return ocsData(await axios.post(`${baseUrl}/access-request-items/${itemId}/files/${fileId}/mask-apply`))
 	},
 
 	getAccessExportUrl(requestId) {
@@ -988,5 +1112,83 @@ export default {
 
 	async markAccessRequestSent(requestId) {
 		return ocsData(await axios.post(`${baseUrl}/access-requests/${requestId}/mark-sent`)).access_request
+	},
+
+	// ---------------------------------------------------------------
+	// Custom fields
+	// ---------------------------------------------------------------
+
+	async getAccessMaskRules() {
+		return ocsData(await axios.get(`${baseUrl}/access-mask-rules`))
+	},
+
+	async createAccessMaskRule(payload) {
+		return ocsData(await axios.post(`${baseUrl}/access-mask-rules`, payload)).rule
+	},
+
+	async updateAccessMaskRule(id, payload) {
+		return ocsData(await axios.put(`${baseUrl}/access-mask-rules/${id}`, payload)).rule
+	},
+
+	async deleteAccessMaskRule(id) {
+		return ocsData(await axios.delete(`${baseUrl}/access-mask-rules/${id}`))
+	},
+
+	async testAccessMaskRule(payload) {
+		return ocsData(await axios.post(`${baseUrl}/access-mask-rules/test`, payload)).matches
+	},
+
+	async getCustomFieldDefs() {
+		return ocsData(await axios.get(`${baseUrl}/admin/custom-fields`)).fields
+	},
+
+	async getCustomFields() {
+		return ocsData(await axios.get(`${baseUrl}/custom-fields`)).fields
+	},
+
+	async createCustomFieldDef(payload) {
+		return ocsData(await axios.post(`${baseUrl}/admin/custom-fields`, payload)).field
+	},
+
+	async updateCustomFieldDef(id, payload) {
+		return ocsData(await axios.put(`${baseUrl}/admin/custom-fields/${id}`, payload)).field
+	},
+
+	async deleteCustomFieldDef(id) {
+		return ocsData(await axios.delete(`${baseUrl}/admin/custom-fields/${id}`))
+	},
+
+	async getSapaRules() {
+		return ocsData(await axios.get(`${baseUrl}/admin/sapa-rules`)).rules
+	},
+
+	async createSapaRule(payload) {
+		return ocsData(await axios.post(`${baseUrl}/admin/sapa-rules`, payload)).rule
+	},
+
+	async updateSapaRule(id, payload) {
+		return ocsData(await axios.put(`${baseUrl}/admin/sapa-rules/${id}`, payload)).rule
+	},
+
+	async getSapaRuleCounts(id) {
+		return ocsData(await axios.get(`${baseUrl}/admin/sapa-rules/${id}/counts`))
+	},
+
+	async deleteSapaRule(id) {
+		return ocsData(await axios.delete(`${baseUrl}/admin/sapa-rules/${id}`))
+	},
+
+	async getApplicableCustomFields({ casetypeId = null, orgUuid = null, classificationCode = null } = {}) {
+		return ocsData(await axios.get(`${baseUrl}/custom-fields/applicable`, {
+			params: { casetype_id: casetypeId, org_uuid: orgUuid, classification_code: classificationCode },
+		})).fields
+	},
+
+	async getCaseCustomFields(caseId) {
+		return ocsData(await axios.get(`${baseUrl}/cases/${caseId}/custom-fields`)).fields
+	},
+
+	async updateCaseCustomFields(caseId, values) {
+		return ocsData(await axios.put(`${baseUrl}/cases/${caseId}/custom-fields`, { values })).values
 	},
 }

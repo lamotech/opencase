@@ -16,6 +16,9 @@
 			</NcEmptyContent>
 
 			<template v-else>
+				<!-- Extra fields from the caller (e.g. a filename input) -->
+				<slot name="before" :template="selectedTemplate" />
+
 				<NcTextField v-model="nameFilter"
 					class="template-picker__filter"
 					:label="t('opencase', 'Filtrer efter navn')"
@@ -146,7 +149,7 @@ export default {
 		selectOnClick:  { type: Boolean, default: false },
 	},
 
-	emits: ['close', 'selected'],
+	emits: ['close', 'selected', 'pick'],
 
 	data() {
 		return {
@@ -205,6 +208,7 @@ export default {
 	methods: {
 		pick(template) {
 			this.selectedId = template.id
+			this.$emit('pick', template)
 			if (this.selectOnClick) this.confirm()
 		},
 

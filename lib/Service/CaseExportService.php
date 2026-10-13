@@ -24,6 +24,9 @@ use OCA\OpenCase\Db\DocumentCategoryMapper;
 use OCA\OpenCase\Db\DocumentContactMapper;
 use OCA\OpenCase\Db\DocumentMapper;
 use OCA\OpenCase\Db\DocumentNoteMapper;
+use OCA\OpenCase\Db\DocumentRelation;
+use OCA\OpenCase\Db\DocumentRelationMapper;
+use OCA\OpenCase\Db\DocumentRelationTypeMapper;
 use OCA\OpenCase\Db\DocumentStatusMapper;
 use OCA\OpenCase\Db\DocWorkflowMapper;
 use OCA\OpenCase\Db\DocWorkflowStepMapper;
@@ -82,6 +85,8 @@ class CaseExportService {
         private FileMapper $fileMapper,
         private DocumentContactMapper $documentContactMapper,
         private DocumentNoteMapper $documentNoteMapper,
+        private DocumentRelationMapper $documentRelationMapper,
+        private DocumentRelationTypeMapper $documentRelationTypeMapper,
         private DocWorkflowMapper $docWorkflowMapper,
         private DocWorkflowStepMapper $docWorkflowStepMapper,
         private AuditLogMapper $auditLogMapper,
@@ -98,6 +103,7 @@ class CaseExportService {
         private DocumentStatusMapper $documentStatusMapper,
         private DocumentCategoryMapper $documentCategoryMapper,
         private ExportLogMapper $exportLogMapper,
+        private CustomFieldService $customFieldService,
         private Configuration $configuration,
         private IConfig $config,
         private IUserManager $userManager,
@@ -191,6 +197,7 @@ class CaseExportService {
         $this->appendJournalNotes($doc, $caseEl, $case->getId());
         $this->appendCaseworkers($doc, $caseEl, $case->getId());
         $this->appendEstates($doc, $caseEl, $case->getId(), $estateRoleNames);
+        $this->appendCustomFields($doc, $caseEl, $case);
 
         $documentsEl = $doc->createElementNS(self::NS, 'Documents');
         $caseEl->appendChild($documentsEl);
@@ -451,6 +458,54 @@ class CaseExportService {
         return $result;
     }
 
+    private function appendCustomFields(DOMDocument $doc, DOMElement $caseEl, CaseEntity $case): void {
+        $wrapEl = $doc->createElementNS(self::NS, 'CustomFields');
+        $caseEl->appendChild($wrapEl);
+
+        foreach ($this->customFieldFields($case) as $fields) {
+            $el = $doc->createElementNS(self::NS, 'CustomField');
+            $wrapEl->appendChild($el);
+            $this->appendFields($doc, $el, $fields);
+        }
+    }
+
+    /**
+     * Build the CustomFieldType field maps for the custom fields applicable
+     * to a case (by casetype/organisation/KLE-nummer), matching
+     * appinfo/schema/case-export.xsd. Shared by the closed-case export and
+     * the public data API's single-case lookup.
+     *
+     * @return list<array<string, string|null>>
+     */
+    public function customFieldFields(CaseEntity $case): array {
+        $classificationCode = null;
+        $profile = $this->accessProfileMapper->findById($case->getAccessProfileId());
+        if ($profile !== null) {
+            $classificationCode = $this->classificationSubjectMapper->findByUuid($profile->getClassSubjectUuid())?->getCode();
+        }
+
+        $defs   = $this->customFieldService->getApplicableFields($case->getCasetypeId(), $case->getOrgUuid(), $classificationCode);
+        $values = $this->customFieldService->getValuesForCase($case->getId());
+
+        $result = [];
+        foreach ($defs as $def) {
+            $result[] = [
+                'FieldKey'  => $def->getFieldKey(),
+                'Label'     => $def->getLabel(),
+                'FieldType' => $def->getFieldType(),
+                'Value'     => $this->customFieldValueToString($values[$def->getFieldKey()] ?? null),
+            ];
+        }
+        return $result;
+    }
+
+    private function customFieldValueToString(string|bool|null $value): ?string {
+        if (is_bool($value)) {
+            return $value ? 'true' : 'false';
+        }
+        return $value;
+    }
+
     // ---------------------------------------------------------------
     // Document-level sections
     // ---------------------------------------------------------------
@@ -481,6 +536,7 @@ class CaseExportService {
         $this->appendFiles($doc, $el, $documentId, $case, $filesFolder);
         $this->appendContacts($doc, $el, $documentId, $contactRoleNames);
         $this->appendDocumentNotes($doc, $el, $documentId);
+        $this->appendDocumentRelations($doc, $el, $documentId);
         $this->appendWorkflowHistory($doc, $el, $documentId);
 
         $this->writeAuditLog(
@@ -549,6 +605,17 @@ class CaseExportService {
         }
     }
 
+    private function appendDocumentRelations(DOMDocument $doc, DOMElement $documentEl, int $documentId): void {
+        $wrapEl = $doc->createElementNS(self::NS, 'Relations');
+        $documentEl->appendChild($wrapEl);
+
+        foreach ($this->documentRelationFields($documentId) as $fields) {
+            $el = $doc->createElementNS(self::NS, 'Relation');
+            $wrapEl->appendChild($el);
+            $this->appendFields($doc, $el, $fields);
+        }
+    }
+
     private function appendWorkflowHistory(DOMDocument $doc, DOMElement $documentEl, int $documentId): void {
         $wrapEl = $doc->createElementNS(self::NS, 'WorkflowHistory');
         $documentEl->appendChild($wrapEl);
@@ -577,7 +644,7 @@ class CaseExportService {
 
     /**
      * Build the DocumentType field maps for a case's documents (Files,
-     * Contacts, Notes, WorkflowHistory nested), matching
+     * Contacts, Notes, Relations, WorkflowHistory nested), matching
      * appinfo/schema/case-export.xsd. Unlike the closed-case export, this
      * does not copy files to disk or write audit logs — read-only lookup.
      *
@@ -595,7 +662,7 @@ class CaseExportService {
     }
 
     /**
-     * Build the DocumentType field map (Files, Contacts, Notes,
+     * Build the DocumentType field map (Files, Contacts, Notes, Relations,
      * WorkflowHistory nested) for a single document, matching
      * appinfo/schema/case-export.xsd. Shared by documentFields() (a case's
      * document list) and the public data API's single-document lookup.
@@ -631,9 +698,70 @@ class CaseExportService {
             fn ($note) => $this->documentNoteFieldsFromEntity($note),
             $this->documentNoteMapper->findByDocument($documentId),
         );
+        $fields['Relations'] = $this->documentRelationFields($documentId);
         $fields['WorkflowHistory'] = $this->workflowHistoryFieldsForDocument($documentId);
 
         return $fields;
+    }
+
+    /**
+     * Build the DocumentRelationType field maps for every relation the
+     * document takes part in, seen from that document: Direction is 'To'
+     * when the document is the from-side (it points to the related
+     * document, e.g. the related document is its Bilag) and 'From' when the
+     * related document points to it. Relations whose other document no
+     * longer exists are left out.
+     *
+     * @return list<array<string, string|null>>
+     */
+    public function documentRelationFields(int $documentId): array {
+        $relations = $this->documentRelationMapper->findByDocument($documentId);
+        if (empty($relations)) {
+            return [];
+        }
+
+        $typeNames = $this->documentRelationTypeMapper->getNameMap(self::LOOKUP_LANGUAGE);
+        $result    = [];
+        foreach ($relations as $relation) {
+            $fields = $this->documentRelationFieldsFromEntity($relation, $documentId, $typeNames);
+            if ($fields !== null) {
+                $result[] = $fields;
+            }
+        }
+        return $result;
+    }
+
+    /**
+     * Public so the public data API's relation-adding endpoint can reuse it
+     * for its response shape. Returns null when the related document no
+     * longer exists.
+     *
+     * @param array<int, string> $typeNames
+     * @return array<string, string|null>|null
+     */
+    public function documentRelationFieldsFromEntity(DocumentRelation $relation, int $documentId, ?array $typeNames = null): ?array {
+        $typeNames ??= $this->documentRelationTypeMapper->getNameMap(self::LOOKUP_LANGUAGE);
+
+        $isFrom  = $relation->getDocumentFromId() === $documentId;
+        $otherId = $isFrom ? $relation->getDocumentToId() : $relation->getDocumentFromId();
+        $other   = $this->documentMapper->findById($otherId);
+        if ($other === null) {
+            return null;
+        }
+
+        $typeId = $relation->getDocumentrelationtypeId();
+
+        return [
+            'Id'                    => (string)$relation->getId(),
+            'RelationTypeId'        => (string)$typeId,
+            'RelationTypeName'      => $typeNames[$typeId] ?? null,
+            'Direction'             => $isFrom ? 'To' : 'From',
+            'RelatedDocumentId'     => (string)$otherId,
+            'RelatedDocumentUuid'   => $other->getUuid(),
+            'RelatedDocumentNumber' => $other->getDocumentNumber(),
+            'CreatedAt'             => $this->formatDateTime($relation->getCreatedAt()),
+            'CreatedBy'             => $relation->getCreatedBy(),
+        ];
     }
 
     /** @return list<array<string, mixed>> */

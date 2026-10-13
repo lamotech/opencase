@@ -91,7 +91,11 @@ class DocumentContactMapper extends QBMapper {
             ->innerJoin('d', 'opencase_cases', 'c', $qb->expr()->eq('c.id', 'd.case_id'))
             ->leftJoin('c', 'opencase_org', 'o', $qb->expr()->eq('o.org_uuid', 'c.org_uuid'))
             ->where($qb->expr()->eq('dc.cpr_cvr', $qb->createNamedParameter($cprCvr)))
-            ->andWhere($qb->expr()->eq('c.is_inbox', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)));
+            ->andWhere($qb->expr()->eq('c.is_inbox', $qb->createNamedParameter(0, IQueryBuilder::PARAM_INT)))
+            ->andWhere($qb->expr()->orX(
+                $qb->expr()->isNull('d.is_deleted'),
+                $qb->expr()->eq('d.is_deleted', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL))
+            ));
 
         if ($pnumber !== null && $pnumber !== '') {
             $qb->andWhere($qb->expr()->eq('dc.pnumber', $qb->createNamedParameter($pnumber)));
@@ -127,6 +131,10 @@ class DocumentContactMapper extends QBMapper {
             ))
             ->innerJoin('d', 'opencase_cases', 'c', $qb->expr()->eq('c.id', 'd.case_id'))
             ->where($qb->expr()->eq('dc.cpr_cvr', $qb->createNamedParameter($cprCvr)))
+            ->andWhere($qb->expr()->orX(
+                $qb->expr()->isNull('d.is_deleted'),
+                $qb->expr()->eq('d.is_deleted', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL))
+            ))
             ->groupBy(['dc.id', 'dc.document_id', 'dc.name', 'd.case_id', 'c.responsible_user_id']);
 
         $result = $qb->executeQuery();
@@ -224,5 +232,15 @@ class DocumentContactMapper extends QBMapper {
             ->set('zipdistrict', $qb->createNamedParameter($zipdistrict))
             ->where($qb->expr()->eq('id', $qb->createNamedParameter($id, IQueryBuilder::PARAM_INT)))
             ->executeStatement();
+    }
+
+    /**
+     * Delete all contacts of a document (used when it is hard-deleted).
+     */
+    public function deleteByDocument(int $documentId): void {
+        $qb = $this->db->getQueryBuilder();
+        $qb->delete($this->getTableName())
+            ->where($qb->expr()->eq('document_id', $qb->createNamedParameter($documentId, IQueryBuilder::PARAM_INT)));
+        $qb->executeStatement();
     }
 }

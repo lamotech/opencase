@@ -7,7 +7,7 @@
 				</template>
 				{{ t('opencase', 'Ny journalnotat') }}
 			</NcButton>
-			<NcButton v-if="notes.length > 0" :disabled="generatingPdf" @click="generatePdf">
+			<NcButton v-if="notes.length > 0" :disabled="generatingPdf" @click="openPdfDialog">
 				<template #icon>
 					<NcLoadingIcon v-if="generatingPdf" :size="20" />
 					<FilePdfBoxIcon v-else :size="20" />
@@ -15,6 +15,45 @@
 				{{ t('opencase', 'Dan journalark') }}
 			</NcButton>
 		</div>
+
+		<NcDialog v-if="showPdfDialog"
+			:name="t('opencase', 'Dan journalark')"
+			@update:open="v => !v && closePdfDialog()">
+			<div class="opencase-journal-notes__pdf-dialog">
+				<NcCheckboxRadioSwitch v-model="pdfMode"
+					type="radio"
+					value="download"
+					name="journal_pdf_mode">
+					{{ t('opencase', 'Download fil') }}
+				</NcCheckboxRadioSwitch>
+				<NcCheckboxRadioSwitch v-if="canWrite"
+					v-model="pdfMode"
+					type="radio"
+					value="document"
+					name="journal_pdf_mode">
+					{{ t('opencase', 'Gem som nyt dokument på sagen') }}
+				</NcCheckboxRadioSwitch>
+				<div v-if="pdfMode === 'document'" class="opencase-journal-notes__pdf-field">
+					<NcTextField v-model="pdfTitle"
+						:label="t('opencase', 'Dokumenttitel')"
+						:error="!!pdfTitleError"
+						:helper-text="pdfTitleError"
+						@keyup.enter="confirmPdf" />
+				</div>
+			</div>
+
+			<template #actions>
+				<NcButton :disabled="generatingPdf" @click="closePdfDialog">
+					{{ t('opencase', 'Annuller') }}
+				</NcButton>
+				<NcButton type="primary" :disabled="generatingPdf" @click="confirmPdf">
+					<template v-if="generatingPdf" #icon>
+						<NcLoadingIcon :size="16" />
+					</template>
+					{{ pdfMode === 'document' ? t('opencase', 'Gem') : t('opencase', 'Download') }}
+				</NcButton>
+			</template>
+		</NcDialog>
 
 		<NcLoadingIcon v-if="loading" :size="32" />
 
@@ -82,6 +121,10 @@
 
 <script>
 import NcButton from '@nextcloud/vue/components/NcButton'
+import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
+import NcDialog from '@nextcloud/vue/components/NcDialog'
+import NcTextField from '@nextcloud/vue/components/NcTextField'
+import { showError, showSuccess } from '@nextcloud/dialogs'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 
@@ -94,11 +137,20 @@ import LockOutlineIcon from 'vue-material-design-icons/LockOutline.vue'
 import EyeIcon from 'vue-material-design-icons/Eye.vue'
 import FilePdfBoxIcon from 'vue-material-design-icons/FilePdfBox.vue'
 
+// Saved journal sheets are filed as internal documents
+const JOURNAL_SHEET_CATEGORY_ID = 3
+const JOURNAL_SHEET_INSIGHT_LEVEL_ID = 2
+// ...and marked Final once the PDF is uploaded
+const JOURNAL_SHEET_STATUS_FINAL_ID = 3
+
 export default {
 	name: 'JournalNoteList',
 
 	components: {
 		NcButton,
+		NcCheckboxRadioSwitch,
+		NcDialog,
+		NcTextField,
 		NcEmptyContent,
 		NcLoadingIcon,
 		PlusIcon,
@@ -120,6 +172,10 @@ export default {
 			type: Boolean,
 			default: false,
 		},
+		caseId: {
+			type: Number,
+			required: true,
+		},
 		caseTitle: {
 			type: String,
 			default: '',
@@ -130,15 +186,113 @@ export default {
 		},
 	},
 
-	emits: ['new', 'edit', 'delete', 'lock', 'view'],
+	emits: ['new', 'edit', 'delete', 'lock', 'view', 'document-created'],
 
 	data() {
 		return {
 			generatingPdf: false,
+			showPdfDialog: false,
+			pdfMode: 'download',
+			pdfTitle: '',
+			pdfTitleError: '',
 		}
 	},
 
 	methods: {
+		openPdfDialog() {
+			const date = new Date().toLocaleDateString('da-DK', {
+				year: 'numeric',
+				month: '2-digit',
+				day: '2-digit',
+			})
+			this.pdfMode = this.canWrite ? 'document' : 'download'
+			this.pdfTitle = t('opencase', 'Journalark') + ' - ' + date
+			this.pdfTitleError = ''
+			this.showPdfDialog = true
+		},
+
+		closePdfDialog() {
+			if (this.generatingPdf) return
+			this.showPdfDialog = false
+		},
+
+		async confirmPdf() {
+			if (this.generatingPdf) return
+			if (this.pdfMode === 'document') {
+				await this.savePdfAsDocument()
+			} else {
+				await this.downloadPdf()
+			}
+		},
+
+		async downloadPdf() {
+			this.generatingPdf = true
+			try {
+				const doc = await this.buildPdf()
+				doc.save('journalark.pdf')
+				this.showPdfDialog = false
+			} catch (e) {
+				showError(t('opencase', 'Kunne ikke danne journalark'))
+			} finally {
+				this.generatingPdf = false
+			}
+		},
+
+		async savePdfAsDocument() {
+			const title = this.pdfTitle.trim()
+			if (!title) {
+				this.pdfTitleError = t('opencase', 'Titel er påkrævet')
+				return
+			}
+			this.pdfTitleError = ''
+
+			this.generatingPdf = true
+			try {
+				const pdf = await this.buildPdf()
+				const filename = title.replace(/[\\/:*?"<>|]+/g, '_') + '.pdf'
+				const file = new File([pdf.output('blob')], filename, { type: 'application/pdf' })
+
+				const today = new Date().toISOString().split('T')[0]
+				let document = await this.$store.dispatch('createDocument', {
+					caseId: this.caseId,
+					payload: {
+						title,
+						document_category_id: JOURNAL_SHEET_CATEGORY_ID,
+						insight_level_id: JOURNAL_SHEET_INSIGHT_LEVEL_ID,
+						document_date: today,
+						registered_date: today,
+					},
+				})
+
+				try {
+					await this.$store.dispatch('uploadFile', {
+						documentId: document.id,
+						file,
+						onProgress: () => {},
+					})
+				} catch (e) {
+					showError(t('opencase', 'Dokument oprettet, men journalarket kunne ikke uploades'))
+					this.$emit('document-created', document)
+					this.showPdfDialog = false
+					return
+				}
+
+				// Set status after upload, since Final documents are read-only
+				document = await this.$store.dispatch('updateDocument', {
+					id: document.id,
+					payload: { status: JOURNAL_SHEET_STATUS_FINAL_ID },
+				})
+
+				showSuccess(t('opencase', 'Journalark gemt som dokument'))
+				this.$emit('document-created', document)
+				this.showPdfDialog = false
+			} catch (e) {
+				showError(e.response?.data?.ocs?.data?.error || t('opencase', 'Kunne ikke gemme journalark'))
+			} finally {
+				this.generatingPdf = false
+			}
+		},
+
 		formatDate(dateStr) {
 			if (!dateStr) return ''
 			return new Date(dateStr).toLocaleString('da-DK', {
@@ -209,153 +363,159 @@ export default {
 			return segments
 		},
 
-		async generatePdf() {
-			this.generatingPdf = true
-			try {
-				const { jsPDF } = await import('jspdf')
-				const doc = new jsPDF({ unit: 'mm', format: 'a4' })
+		async buildPdf() {
+			const { jsPDF } = await import('jspdf')
+			const doc = new jsPDF({ unit: 'mm', format: 'a4' })
 
-				const pageW = doc.internal.pageSize.getWidth()
-				const pageH = doc.internal.pageSize.getHeight()
-				const marginL = 20
-				const marginR = 20
-				const marginT = 20
-				const marginB = 20
-				const contentW = pageW - marginL - marginR
-				let y = marginT
+			const pageW = doc.internal.pageSize.getWidth()
+			const pageH = doc.internal.pageSize.getHeight()
+			const marginL = 20
+			const marginR = 20
+			const marginT = 20
+			const marginB = 20
+			const contentW = pageW - marginL - marginR
+			let y = marginT
 
-				const checkPageBreak = (needed) => {
-					if (y + needed > pageH - marginB) {
-						doc.addPage()
-						y = marginT
-					}
+			const checkPageBreak = (needed) => {
+				if (y + needed > pageH - marginB) {
+					doc.addPage()
+					y = marginT
 				}
-
-				// Cover header
-				doc.setFont('helvetica', 'bold')
-				doc.setFontSize(18)
-				doc.text(t('opencase', 'Journalark'), marginL, y)
-				y += 8
-
-				if (this.caseTitle) {
-					doc.setFont('helvetica', 'normal')
-					doc.setFontSize(11)
-					doc.text(this.caseTitle, marginL, y)
-					y += 6
-				}
-
-				doc.setFontSize(9)
-				doc.setTextColor(120, 120, 120)
-				doc.text(
-					t('opencase', 'Genereret') + ': ' + this.formatDateLong(new Date().toISOString()),
-					marginL, y,
-				)
-				doc.setTextColor(0, 0, 0)
-				y += 4
-
-				// Divider
-				doc.setDrawColor(180, 180, 180)
-				doc.line(marginL, y, pageW - marginR, y)
-				y += 8
-
-				for (const note of this.notes) {
-					checkPageBreak(20)
-
-					// Note title
-					doc.setFont('helvetica', 'bold')
-					doc.setFontSize(13)
-					const titleLines = doc.splitTextToSize(note.title, contentW)
-					checkPageBreak(titleLines.length * 6 + 4)
-					doc.text(titleLines, marginL, y)
-					y += titleLines.length * 6
-
-					// Note meta
-					doc.setFont('helvetica', 'normal')
-					doc.setFontSize(8)
-					doc.setTextColor(120, 120, 120)
-					let meta = note.created_by + ' · ' + this.formatDateLong(note.created_at)
-					if (note.is_locked) meta += ' · ' + t('opencase', 'Låst')
-					doc.text(meta, marginL, y)
-					doc.setTextColor(0, 0, 0)
-					y += 5
-
-					// Note body
-					const segments = this.parseHtmlToSegments(note.text)
-					for (const seg of segments) {
-						if (!seg.text || !seg.text.trim()) continue
-						if (seg.type === 'h1') {
-							doc.setFont('helvetica', 'bold')
-							doc.setFontSize(12)
-							const lines = doc.splitTextToSize(seg.text.trim(), contentW)
-							checkPageBreak(lines.length * 6 + 2)
-							doc.text(lines, marginL, y)
-							y += lines.length * 6 + 1
-						} else if (seg.type === 'h2') {
-							doc.setFont('helvetica', 'bold')
-							doc.setFontSize(11)
-							const lines = doc.splitTextToSize(seg.text.trim(), contentW)
-							checkPageBreak(lines.length * 5 + 2)
-							doc.text(lines, marginL, y)
-							y += lines.length * 5 + 1
-						} else if (seg.type === 'h3') {
-							doc.setFont('helvetica', 'bold')
-							doc.setFontSize(10)
-							const lines = doc.splitTextToSize(seg.text.trim(), contentW)
-							checkPageBreak(lines.length * 5 + 1)
-							doc.text(lines, marginL, y)
-							y += lines.length * 5 + 1
-						} else if (seg.type === 'blockquote') {
-							doc.setFont('helvetica', 'italic')
-							doc.setFontSize(9.5)
-							doc.setTextColor(100, 100, 100)
-							const lines = doc.splitTextToSize(seg.text.trim(), contentW - 6)
-							checkPageBreak(lines.length * 5 + 1)
-							doc.setDrawColor(150, 150, 150)
-							doc.line(marginL + 1, y - 3, marginL + 1, y + lines.length * 5 - 2)
-							doc.text(lines, marginL + 5, y)
-							doc.setTextColor(0, 0, 0)
-							doc.setDrawColor(0, 0, 0)
-							y += lines.length * 5 + 1
-						} else {
-							doc.setFont('helvetica', 'normal')
-							doc.setFontSize(10)
-							const indent = seg.type === 'li' ? marginL + 4 : marginL
-							const w = seg.type === 'li' ? contentW - 4 : contentW
-							const lines = doc.splitTextToSize(seg.text.trim(), w)
-							checkPageBreak(lines.length * 5)
-							doc.text(lines, indent, y)
-							y += lines.length * 5
-						}
-					}
-
-					y += 4
-					// Separator between notes
-					doc.setDrawColor(220, 220, 220)
-					doc.line(marginL, y, pageW - marginR, y)
-					y += 6
-				}
-
-				// Page numbers
-				const totalPages = doc.internal.getNumberOfPages()
-				for (let i = 1; i <= totalPages; i++) {
-					doc.setPage(i)
-					doc.setFont('helvetica', 'normal')
-					doc.setFontSize(8)
-					doc.setTextColor(150, 150, 150)
-					doc.text(`${i} / ${totalPages}`, pageW / 2, pageH - 8, { align: 'center' })
-					doc.setTextColor(0, 0, 0)
-				}
-
-				doc.save('journalark.pdf')
-			} finally {
-				this.generatingPdf = false
 			}
+
+			// Cover header
+			doc.setFont('helvetica', 'bold')
+			doc.setFontSize(18)
+			doc.text(t('opencase', 'Journalark'), marginL, y)
+			y += 8
+
+			if (this.caseTitle) {
+				doc.setFont('helvetica', 'normal')
+				doc.setFontSize(11)
+				doc.text(this.caseTitle, marginL, y)
+				y += 6
+			}
+
+			doc.setFontSize(9)
+			doc.setTextColor(120, 120, 120)
+			doc.text(
+				t('opencase', 'Genereret') + ': ' + this.formatDateLong(new Date().toISOString()),
+				marginL, y,
+			)
+			doc.setTextColor(0, 0, 0)
+			y += 4
+
+			// Divider
+			doc.setDrawColor(180, 180, 180)
+			doc.line(marginL, y, pageW - marginR, y)
+			y += 8
+
+			for (const note of this.notes) {
+				checkPageBreak(20)
+
+				// Note title
+				doc.setFont('helvetica', 'bold')
+				doc.setFontSize(13)
+				const titleLines = doc.splitTextToSize(note.title, contentW)
+				checkPageBreak(titleLines.length * 6 + 4)
+				doc.text(titleLines, marginL, y)
+				y += titleLines.length * 6
+
+				// Note meta
+				doc.setFont('helvetica', 'normal')
+				doc.setFontSize(8)
+				doc.setTextColor(120, 120, 120)
+				let meta = note.created_by + ' · ' + this.formatDateLong(note.created_at)
+				if (note.is_locked) meta += ' · ' + t('opencase', 'Låst')
+				doc.text(meta, marginL, y)
+				doc.setTextColor(0, 0, 0)
+				y += 5
+
+				// Note body
+				const segments = this.parseHtmlToSegments(note.text)
+				for (const seg of segments) {
+					if (!seg.text || !seg.text.trim()) continue
+					if (seg.type === 'h1') {
+						doc.setFont('helvetica', 'bold')
+						doc.setFontSize(12)
+						const lines = doc.splitTextToSize(seg.text.trim(), contentW)
+						checkPageBreak(lines.length * 6 + 2)
+						doc.text(lines, marginL, y)
+						y += lines.length * 6 + 1
+					} else if (seg.type === 'h2') {
+						doc.setFont('helvetica', 'bold')
+						doc.setFontSize(11)
+						const lines = doc.splitTextToSize(seg.text.trim(), contentW)
+						checkPageBreak(lines.length * 5 + 2)
+						doc.text(lines, marginL, y)
+						y += lines.length * 5 + 1
+					} else if (seg.type === 'h3') {
+						doc.setFont('helvetica', 'bold')
+						doc.setFontSize(10)
+						const lines = doc.splitTextToSize(seg.text.trim(), contentW)
+						checkPageBreak(lines.length * 5 + 1)
+						doc.text(lines, marginL, y)
+						y += lines.length * 5 + 1
+					} else if (seg.type === 'blockquote') {
+						doc.setFont('helvetica', 'italic')
+						doc.setFontSize(9.5)
+						doc.setTextColor(100, 100, 100)
+						const lines = doc.splitTextToSize(seg.text.trim(), contentW - 6)
+						checkPageBreak(lines.length * 5 + 1)
+						doc.setDrawColor(150, 150, 150)
+						doc.line(marginL + 1, y - 3, marginL + 1, y + lines.length * 5 - 2)
+						doc.text(lines, marginL + 5, y)
+						doc.setTextColor(0, 0, 0)
+						doc.setDrawColor(0, 0, 0)
+						y += lines.length * 5 + 1
+					} else {
+						doc.setFont('helvetica', 'normal')
+						doc.setFontSize(10)
+						const indent = seg.type === 'li' ? marginL + 4 : marginL
+						const w = seg.type === 'li' ? contentW - 4 : contentW
+						const lines = doc.splitTextToSize(seg.text.trim(), w)
+						checkPageBreak(lines.length * 5)
+						doc.text(lines, indent, y)
+						y += lines.length * 5
+					}
+				}
+
+				y += 4
+				// Separator between notes
+				doc.setDrawColor(220, 220, 220)
+				doc.line(marginL, y, pageW - marginR, y)
+				y += 6
+			}
+
+			// Page numbers
+			const totalPages = doc.internal.getNumberOfPages()
+			for (let i = 1; i <= totalPages; i++) {
+				doc.setPage(i)
+				doc.setFont('helvetica', 'normal')
+				doc.setFontSize(8)
+				doc.setTextColor(150, 150, 150)
+				doc.text(`${i} / ${totalPages}`, pageW / 2, pageH - 8, { align: 'center' })
+				doc.setTextColor(0, 0, 0)
+			}
+
+			return doc
 		},
 	},
 }
 </script>
 
 <style scoped>
+.opencase-journal-notes__pdf-dialog {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding-bottom: 8px;
+}
+
+.opencase-journal-notes__pdf-field {
+	margin: 8px 0 0 36px;
+}
+
 .opencase-journal-notes__header {
 	display: flex;
 	gap: 8px;

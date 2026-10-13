@@ -38,7 +38,9 @@ use Psr\Log\LoggerInterface;
  *   GET    /api/v1/files/{id}                  — Get file metadata
  *   GET    /api/v1/files/{id}/download         — Download file content
  *   POST   /api/v1/files/{id}/version          — Upload new version
- *   DELETE /api/v1/files/{id}                  — Delete a file
+ *   PUT    /api/v1/files/{id}/name             — Rename a file
+ *   DELETE /api/v1/files/{id}                  — Delete a file (soft delete when use_softdelete=1)
+ *   POST   /api/v1/files/{id}/restore          — Restore a soft-deleted file
  */
 class FileController extends ApiController {
 
@@ -61,12 +63,15 @@ class FileController extends ApiController {
 
     /**
      * List all files in a document.
+     *
+     * Query: include_deleted=1 — also return soft-deleted files (is_deleted=true).
      */
     #[NoAdminRequired]
     #[ApiRoute(verb: 'GET', url: '/api/v1/documents/{docId}/files')]
     public function indexByDocument(int $docId): DataResponse {
+        $includeDeleted = filter_var($this->request->getParam('include_deleted', false), FILTER_VALIDATE_BOOLEAN);
         try {
-            $files          = $this->fileService->listByDocument($docId, $this->userId);
+            $files          = $this->fileService->listByDocument($docId, $this->userId, $includeDeleted);
             $document       = $this->documentMapper->findById($docId);
             $documentNumber = $document?->getDocumentNumber();
             return new DataResponse([
@@ -213,6 +218,8 @@ class FileController extends ApiController {
      *
      * Request body (JSON or form):
      *   template_id — ID of the template to use
+     *   filename    — optional name for the new file; the template's extension
+     *                 is always kept. Defaults to the template's own filename.
      *
      * Placeholders in the template file (e.g. {{case.number}}, {{sag.titel}})
      * are replaced with live metadata from the parent case and document before
@@ -228,6 +235,7 @@ class FileController extends ApiController {
         if ($templateId <= 0) {
             return new DataResponse(['error' => 'template_id is required'], Http::STATUS_BAD_REQUEST);
         }
+        $requestedFilename = trim((string) $this->request->getParam('filename', ''));
 
         // Load template metadata
         try {
@@ -266,9 +274,19 @@ class FileController extends ApiController {
                 throw new \RuntimeException("Failed to open merged temp file: {$tempPath}");
             }
 
+            // The user may name the new file; the template's extension is kept.
+            $filename = $template->getOriginalFilename();
+            if ($requestedFilename !== '') {
+                try {
+                    $filename = FileService::sanitiseFilename($requestedFilename, $filename);
+                } catch (\InvalidArgumentException) {
+                    return new DataResponse(['error' => 'Invalid filename'], Http::STATUS_BAD_REQUEST);
+                }
+            }
+
             $entity = $this->fileService->upload(
                 $docId,
-                $template->getOriginalFilename(),
+                $filename,
                 $template->getMimeType(),
                 $stream,
                 $this->userId ?? '',
@@ -623,14 +641,65 @@ class FileController extends ApiController {
     }
 
     /**
+     * Rename a file.
+     *
+     * Request body: filename — the new name. The current extension is always
+     * kept, so the stored mime type keeps matching the file content.
+     * Requires write access to the parent document.
+     */
+    #[NoAdminRequired]
+    #[ApiRoute(verb: 'PUT', url: '/api/v1/files/{id}/name')]
+    public function rename(int $id): DataResponse {
+        $filename = trim((string) $this->request->getParam('filename', ''));
+        if ($filename === '') {
+            return new DataResponse(['error' => 'filename is required'], Http::STATUS_BAD_REQUEST);
+        }
+
+        try {
+            $entity   = $this->fileService->rename($id, $filename, $this->userId);
+            $document = $this->documentMapper->findById($entity->getDocumentId());
+            return new DataResponse(['file' => $this->serializeFile($entity, $document?->getDocumentNumber())]);
+        } catch (\InvalidArgumentException) {
+            return new DataResponse(['error' => 'Invalid filename'], Http::STATUS_BAD_REQUEST);
+        } catch (\DomainException $e) {
+            return new DataResponse(['error' => $e->getMessage()], Http::STATUS_BAD_REQUEST);
+        } catch (NotFoundException $e) {
+            return new DataResponse(
+                ['error' => 'File not found or access denied'],
+                Http::STATUS_NOT_FOUND
+            );
+        }
+    }
+
+    /**
      * Delete a file.
      */
     #[NoAdminRequired]
     #[ApiRoute(verb: 'DELETE', url: '/api/v1/files/{id}')]
     public function destroy(int $id): DataResponse {
         try {
-            $this->fileService->delete($id, $this->userId);
-            return new DataResponse(['deleted' => true]);
+            $softDeleted = $this->fileService->delete($id, $this->userId);
+            return new DataResponse(['deleted' => true, 'soft_deleted' => $softDeleted]);
+        } catch (NotFoundException $e) {
+            return new DataResponse(
+                ['error' => 'File not found or access denied'],
+                Http::STATUS_NOT_FOUND
+            );
+        }
+    }
+
+    /**
+     * Restore a soft-deleted file.
+     */
+    #[NoAdminRequired]
+    #[ApiRoute(verb: 'POST', url: '/api/v1/files/{id}/restore')]
+    public function restore(int $id): DataResponse {
+        try {
+            $entity   = $this->fileService->restore($id, $this->userId);
+            $document = $this->documentMapper->findById($entity->getDocumentId());
+            return new DataResponse(['file' => $this->serializeFile($entity, $document?->getDocumentNumber())]);
+        } catch (\DomainException $e) {
+            return new DataResponse(['error' => $e->getMessage()], Http::STATUS_BAD_REQUEST);
         } catch (NotFoundException $e) {
             return new DataResponse(
                 ['error' => 'File not found or access denied'],
@@ -658,6 +727,8 @@ class FileController extends ApiController {
             'created_at'        => $entity->getCreatedAt()?->format('c'),
             'updated_at'        => $entity->getUpdatedAt()?->format('c'),
             'created_by'        => $entity->getCreatedBy(),
+            'is_deleted'        => $entity->isSoftDeleted(),
+            'deleted_date'      => $entity->getDeletedDate()?->format('c'),
             'download_url'      => $this->buildDownloadUrl($entity->getId()),
         ];
     }

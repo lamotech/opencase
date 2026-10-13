@@ -75,6 +75,24 @@
       },
       "required": ["Id", "Title"]
     },
+    "DocumentRelationType": {
+      "$anchor": "DocumentRelationType",
+      "title": "Document relation",
+      "description": "A relation seen from the containing document. Direction 'To': the containing document points to the related document (e.g. the related document is its Bilag); 'From': the related document points to it.",
+      "type": "object",
+      "properties": {
+        "Id": { "$ref": "#NumericString" },
+        "RelationTypeId": { "$ref": "#NumericString", "description": "See GET /documentrelationtype." },
+        "RelationTypeName": { "type": ["string", "null"] },
+        "Direction": { "enum": ["To", "From"] },
+        "RelatedDocumentId": { "$ref": "#NumericString" },
+        "RelatedDocumentUuid": { "type": ["string", "null"] },
+        "RelatedDocumentNumber": { "type": ["string", "null"] },
+        "CreatedAt": { "$ref": "#IsoDateTime" },
+        "CreatedBy": { "type": ["string", "null"] }
+      },
+      "required": ["Id", "RelationTypeId", "Direction", "RelatedDocumentId"]
+    },
     "DocumentNoteType": {
       "$anchor": "DocumentNoteType",
       "title": "Document note",
@@ -116,6 +134,20 @@
         "LocationAddress": { "type": ["string", "null"] }
       },
       "required": ["Type"]
+    },
+
+    "CustomFieldType": {
+      "$anchor": "CustomFieldType",
+      "title": "Custom field value (tillægsfelt)",
+      "description": "Shared shape for CaseDetail.CustomFields[], and for the CustomFields list accepted on POST/PUT /cases. Which fields apply to a case is admin-defined and depends on the case's casetype/organisation/KLE-nummer — see GET .../custom-fields/applicable.",
+      "type": "object",
+      "properties": {
+        "FieldKey": { "type": "string", "description": "Stable machine key identifying the field, e.g. \"byggesagsnummer\"." },
+        "Label": { "type": ["string", "null"], "description": "Admin-defined display label. Not present when submitting a value on create/update — only FieldKey and Value are read." },
+        "FieldType": { "type": ["string", "null"], "enum": ["text", "dropdown", "checkbox", "date", null], "description": "Not present when submitting a value on create/update." },
+        "Value": { "type": ["string", "null"], "description": "Omitted/null when the field has not been filled in. For checkbox fields, the literal string \"true\"/\"false\". For date fields, YYYY-MM-DD." }
+      },
+      "required": ["FieldKey"]
     },
 
     "FileType": {
@@ -210,6 +242,7 @@
         "Files": { "type": "array", "items": { "$ref": "#FileType" } },
         "Contacts": { "type": "array", "items": { "$ref": "#PartyType" } },
         "Notes": { "type": "array", "items": { "$ref": "#DocumentNoteType" } },
+        "Relations": { "type": "array", "items": { "$ref": "#DocumentRelationType" } },
         "WorkflowHistory": { "type": "array", "items": { "$ref": "#WorkflowType" } }
       },
       "required": ["Id", "Title", "Status"]
@@ -218,7 +251,7 @@
     "CaseFields": {
       "$anchor": "CaseFields",
       "title": "Case, scalar fields only",
-      "description": "The flat field set shared by every case shape. Used standalone (no Participants/Caseworkers/Estates/Documents) as each item of CaseSearchResult.Cases.",
+      "description": "The flat field set shared by every case shape. Used standalone (no Participants/Caseworkers/Estates/CustomFields/Documents) as each item of CaseSearchResult.Cases.",
       "type": "object",
       "properties": {
         "Id": { "$ref": "#NumericString" },
@@ -253,7 +286,7 @@
     "CaseDetail": {
       "$anchor": "CaseDetail",
       "title": "Case, full detail",
-      "description": "Response shape of GET/POST/PUT /cases: CaseFields plus Participants, Caseworkers and Estates (but NOT Documents/JournalNotes — fetch those via the dedicated /cases/documents and /cases/journal-notes endpoints).",
+      "description": "Response shape of GET/POST/PUT /cases: CaseFields plus Participants, Caseworkers, Estates and CustomFields (but NOT Documents/JournalNotes — fetch those via the dedicated /cases/documents and /cases/journal-notes endpoints). On POST/PUT /cases, a CustomFields list (FieldKey + Value only) may also be sent in the request body to set custom field values — invalid values reject the whole request before the case is created/updated.",
       "allOf": [
         { "$ref": "#CaseFields" },
         {
@@ -261,9 +294,10 @@
           "properties": {
             "Participants": { "type": "array", "items": { "$ref": "#PartyType" } },
             "Caseworkers": { "type": "array", "items": { "$ref": "#CaseworkerType" } },
-            "Estates": { "type": "array", "items": { "$ref": "#EstateType" } }
+            "Estates": { "type": "array", "items": { "$ref": "#EstateType" } },
+            "CustomFields": { "type": "array", "items": { "$ref": "#CustomFieldType" } }
           },
-          "required": ["Participants", "Caseworkers", "Estates"]
+          "required": ["Participants", "Caseworkers", "Estates", "CustomFields"]
         }
       ]
     },
@@ -498,6 +532,28 @@
       },
       "required": ["Title"]
     },
+    "AddDocumentRelationsRequest": {
+      "$anchor": "AddDocumentRelationsRequest",
+      "title": "POST /documents/relations request body",
+      "type": "object",
+      "properties": {
+        "Uuid": { "type": "string" },
+        "DocumentNumber": { "type": "string" },
+        "RelationTypeId": { "type": ["string", "integer"], "default": 1, "description": "See GET /documentrelationtype." },
+        "RelatedDocuments": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "properties": {
+              "Uuid": { "type": "string" },
+              "DocumentNumber": { "type": "string" }
+            }
+          }
+        }
+      },
+      "required": ["RelatedDocuments"]
+    },
     "AddContactsRequest": {
       "$anchor": "AddContactsRequest",
       "title": "POST /documents/contacts request body",
@@ -603,7 +659,7 @@
     "ReferenceCodeItem": {
       "$anchor": "ReferenceCodeItem",
       "title": "Generic {Id, Name, Expired} reference row",
-      "description": "Shape of GET /contactroles, /documentcategory, /participantroles items. Unlike the Case/Document/File resources, Id is a native JSON integer and Expired a native JSON boolean.",
+      "description": "Shape of GET /contactroles, /documentcategory, /documentrelationtype, /participantroles items. Unlike the Case/Document/File resources, Id is a native JSON integer and Expired a native JSON boolean.",
       "type": "object",
       "properties": {
         "Id": { "type": "integer" },
@@ -638,6 +694,8 @@
     "GET /documents/search": { "response": { "Total": "string", "Limit": "string", "Offset": "string", "Documents": "#/$defs/DocumentSearchItem[]" }, "wrapper": "{ \"DocumentSearchResult\": {...} }" },
     "PUT /documents": { "request": "#/$defs/DocumentUpdateRequest", "response": "#/$defs/DocumentType", "wrapper": "{ \"Document\": DocumentType }" },
     "POST /documents/notes": { "request": "#/$defs/AddDocumentNoteRequest", "response": "#/$defs/DocumentNoteType", "wrapper": "{ \"Note\": DocumentNoteType }" },
+    "POST /documents/relations": { "request": "#/$defs/AddDocumentRelationsRequest", "response": "#/$defs/DocumentRelationType[]", "wrapper": "{ \"Relations\": DocumentRelationType[] }" },
+    "DELETE /documents/relations": { "query": "uuid|document_number, relation_id", "response": "#/$defs/DocumentType", "wrapper": "{ \"Document\": DocumentType }" },
     "POST /documents/contacts": { "request": "#/$defs/AddContactsRequest", "response": "(#/$defs/ContactAddResult | #/$defs/PartyAddError)[]", "wrapper": "{ \"Contacts\": [...] }" },
     "POST /documents/files": { "request": "#/$defs/UploadFileRequest", "response": "#/$defs/FileType", "wrapper": "{ \"File\": FileType }" },
     "POST /documents/files/from-template": { "request": "#/$defs/CreateFileFromTemplateRequest", "response": "#/$defs/FileType", "wrapper": "{ \"File\": FileType }" },
@@ -650,6 +708,7 @@
     "GET /casestatus": { "response": "{Id:int, Name:string, IsClosed:bool, Expired:bool}[]", "wrapper": "{ \"CaseStatuses\": [...] }" },
     "GET /casetype": { "response": "{Id:int, Name:string, PrimaryParticipant:string, Expired:bool}[]", "wrapper": "{ \"CaseTypes\": [...] }" },
     "GET /contactroles": { "response": "#/$defs/ReferenceCodeItem[]", "wrapper": "{ \"ContactRoles\": [...] }" },
+    "GET /documentrelationtype": { "response": "#/$defs/ReferenceCodeItem[]", "wrapper": "{ \"DocumentRelationTypes\": [...] }" },
     "GET /documentcategory": { "response": "#/$defs/ReferenceCodeItem[]", "wrapper": "{ \"DocumentCategories\": [...] }" },
     "GET /documentstatus": { "response": "{Id:int, Name:string, IsFinal:bool, Expired:bool}[]", "wrapper": "{ \"DocumentStatuses\": [...] }" },
     "GET /insightlevel": { "response": "{Id:int, Name:string, Description:string|null}[]", "wrapper": "{ \"InsightLevels\": [...] }" },

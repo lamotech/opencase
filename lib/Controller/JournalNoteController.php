@@ -50,6 +50,7 @@ class JournalNoteController extends ApiController {
             'text'       => $note->getText(),
             'created_at' => $note->getCreatedAt()?->format('c'),
             'created_by' => $note->getCreatedBy(),
+            'updated_by' => $note->getUpdatedBy() ?: $note->getCreatedBy(),
             'updated_at' => $note->getUpdatedAt()?->format('c'),
             'is_locked'  => (bool)$note->getIsLocked(),
         ];

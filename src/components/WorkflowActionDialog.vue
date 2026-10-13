@@ -170,7 +170,7 @@ export default {
 }
 
 .wf-action__error {
-	color: var(--color-error);
+	color: #c62828;
 	font-size: 0.9em;
 }
 </style>

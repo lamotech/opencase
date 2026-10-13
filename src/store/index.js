@@ -17,6 +17,8 @@ export default createStore({
 		companySearchEnabled: loadState('opencase', 'company_search_enabled', false),
 		// Whether the Mail app is enabled for the current user (for "Send with email")
 		mailAppEnabled: loadState('opencase', 'mail_app_enabled', false),
+		// Whether deleted files/documents are kept and can be restored (from server config: use_softdelete)
+		softDeleteEnabled: loadState('opencase', 'soft_delete_enabled', false),
 		// Current user's OpenCase roles
 		isAdministrator: false,
 		isTemplateDesigner: false,
@@ -46,6 +48,7 @@ export default createStore({
 		currentCase: null,
 		// Documents for current case
 		documents: [],
+		deletedDocuments: [],
 		documentsLoading: false,
 		// Files for current case
 		files: [],
@@ -148,6 +151,10 @@ export default createStore({
 			state.documents = documents
 		},
 
+		SET_DELETED_DOCUMENTS(state, documents) {
+			state.deletedDocuments = documents
+		},
+
 		SET_DOCUMENTS_LOADING(state, loading) {
 			state.documentsLoading = loading
 		},
@@ -207,8 +214,28 @@ export default createStore({
 			state.documents.push(document)
 		},
 
+		UPDATE_DOCUMENT(state, document) {
+			const idx = state.documents.findIndex(d => d.id === document.id)
+			if (idx !== -1) {
+				state.documents.splice(idx, 1, document)
+			}
+		},
+
 		REMOVE_DOCUMENT(state, documentId) {
 			state.documents = state.documents.filter(d => d.id !== documentId)
+		},
+
+		SOFT_DELETE_DOCUMENT(state, documentId) {
+			const doc = state.documents.find(d => d.id === documentId)
+			state.documents = state.documents.filter(d => d.id !== documentId)
+			if (doc) {
+				state.deletedDocuments.push({ ...doc, is_deleted: true, deleted_date: new Date().toISOString() })
+			}
+		},
+
+		RESTORE_DOCUMENT(state, document) {
+			state.deletedDocuments = state.deletedDocuments.filter(d => d.id !== document.id)
+			state.documents.push(document)
 		},
 
 		ADD_FILE(state, file) {
@@ -323,8 +350,11 @@ export default createStore({
 		async fetchDocuments({ commit }, caseId) {
 			commit('SET_DOCUMENTS_LOADING', true)
 			try {
-				const documents = await api.getDocuments(caseId)
-				commit('SET_DOCUMENTS', documents)
+				// Soft-deleted documents are kept apart so everything reading
+				// state.documents only ever sees live documents
+				const documents = await api.getDocuments(caseId, { includeDeleted: true })
+				commit('SET_DOCUMENTS', documents.filter(d => !d.is_deleted))
+				commit('SET_DELETED_DOCUMENTS', documents.filter(d => d.is_deleted))
 			} finally {
 				commit('SET_DOCUMENTS_LOADING', false)
 			}
@@ -336,9 +366,21 @@ export default createStore({
 			return document
 		},
 
+		async updateDocument({ commit }, { id, payload }) {
+			const document = await api.updateDocument(id, payload)
+			commit('UPDATE_DOCUMENT', document)
+			return document
+		},
+
 		async deleteDocument({ commit }, documentId) {
-			await api.deleteDocument(documentId)
-			commit('REMOVE_DOCUMENT', documentId)
+			const result = await api.deleteDocument(documentId)
+			commit(result?.soft_deleted ? 'SOFT_DELETE_DOCUMENT' : 'REMOVE_DOCUMENT', documentId)
+		},
+
+		async restoreDocument({ commit }, documentId) {
+			const document = await api.restoreDocument(documentId)
+			commit('RESTORE_DOCUMENT', document)
+			return document
 		},
 
 		async fetchFiles({ commit }, caseId) {

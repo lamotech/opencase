@@ -53,7 +53,7 @@
 				</div>
 				<div class="opencase-doc-detail__actions">
 					<FavoriteButton entity="document" :entity-key="document.id" />
-					<NcActions ref="headerActions">
+					<NcActions v-if="!document.is_deleted" ref="headerActions">
 					<NcActionButton v-if="canWrite" @click="showEditDialog = true">
 						<template #icon>
 							<PencilIcon :size="20" />
@@ -119,6 +119,18 @@
 				</div>
 			</div>
 
+			<NcNoteCard v-if="document.is_deleted" type="warning" class="opencase-doc-detail__deleted">
+				<div class="opencase-doc-detail__deleted-content">
+					<span>{{ t('opencase', 'Dokumentet blev slettet {date}', { date: formatDate(document.deleted_date) }) }}</span>
+					<NcButton v-if="document.can_write" :disabled="restoring" @click="restoreDoc">
+						<template #icon>
+							<RestoreIcon :size="20" />
+						</template>
+						{{ t('opencase', 'Gendan dokument') }}
+					</NcButton>
+				</div>
+			</NcNoteCard>
+
 			<!-- Tabs -->
 			<OverflowTabs :tabs="tabs" :value="activeTab" @input="activeTab = $event" />
 
@@ -144,8 +156,14 @@
 						@uploaded="loadFiles" />
 				</div>
 
+				<NcCheckboxRadioSwitch v-if="deletedFiles.length > 0"
+					v-model="showDeletedFiles"
+					class="opencase-doc-detail__show-deleted">
+					{{ t('opencase', 'Vis slettede filer') }}
+				</NcCheckboxRadioSwitch>
+
 				<NcLoadingIcon v-if="filesLoading" :size="32" />
-				<NcEmptyContent v-else-if="files.length === 0"
+				<NcEmptyContent v-else-if="visibleFiles.length === 0"
 					:title="t('opencase', 'Ingen filer endnu')"
 					:description="t('opencase', 'Upload en fil for at tilføje den til dette dokument')">
 					<template #icon>
@@ -154,10 +172,13 @@
 				</NcEmptyContent>
 
 				<FileList v-else
-					:files="files"
+					:files="visibleFiles"
 					:is-read-only="!canWrite || document.is_final"
+					:locked="document.is_deleted"
 					show-version
-					@delete="onDeleteFile" />
+					@delete="onDeleteFile"
+					@restore="onRestoreFile"
+					@renamed="onFileRenamed" />
 			</div>
 
 			<!-- Afsendere/Modtagere tab -->
@@ -180,6 +201,14 @@
 					:note="editingDocumentNote"
 					@close="closeDocumentNoteDialog"
 					@saved="onDocumentNoteSaved" />
+			</div>
+
+			<!-- Dokumentrelationer tab -->
+			<div v-else-if="activeTab === 'relations'" class="opencase-doc-detail__tab-content">
+				<DocumentRelationList :document-id="document.id"
+					:case-number="parentCase?.case_number || ''"
+					:can-write="canWrite && !isFinal"
+					@count-changed="relationsCount = $event" />
 			</div>
 
 			<!-- Log tab -->
@@ -265,6 +294,9 @@ import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActionCaption from '@nextcloud/vue/components/NcActionCaption'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
+import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
+import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
+import RestoreIcon from 'vue-material-design-icons/Restore.vue'
 
 import AutoFixIcon from 'vue-material-design-icons/AutoFix.vue'
 import FolderArrowRightIcon from 'vue-material-design-icons/FolderArrowRight.vue'
@@ -280,6 +312,7 @@ import FolderOutlineIcon from 'vue-material-design-icons/FolderOutline.vue'
 import EmailOutlineIcon from 'vue-material-design-icons/EmailOutline.vue'
 import NoteTextOutlineIcon from 'vue-material-design-icons/NoteTextOutline.vue'
 import HistoryIcon from 'vue-material-design-icons/History.vue'
+import FileLinkOutlineIcon from 'vue-material-design-icons/FileLinkOutline.vue'
 import SitemapIcon from 'vue-material-design-icons/Sitemap.vue'
 import BellPlusOutlineIcon from 'vue-material-design-icons/BellPlusOutline.vue'
 import BellAlertIcon from 'vue-material-design-icons/BellAlert.vue'
@@ -293,6 +326,7 @@ import DocumentAuditLog from '../components/DocumentAuditLog.vue'
 import DocumentContactList from '../components/DocumentContactList.vue'
 import DocumentNoteList from '../components/DocumentNoteList.vue'
 import DocumentNoteDialog from '../components/DocumentNoteDialog.vue'
+import DocumentRelationList from '../components/DocumentRelationList.vue'
 import NewFileFromTemplateDialog from '../components/NewFileFromTemplateDialog.vue'
 import MoveToCaseDialog from '../components/MoveToCaseDialog.vue'
 import MoveToNewCaseDialog from '../components/MoveToNewCaseDialog.vue'
@@ -315,13 +349,13 @@ export default {
 
 	components: {
 		NcBreadcrumbs, NcBreadcrumb, NcButton, NcActions, NcActionButton, NcActionCaption,
-		NcEmptyContent, NcLoadingIcon, AutoFixIcon, FolderArrowRightIcon, FolderPlusIcon, PencilIcon, FileIcon,
+		NcEmptyContent, NcLoadingIcon, NcCheckboxRadioSwitch, NcNoteCard, RestoreIcon, AutoFixIcon, FolderArrowRightIcon, FolderPlusIcon, PencilIcon, FileIcon,
 		FileDocumentEditOutlineIcon, EmailArrowRightIcon, EmailFastOutlineIcon, ShareVariantIcon,
 		MoveToCaseDialog,
 		MoveToNewCaseDialog,
 		CaseStatusBadge, FileList, FileUploadButton, EditDocumentDialog,
 		DocumentInfoPanel, DocumentAuditLog, DocumentContactList,
-		DocumentNoteList, DocumentNoteDialog, NewFileFromTemplateDialog,
+		DocumentNoteList, DocumentNoteDialog, DocumentRelationList, NewFileFromTemplateDialog,
 		SendEmailDialog,
 		DigitalPostDialog,
 		DigitalPostStatusDialog,
@@ -342,12 +376,14 @@ export default {
 
 	data() {
 		const hashTab = window.location.hash.replace('#tab-', '')
-		const validDocTabs = ['info', 'files', 'contacts', 'notes', 'log', 'workflow']
+		const validDocTabs = ['info', 'files', 'contacts', 'notes', 'relations', 'log', 'workflow']
 		return {
 			loading: true,
 			document: null,
 			parentCase: null,
 			files: [],
+			showDeletedFiles: false,
+			restoring: false,
 			filesLoading: false,
 			showEditDialog: false,
 			showTemplateDialog: false,
@@ -363,6 +399,7 @@ export default {
 			documentNotes: [],
 			documentNotesLoading: false,
 			contactsCount: null,
+			relationsCount: null,
 			showDocumentNoteDialog: false,
 			editingDocumentNote: null,
 			favoriteAiPrompts: [],
@@ -375,7 +412,11 @@ export default {
 	},
 
 	computed: {
-		canWrite() { return this.document?.can_write ?? this.parentCase?.can_write ?? false },
+		canWrite() {
+			// A deleted document is read-only until it is restored
+			if (this.document?.is_deleted) return false
+			return this.document?.can_write ?? this.parentCase?.can_write ?? false
+		},
 		isFinal() { return !!this.document?.is_final },
 		isIncoming() { return this.document?.document_category_id === 1 },
 		canJournalize() {
@@ -398,12 +439,23 @@ export default {
 			return { total, done, percent: Math.round(done / total * 100) }
 		},
 
+		activeFiles() {
+			return this.files.filter(f => !f.is_deleted)
+		},
+		deletedFiles() {
+			return this.files.filter(f => f.is_deleted)
+		},
+		visibleFiles() {
+			return this.showDeletedFiles ? this.files : this.activeFiles
+		},
+
 		tabs() {
 			return [
 				{ id: 'info', label: t('opencase', 'Info'), icon: InformationOutlineIcon },
-				{ id: 'files', label: t('opencase', 'Filer'), count: this.files.length || null, icon: FolderOutlineIcon },
+				{ id: 'files', label: t('opencase', 'Filer'), count: this.activeFiles.length || null, icon: FolderOutlineIcon },
 				{ id: 'contacts', label: t('opencase', 'Afsendere/Modtagere'), count: this.contactsCount, icon: EmailOutlineIcon },
 				{ id: 'notes', label: t('opencase', 'Noter'), count: this.documentNotes.length || null, icon: NoteTextOutlineIcon },
+				{ id: 'relations', label: t('opencase', 'Dokumentrelationer'), count: this.relationsCount, icon: FileLinkOutlineIcon },
 				{ id: 'log', label: t('opencase', 'Log'), icon: HistoryIcon },
 				{ id: 'workflow', label: t('opencase', 'Workflow'), icon: SitemapIcon },
 			]
@@ -490,6 +542,7 @@ export default {
 					this.loadFiles().catch(() => {}),
 					api.getDocumentContacts(this.id).then(r => { this.contactsCount = r.length }).catch(() => {}),
 					api.getDocumentNotes(this.id).then(r => { this.documentNotes = r }).catch(() => {}),
+					api.getDocumentRelations(this.id).then(r => { this.relationsCount = r.length || null }).catch(() => {}),
 					api.getActiveWorkflow(this.id).then(w => { this.activeWorkflow = w }).catch(() => { this.activeWorkflow = null }),
 					api.getDocumentReminders(this.id).then(r => { this.reminders = r }).catch(() => {}),
 				])
@@ -516,7 +569,7 @@ export default {
 		async loadFiles() {
 			this.filesLoading = true
 			try {
-				this.files = await api.getFilesByDocument(this.id)
+				this.files = await api.getFilesByDocument(this.id, { includeDeleted: true })
 			} finally {
 				this.filesLoading = false
 			}
@@ -533,13 +586,50 @@ export default {
 			}
 		},
 
+		async restoreDoc() {
+			this.restoring = true
+			try {
+				this.document = await api.restoreDocument(this.id)
+				showSuccess(t('opencase', 'Dokument gendannet'))
+			} catch (e) {
+				showError(e.response?.data?.ocs?.data?.error || t('opencase', 'Kunne ikke gendanne dokument'))
+			} finally {
+				this.restoring = false
+			}
+		},
+
+		onFileRenamed(file) {
+			const idx = this.files.findIndex(f => f.id === file.id)
+			if (idx >= 0) this.files.splice(idx, 1, file)
+			showSuccess(t('opencase', 'Fil omdøbt'))
+		},
+
 		async onDeleteFile(fileId) {
 			try {
-				await api.deleteFile(fileId)
-				this.files = this.files.filter(f => f.id !== fileId)
+				const result = await api.deleteFile(fileId)
+				if (result?.soft_deleted) {
+					const idx = this.files.findIndex(f => f.id === fileId)
+					if (idx >= 0) {
+						this.files.splice(idx, 1, { ...this.files[idx], is_deleted: true, deleted_date: new Date().toISOString() })
+					}
+				} else {
+					this.files = this.files.filter(f => f.id !== fileId)
+				}
 				showSuccess(t('opencase', 'Fil slettet'))
 			} catch (e) {
 				showError(t('opencase', 'Kunne ikke slette fil'))
+			}
+		},
+
+		async onRestoreFile(fileId) {
+			try {
+				const restored = await api.restoreFile(fileId)
+				const idx = this.files.findIndex(f => f.id === fileId)
+				if (idx >= 0) this.files.splice(idx, 1, restored)
+				if (this.deletedFiles.length === 0) this.showDeletedFiles = false
+				showSuccess(t('opencase', 'Fil gendannet'))
+			} catch (e) {
+				showError(t('opencase', 'Kunne ikke gendanne fil'))
 			}
 		},
 
@@ -748,8 +838,8 @@ export default {
 
 .opencase-doc-detail__reminder-banner--overdue {
 	background: var(--color-error-hover, #fce4ec);
-	border-color: var(--color-error, #c62828);
-	color: var(--color-error, #c62828);
+	border-color: #c62828;
+	color: #c62828;
 	font-weight: 600;
 }
 
@@ -770,5 +860,17 @@ export default {
 	display: flex;
 	justify-content: flex-end;
 	margin-bottom: 12px;
+}
+
+.opencase-doc-detail__show-deleted {
+	margin-bottom: 8px;
+}
+
+.opencase-doc-detail__deleted-content {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	flex-wrap: wrap;
 }
 </style>

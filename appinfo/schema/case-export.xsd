@@ -50,6 +50,7 @@
             <xs:element name="JournalNotes" type="JournalNotesType"/>
             <xs:element name="Caseworkers" type="CaseworkersType"/>
             <xs:element name="Estates" type="EstatesType"/>
+            <xs:element name="CustomFields" type="CustomFieldsType"/>
             <xs:element name="Documents" type="DocumentsType"/>
         </xs:sequence>
     </xs:complexType>
@@ -139,6 +140,28 @@
         </xs:sequence>
     </xs:complexType>
 
+    <!-- ── Custom fields ("Tillægsfelter") ─────────────────────────────── -->
+
+    <xs:complexType name="CustomFieldsType">
+        <xs:sequence>
+            <xs:element name="CustomField" type="CustomFieldType" minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <!-- One admin-defined field applicable to the case (by casetype/
+         organisation/KLE-nummer), with its current value if set.
+         FieldType is one of: text | dropdown | checkbox | date.
+         Value is omitted when the field has not been filled in; for
+         checkbox fields it is the literal string "true"/"false". -->
+    <xs:complexType name="CustomFieldType">
+        <xs:sequence>
+            <xs:element name="FieldKey" type="xs:string"/>
+            <xs:element name="Label" type="xs:string"/>
+            <xs:element name="FieldType" type="xs:string"/>
+            <xs:element name="Value" type="xs:string" minOccurs="0"/>
+        </xs:sequence>
+    </xs:complexType>
+
     <!-- ============================== Documents ============================== -->
 
     <xs:complexType name="DocumentsType">
@@ -169,6 +192,8 @@
             <xs:element name="Files" type="FilesType"/>
             <xs:element name="Contacts" type="ContactsType"/>
             <xs:element name="Notes" type="DocumentNotesType"/>
+            <!-- Optional so case.xml files exported before relations existed still validate -->
+            <xs:element name="Relations" type="DocumentRelationsType" minOccurs="0"/>
             <xs:element name="WorkflowHistory" type="WorkflowHistoryType"/>
         </xs:sequence>
     </xs:complexType>
@@ -212,6 +237,38 @@
     <xs:complexType name="DocumentNotesType">
         <xs:sequence>
             <xs:element name="Note" type="NoteType" minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <!-- ── Document relations ──────────────────────────────────────────── -->
+
+    <xs:complexType name="DocumentRelationsType">
+        <xs:sequence>
+            <xs:element name="Relation" type="DocumentRelationType" minOccurs="0" maxOccurs="unbounded"/>
+        </xs:sequence>
+    </xs:complexType>
+
+    <!-- A relation seen from the containing document. Direction "To": the
+         containing document points to the related document (e.g. the related
+         document is its Bilag); "From": the related document points to it. -->
+    <xs:complexType name="DocumentRelationType">
+        <xs:sequence>
+            <xs:element name="Id" type="xs:long"/>
+            <xs:element name="RelationTypeId" type="xs:int"/>
+            <xs:element name="RelationTypeName" type="xs:string" minOccurs="0"/>
+            <xs:element name="Direction">
+                <xs:simpleType>
+                    <xs:restriction base="xs:string">
+                        <xs:enumeration value="To"/>
+                        <xs:enumeration value="From"/>
+                    </xs:restriction>
+                </xs:simpleType>
+            </xs:element>
+            <xs:element name="RelatedDocumentId" type="xs:long"/>
+            <xs:element name="RelatedDocumentUuid" type="xs:string" minOccurs="0"/>
+            <xs:element name="RelatedDocumentNumber" type="xs:string" minOccurs="0"/>
+            <xs:element name="CreatedAt" type="xs:dateTime" minOccurs="0"/>
+            <xs:element name="CreatedBy" type="xs:string" minOccurs="0"/>
         </xs:sequence>
     </xs:complexType>
 

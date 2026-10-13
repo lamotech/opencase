@@ -11,6 +11,7 @@ const LABELS = {
 	reviewing:      'Vurderer',
 	redacting:      'Maskerer',
 	approval:       'Godkendelse',
+	approved:       'Godkendt',
 	sent:           'Afsendt',
 	rejected:       'Afslået',
 	partly_rejected: 'Delvist afslået',
@@ -43,6 +44,7 @@ export default {
 .oc-access-status--reviewing      { background: #fff3e0; color: #e65100; }
 .oc-access-status--redacting      { background: #fce4ec; color: #880e4f; }
 .oc-access-status--approval       { background: #ede7f6; color: #4527a0; }
+.oc-access-status--approved       { background: #e8f5e9; color: #2e7d32; }
 .oc-access-status--sent           { background: #e8f5e9; color: #1b5e20; }
 .oc-access-status--rejected       { background: #ffebee; color: #b71c1c; }
 .oc-access-status--partly_rejected{ background: #fff9c4; color: #827717; }

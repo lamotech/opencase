@@ -56,6 +56,45 @@ Det giver et hurtigt overblik over den organisatoriske tilknytning og gør det l
 
 ---
 
+## Fanen Opgaver
+
+På fanen **Opgaver** vises de åbne opgaver, som medarbejderen skal udføre. Antallet af opgaver vises ved fanens navn.
+
+Fanen samler to typer opgaver:
+
+- **Workflowopgaver** – dokumenter i et [workflow](../dokumenter/workflow.md), hvor det er medarbejderens tur til at gennemse eller godkende dokumentet.
+- **Påmindelser** – aktive [påmindelser](../dokumenter/paamindelser.md) på sager og dokumenter, som er tildelt medarbejderen.
+
+For hver opgave vises:
+
+| Kolonne | Beskrivelse |
+|---------|-------------|
+| **Frist** | Opgavens frist. Opgaver uden frist vises med teksten *Ingen frist*. |
+| **Type** | *Gennemse* eller *Godkendelse* for workflowopgaver og *Påmindelse* for påmindelser. |
+| **Opgave** | *Gennemse dokument* eller *Godkend eller afvis dokument* for workflowopgaver og påmindelsens titel for påmindelser. |
+| **Sag** | Sagsnummer og titel på den sag, opgaven vedrører. |
+| **Dokument** | Titel på det dokument, opgaven vedrører. |
+
+Opgaverne er sorteret efter frist, så opgaven med den tidligste frist står øverst. Opgaver uden frist vises nederst.
+
+Fristen vises med **rød fed skrift**, hvis den er overskredet.
+
+![Fanen Opgaver](../images/soegning/medarbejder-opgaver.png)
+
+### Åbn en opgave
+
+Klik på en opgave for at åbne den:
+
+- En workflowopgave åbner dokumentet på fanen **Workflow**.
+- En påmindelse på et dokument åbner dokumentet.
+- En påmindelse på en sag åbner sagen.
+
+!!! info "Kun opgaver, du selv har adgang til"
+
+    Listen viser kun opgaver på sager og dokumenter, som **du** har adgang til at se. Medarbejderen kan derfor have flere opgaver, end der vises på fanen.
+
+---
+
 ## Fanen Sager
 
 På fanen **Sager** vises de sager, hvor medarbejderen er registreret som part.
@@ -109,6 +148,7 @@ Søgning efter medarbejdere er især nyttig, når du ønsker at:
 
 - finde en bestemt medarbejder
 - se medarbejderens organisatoriske placering
+- få overblik over medarbejderens opgaver og frister
 - få overblik over medarbejderens sager
 - kontrollere medarbejderens adgangsrettigheder
 - undersøge manuelt tildelte adgange

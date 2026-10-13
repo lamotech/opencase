@@ -10,6 +10,8 @@ class ClassificationKLEData {
 		public readonly string $code,
 		public readonly string $title,
 		public readonly string $description,
+		public readonly ?int $disposalcode_id = null,
+		public readonly ?int $deletion_deadline_id = null,
 	) {
 	}
 }

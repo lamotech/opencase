@@ -23,6 +23,10 @@ use OCP\AppFramework\Db\Entity;
  * @method void setDescription(?string $description)
  * @method int getActive()
  * @method void setActive(int $active)
+ * @method int|null getDisposalcodeId()
+ * @method void setDisposalcodeId(?int $disposalcodeId)
+ * @method int|null getDeletionDeadlineId()
+ * @method void setDeletionDeadlineId(?int $deletionDeadlineId)
  */
 class ClassificationSubject extends Entity {
 
@@ -31,6 +35,8 @@ class ClassificationSubject extends Entity {
     protected string $title = '';
     protected ?string $description = null;
     protected int $active = 1;
+    protected ?int $disposalcodeId = null;
+    protected ?int $deletionDeadlineId = null;
 
     public function __construct() {
         $this->addType('uuid', 'string');
@@ -38,5 +44,7 @@ class ClassificationSubject extends Entity {
         $this->addType('title', 'string');
         $this->addType('description', 'string');
         $this->addType('active', 'integer');
+        $this->addType('disposalcodeId', 'integer');
+        $this->addType('deletionDeadlineId', 'integer');
     }
 }

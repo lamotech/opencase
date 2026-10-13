@@ -51,6 +51,9 @@ class IssueTokenCommand extends Command {
 				case 'kombipostafsend':
 					$entityId = $this->configuration->getConfigValue('entity_id_kombipostafsend', 'http://entityid.kombit.dk/service/kombipostafsend/1');
 					break;
+				case 'sagdokumentindeks':
+					$entityId = $this->configuration->getConfigValue('entity_id_sagdokumentindeks', 'http://entityid.kombit.dk/service/sdi/sagdokumentindeks/6');
+					break;
 				case 'opencase':
 					$entityId = $this->configuration->getConfigValue('entity_id_opencase', 'http://opencase.dk/service/api/1');
 					break;

@@ -195,7 +195,9 @@ proc: BEGIN
     LEFT JOIN _oc_write_profiles wp ON wp.access_profile_id = c.access_profile_id
     LEFT JOIN oc_opencase_documentstatus ds
            ON ds.id = d.status AND ds.language = 'en'
-    WHERE c.created_at IS NOT NULL;
+    WHERE c.created_at IS NOT NULL
+      AND COALESCE(f.is_deleted, 0) = 0
+      AND COALESCE(d.is_deleted, 0) = 0;
 
     -- ════════════════════════════════════════════════════════════════════════
     -- 3. Insert missing oc_filecache entries level by level

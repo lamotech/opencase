@@ -65,11 +65,12 @@ class AccessDecisionService {
         $saved = $this->decisionMapper->update($dec);
 
         $req = $this->requestMapper->findById($requestId);
-        $req->setStatus('approval');
+        $old = $req->getStatus();
+        $req->setStatus('approved');
         $req->setUpdatedAt(new \DateTime());
         $this->requestMapper->update($req);
 
-        $this->auditService->logAccessRequestStatusChanged($req->getCaseId(), $userId, $requestId, 'redacting', 'approval');
+        $this->auditService->logAccessRequestStatusChanged($req->getCaseId(), $userId, $requestId, $old, 'approved');
         return $saved;
     }
 

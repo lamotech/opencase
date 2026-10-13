@@ -22,6 +22,7 @@ use OCA\OpenCase\Db\SeparationSheet;
 use OCA\OpenCase\Db\SeparationSheetMapper;
 use OCA\OpenCase\Service\CaseNumberService;
 use OCA\OpenCase\Service\CaseService;
+use OCA\OpenCase\Service\DisposalService;
 use OCA\OpenCase\Service\PrivilegeService;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\BackgroundJob\TimedJob;
@@ -88,6 +89,7 @@ class ProcessImportsJob extends TimedJob {
         private ConfigMapper $configMapper,
         private IConfig $config,
         private PrivilegeService $privilegeService,
+        private DisposalService $disposalService,
         private LoggerInterface $logger,
     ) {
         parent::__construct($time);
@@ -614,6 +616,7 @@ class ProcessImportsJob extends TimedJob {
         $entity->setInsightLevelId($sheet->getInsightLevelId());
         $entity->setClassificationFacetUuid($sheet->getClassificationFacetUuid());
         $entity->setUuid(CaseService::generateUuid());
+        $this->disposalService->applyDisposalCode($entity);
 
         return $this->caseMapper->insert($entity);
     }
@@ -703,6 +706,7 @@ class ProcessImportsJob extends TimedJob {
         $entity->setClassificationFacetUuid($resolvedFacetUuid);
         $entity->setInsightLevelId($insightLevelId);
         $entity->setUuid(CaseService::generateUuid());
+        $this->disposalService->applyDisposalCode($entity);
 
         return $this->caseMapper->insert($entity);
     }

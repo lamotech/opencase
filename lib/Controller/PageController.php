@@ -101,5 +101,10 @@ class PageController extends Controller {
             'mail_app_enabled',
             $this->appManager->isEnabledForUser('mail'),
         );
+        $this->initialState->provideInitialState(
+            'opencase',
+            'soft_delete_enabled',
+            $this->configuration->getConfigValue('use_softdelete', '0') === '1',
+        );
     }
 }

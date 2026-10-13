@@ -370,6 +370,11 @@
 					</thead>
 					<tbody>
 						<tr>
+							<td>{{ t('opencase', 'Nextcloud bruger') }}</td>
+							<td>http://{{ domain }}/roles/usersystemrole/nextclouduser/1</td>
+							<td>{{ t('opencase', 'None') }}</td>
+						</tr>
+						<tr>
 							<td>{{ t('opencase', 'User') }}</td>
 							<td>http://{{ domain }}/roles/usersystemrole/opencaseuser/1</td>
 							<td>{{ t('opencase', 'Organisation, KLE, Følsomhed') }}</td>
@@ -518,6 +523,107 @@
 								:disabled="!enterpriseVersion"
 								:style="{ width: '600px', maxWidth: '100%', boxSizing: 'border-box' }"
 								@change="saveConfigValue('endpoint_fordeling', endpointFordeling)">
+						</td>
+					</tr>
+				</table>
+			</NcSettingsSection>
+
+			<NcSettingsSection :name="t('opencase', 'Sag- og dokumentindeks')">
+				<p v-if="!enterpriseVersion" class="enterprise-version-warning">
+					{{ t('opencase', 'Integrationen er kun tilgængelig i Enterprise versionen') }}
+				</p>
+				<p>{{ t('opencase', 'Indstillinger for integrationen til Sags- og Dokumentindekset (SAPA).') }}</p>
+
+				<table class="opencase-cert-table">
+					<tr>
+						<td class="opencase-cert-label">
+							<label for="sdi-entity-id">{{ t('opencase', 'Entity id for sag- og dokumentindeks') }}</label>
+						</td>
+						<td>
+							<input id="sdi-entity-id"
+								v-model="entityIdSagdokumentindeks"
+								type="text"
+								:disabled="!enterpriseVersion"
+								:style="{ width: '600px', maxWidth: '100%', boxSizing: 'border-box' }"
+								@change="saveConfigValue('entity_id_sagdokumentindeks', entityIdSagdokumentindeks)">
+						</td>
+					</tr>
+					<tr>
+						<td class="opencase-cert-label">
+							<label for="sdi-endpoint">{{ t('opencase', 'Endpoint for sag- og dokumentindeks') }}</label>
+						</td>
+						<td>
+							<input id="sdi-endpoint"
+								v-model="endpointSagdokumentindeks"
+								type="text"
+								:disabled="!enterpriseVersion"
+								:style="{ width: '600px', maxWidth: '100%', boxSizing: 'border-box' }"
+								@change="saveConfigValue('endpoint_sagdokumentindeks', endpointSagdokumentindeks)">
+						</td>
+					</tr>
+					<tr>
+						<td class="opencase-cert-label">
+							<label for="sdi-municipality-number">{{ t('opencase', 'Kommunenummer') }}</label>
+						</td>
+						<td>
+							<input id="sdi-municipality-number"
+								v-model="sagdokumentindeksMunicipalityNumber"
+								type="text"
+								:disabled="!enterpriseVersion"
+								:style="{ width: '300px', maxWidth: '100%', boxSizing: 'border-box' }"
+								@change="saveConfigValue('sagdokumentindeks_municipality_number', sagdokumentindeksMunicipalityNumber)">
+						</td>
+					</tr>
+					<tr>
+						<td class="opencase-cert-label">
+							<label for="sdi-municipality-name">{{ t('opencase', 'Kommune navn') }}</label>
+						</td>
+						<td>
+							<input id="sdi-municipality-name"
+								v-model="sagdokumentindeksMunicipalityName"
+								type="text"
+								:disabled="!enterpriseVersion"
+								:style="{ width: '300px', maxWidth: '100%', boxSizing: 'border-box' }"
+								@change="saveConfigValue('sagdokumentindeks_municipality_name', sagdokumentindeksMunicipalityName)">
+						</td>
+					</tr>
+					<tr>
+						<td class="opencase-cert-label">
+							<label for="sdi-municipality-cvr">{{ t('opencase', 'Kommune CVR nummer') }}</label>
+						</td>
+						<td>
+							<input id="sdi-municipality-cvr"
+								v-model="sagdokumentindeksMunicipalityCvr"
+								type="text"
+								:disabled="!enterpriseVersion"
+								:style="{ width: '300px', maxWidth: '100%', boxSizing: 'border-box' }"
+								@change="saveConfigValue('sagdokumentindeks_municipality_cvr', sagdokumentindeksMunicipalityCvr)">
+						</td>
+					</tr>
+					<tr>
+						<td class="opencase-cert-label">
+							<label for="sdi-itsystem-uuid">{{ t('opencase', 'IT system UUID') }}</label>
+						</td>
+						<td>
+							<input id="sdi-itsystem-uuid"
+								v-model="sagdokumentindeksItsystemUuid"
+								type="text"
+								:disabled="!enterpriseVersion"
+								:style="{ width: '600px', maxWidth: '100%', boxSizing: 'border-box' }"
+								@change="saveConfigValue('sagdokumentindeks_itsystem_uuid', sagdokumentindeksItsystemUuid)">
+						</td>
+					</tr>
+					<tr>
+						<td class="opencase-cert-label">
+							<label for="sdi-itsystem-name">{{ t('opencase', 'IT system navn') }}</label>
+						</td>
+						<td>
+							<input id="sdi-itsystem-name"
+								v-model="sagdokumentindeksItsystemName"
+								type="text"
+								:disabled="!enterpriseVersion"
+								:style="{ width: '300px', maxWidth: '100%', boxSizing: 'border-box' }"
+								@change="saveConfigValue('sagdokumentindeks_itsystem_name', sagdokumentindeksItsystemName)">
 						</td>
 					</tr>
 				</table>
@@ -842,6 +948,59 @@
 				<p>{{ t('opencase', '1. Go to admin.microsoft.com → Settings → Integrated apps.') }}</p>
 				<p>{{ t('opencase', '2. Click "Upload custom apps" and upload each manifest.xml downloaded above.') }}</p>
 				<p>{{ t('opencase', '3. Assign the add-in to the relevant users or groups.') }}</p>
+			</NcSettingsSection>
+		</div>
+
+		<div v-show="activeTab === 'masking'">
+			<NcSettingsSection :name="t('opencase', 'Maskeringstjeneste')">
+				<p v-if="!enterpriseVersion" class="enterprise-version-warning">
+					{{ t('opencase', 'Integrationen er kun tilgængelig i Enterprise versionen') }}
+				</p>
+				<p>{{ t('opencase', 'Maskeringstjenesten finder personoplysninger i filer under aktindsigt og laver maskerede PDF-versioner, hvor oplysningerne er fjernet fra filen. Tjenesten kører som en Docker-container ved siden af Nextcloud – se redaction-service/README.md. Uden URL er automatisk maskering slået fra, og filer maskeres manuelt ved upload.') }}</p>
+				<p>{{ t('opencase', 'Hvad der søges efter, styres under OpenCase → Konfiguration → Maskeringsregler.') }}</p>
+
+				<table class="opencase-cert-table">
+					<tr>
+						<td class="opencase-cert-label">
+							<label for="redaction-service-url">{{ t('opencase', 'URL') }}</label>
+						</td>
+						<td>
+							<input id="redaction-service-url"
+								v-model="redactionServiceUrl"
+								type="text"
+								placeholder="http://127.0.0.1:8080"
+								autocomplete="off"
+								spellcheck="false"
+								:disabled="!enterpriseVersion"
+								:style="{ width: '400px', maxWidth: '100%', boxSizing: 'border-box' }"
+								@change="saveConfigValue('redaction_service_url', redactionServiceUrl.trim())">
+						</td>
+					</tr>
+					<tr>
+						<td class="opencase-cert-label">
+							<label for="redaction-service-api-key">{{ t('opencase', 'API-nøgle') }}</label>
+						</td>
+						<td>
+							<input id="redaction-service-api-key"
+								v-model="redactionServiceApiKey"
+								type="password"
+								autocomplete="new-password"
+								:disabled="!enterpriseVersion"
+								:style="{ width: '400px', maxWidth: '100%', boxSizing: 'border-box' }"
+								@change="saveConfigValue('redaction_service_api_key', redactionServiceApiKey.trim())">
+						</td>
+					</tr>
+				</table>
+				<p class="opencase-msoffice-hint">{{ t('opencase', 'Samme værdi som REDACTION_API_KEY i tjenestens container.') }}</p>
+
+				<div class="opencase-button-row">
+					<button class="primary" :disabled="!enterpriseVersion || testingRedactionService" @click="testRedactionService">
+						{{ t('opencase', 'Test forbindelse') }}
+					</button>
+				</div>
+				<p v-if="redactionServiceTest" :class="redactionServiceTest.ok ? 'opencase-test-ok' : 'enterprise-version-warning'">
+					{{ redactionServiceTest.ok ? t('opencase', 'Forbindelsen virker.') : redactionServiceTest.error }}
+				</p>
 			</NcSettingsSection>
 		</div>
 
@@ -1895,6 +2054,7 @@ export default {
 				{ id: 'serviceplatformen', label: t('opencase', 'Serviceplatformen') },
 				{ id: 'datafordeler', label: t('opencase', 'Datafordeler') },
 				{ id: 'msoffice', label: t('opencase', 'MS Office') },
+				{ id: 'masking', label: t('opencase', 'Maskering') },
 				{ id: 'api', label: t('opencase', 'API') },
 				{ id: 'local_users', label: t('opencase', 'Lokale brugere') },
 				{ id: 'transaction_log', label: t('opencase', 'Transaktionslog') },
@@ -1990,6 +2150,13 @@ export default {
 			endpointAddress: config.endpoint_address || '',
 			entityIdFordeling: config.entity_id_fordeling || '',
 			endpointFordeling: config.endpoint_fordeling || '',
+			entityIdSagdokumentindeks: config.entity_id_sagdokumentindeks || '',
+			endpointSagdokumentindeks: config.endpoint_sagdokumentindeks || '',
+			sagdokumentindeksMunicipalityNumber: config.sagdokumentindeks_municipality_number || '',
+			sagdokumentindeksMunicipalityName: config.sagdokumentindeks_municipality_name || '',
+			sagdokumentindeksMunicipalityCvr: config.sagdokumentindeks_municipality_cvr || '',
+			sagdokumentindeksItsystemUuid: config.sagdokumentindeks_itsystem_uuid || '',
+			sagdokumentindeksItsystemName: config.sagdokumentindeks_itsystem_name || '',
 			syncing: false,
 			syncResult: null,
 			syncError: '',
@@ -2020,6 +2187,10 @@ export default {
 			msofficeGraphClientId: config.msoffice_graph_client_id || '',
 			msofficeGraphTenantId: config.msoffice_graph_tenant_id || '',
 			msofficeUriCopied: false,
+			redactionServiceUrl: config.redaction_service_url || '',
+			redactionServiceApiKey: config.redaction_service_api_key || '',
+			testingRedactionService: false,
+			redactionServiceTest: null,
 			sftpHost: config.sftp_host || '',
 			sftpUserName: config.sftp_user_name || '',
 			sftpSshPrivateKeyFullFileName: config.sftp_ssh_private_key_full_fileName || '',
@@ -2139,6 +2310,21 @@ export default {
 	},
 	methods: {
 		t,
+		async testRedactionService() {
+			this.testingRedactionService = true
+			this.redactionServiceTest = null
+			try {
+				// Make sure what is in the fields is what gets tested
+				await this.saveConfigValue('redaction_service_url', this.redactionServiceUrl.trim())
+				await this.saveConfigValue('redaction_service_api_key', this.redactionServiceApiKey.trim())
+				const { data } = await axios.post(generateUrl('/apps/opencase/settings/test-redaction-service'))
+				this.redactionServiceTest = data
+			} catch (e) {
+				this.redactionServiceTest = { ok: false, error: t('opencase', 'Testen fejlede') }
+			} finally {
+				this.testingRedactionService = false
+			}
+		},
 		async saveConfigValue(key, value) {
 			try {
 				await axios.post(
@@ -2839,6 +3025,12 @@ export default {
 	opacity: 0.5;
 	pointer-events: none;
 	cursor: not-allowed;
+}
+
+.opencase-test-ok {
+	color: var(--color-success-text, #2e7d32);
+	font-weight: bold;
+	padding: 12px 0px;
 }
 
 .enterprise-version-warning {

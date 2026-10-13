@@ -46,6 +46,8 @@ return [
         ['name' => 'public_document_api#upload_file', 'url' => '/public/v1/api/documents/files', 'verb' => 'POST'],
         ['name' => 'public_document_api#create_file_from_template', 'url' => '/public/v1/api/documents/files/from-template', 'verb' => 'POST'],
         ['name' => 'public_document_api#add_note', 'url' => '/public/v1/api/documents/notes', 'verb' => 'POST'],
+        ['name' => 'public_document_api#add_relations', 'url' => '/public/v1/api/documents/relations', 'verb' => 'POST'],
+        ['name' => 'public_document_api#delete_relation', 'url' => '/public/v1/api/documents/relations', 'verb' => 'DELETE'],
         ['name' => 'public_file_api#show', 'url' => '/public/v1/api/files', 'verb' => 'GET'],
         ['name' => 'public_file_api#upload_version', 'url' => '/public/v1/api/files/version', 'verb' => 'POST'],
         ['name' => 'public_file_api#versions', 'url' => '/public/v1/api/files/versions', 'verb' => 'GET'],
@@ -57,6 +59,7 @@ return [
         ['name' => 'public_reference_api#case_types',             'url' => '/public/v1/api/casetype',              'verb' => 'GET'],
         ['name' => 'public_reference_api#contact_roles',          'url' => '/public/v1/api/contactroles',          'verb' => 'GET'],
         ['name' => 'public_reference_api#document_categories',    'url' => '/public/v1/api/documentcategory',      'verb' => 'GET'],
+        ['name' => 'public_reference_api#document_relation_types', 'url' => '/public/v1/api/documentrelationtype',  'verb' => 'GET'],
         ['name' => 'public_reference_api#document_statuses',      'url' => '/public/v1/api/documentstatus',        'verb' => 'GET'],
         ['name' => 'public_reference_api#insight_levels',         'url' => '/public/v1/api/insightlevel',          'verb' => 'GET'],
         ['name' => 'public_reference_api#participant_roles',      'url' => '/public/v1/api/participantroles',      'verb' => 'GET'],
@@ -81,6 +84,7 @@ return [
 
         // Admin settings page endpoints (non-OCS, called from the NC admin settings Vue)
         ['name' => 'settings#save_config',              'url' => '/settings/config',               'verb' => 'POST'],
+        ['name' => 'settings#test_redaction_service',   'url' => '/settings/test-redaction-service', 'verb' => 'POST'],
         ['name' => 'settings#sync_organisations',       'url' => '/settings/sync-organisations',        'verb' => 'POST'],
         ['name' => 'settings#org_sync_status',          'url' => '/settings/sync-organisations/status', 'verb' => 'GET'],
         ['name' => 'settings#sync_klassifikation',      'url' => '/settings/sync-klassifikation',  'verb' => 'POST'],
@@ -161,6 +165,7 @@ return [
         ['name' => 'document#show',      'url' => '/api/v1/documents/{id}',            'verb' => 'GET'],
         ['name' => 'document#update',    'url' => '/api/v1/documents/{id}',            'verb' => 'PUT'],
         ['name' => 'document#destroy',   'url' => '/api/v1/documents/{id}',            'verb' => 'DELETE'],
+        ['name' => 'document#restore',   'url' => '/api/v1/documents/{id}/restore',    'verb' => 'POST'],
         ['name' => 'document#set_access', 'url' => '/api/v1/documents/{id}/access/{targetUser}', 'verb' => 'PUT'],
 
         // ---------------------------------------------------------
@@ -174,7 +179,9 @@ return [
         ['name' => 'file#download',          'url' => '/api/v1/files/{id}/download',      'verb' => 'GET'],
         ['name' => 'file#get_edit_url',      'url' => '/api/v1/files/{id}/edit-url',      'verb' => 'GET'],
         ['name' => 'file#upload_new_version', 'url' => '/api/v1/files/{id}/version',      'verb' => 'POST'],
+        ['name' => 'file#rename',            'url' => '/api/v1/files/{id}/name',          'verb' => 'PUT'],
         ['name' => 'file#destroy',           'url' => '/api/v1/files/{id}',               'verb' => 'DELETE'],
+        ['name' => 'file#restore',           'url' => '/api/v1/files/{id}/restore',       'verb' => 'POST'],
 
         // ---------------------------------------------------------
         // File shares
@@ -284,6 +291,14 @@ return [
         ['name' => 'recent#index', 'url' => '/api/v1/recent', 'verb' => 'GET'],
 
         // ---------------------------------------------------------
+        // Bulk update (Masseredigering)
+        // ---------------------------------------------------------
+        ['name' => 'bulk_update#index', 'url' => '/api/v1/bulkupdates', 'verb' => 'GET'],
+        ['name' => 'bulk_update#create', 'url' => '/api/v1/bulkupdates', 'verb' => 'POST'],
+        ['name' => 'bulk_update#failed_items', 'url' => '/api/v1/bulkupdates/{id}/failed-items', 'verb' => 'GET'],
+        ['name' => 'bulk_update#cancel', 'url' => '/api/v1/bulkupdates/{id}/cancel', 'verb' => 'PUT'],
+
+        // ---------------------------------------------------------
         // Current user
         // ---------------------------------------------------------
         ['name' => 'me#roles', 'url' => '/api/v1/me/roles', 'verb' => 'GET'],
@@ -335,6 +350,7 @@ return [
 
         // Aktindsigt (right of access)
         // ---------------------------------------------------------
+        ['name' => 'access_request#mine',             'url' => '/api/v1/me/access-requests',                                 'verb' => 'GET'],
         ['name' => 'access_request#index',            'url' => '/api/v1/cases/{caseId}/access-requests',                     'verb' => 'GET'],
         ['name' => 'access_request#create',           'url' => '/api/v1/cases/{caseId}/access-requests',                     'verb' => 'POST'],
         ['name' => 'access_request#decision_templates',  'url' => '/api/v1/access-requests/decision-templates',              'verb' => 'GET'],
@@ -353,6 +369,11 @@ return [
         ['name' => 'access_request#masking_files',   'url' => '/api/v1/access-requests/{id}/masking-files',                  'verb' => 'GET'],
         ['name' => 'access_request#upload_masked',   'url' => '/api/v1/access-request-items/{itemId}/files/{fileId}/masked', 'verb' => 'POST'],
         ['name' => 'access_request#download_masked', 'url' => '/api/v1/access-request-items/{itemId}/files/{fileId}/masked/download', 'verb' => 'GET'],
+        ['name' => 'access_masking#suggestions',      'url' => '/api/v1/access-request-items/{itemId}/files/{fileId}/mask-suggestions', 'verb' => 'GET'],
+        ['name' => 'access_masking#analyze',          'url' => '/api/v1/access-request-items/{itemId}/files/{fileId}/mask-analyze',     'verb' => 'POST'],
+        ['name' => 'access_masking#add_term',         'url' => '/api/v1/access-request-items/{itemId}/files/{fileId}/mask-terms',       'verb' => 'POST'],
+        ['name' => 'access_masking#apply',            'url' => '/api/v1/access-request-items/{itemId}/files/{fileId}/mask-apply',       'verb' => 'POST'],
+        ['name' => 'access_masking#update_suggestion', 'url' => '/api/v1/access-mask-suggestions/{suggestionId}',                      'verb' => 'PATCH'],
         ['name' => 'access_export#export',            'url' => '/api/v1/access-requests/{id}/export',                        'verb' => 'GET'],
         ['name' => 'access_export#mark_sent',         'url' => '/api/v1/access-requests/{id}/mark-sent',                     'verb' => 'POST'],
 
@@ -390,5 +411,18 @@ return [
         ['name' => 'admin#setup_elasticsearch', 'url' => '/api/v1/admin/es/setup',                         'verb' => 'POST'],
         ['name' => 'admin#reindex_all',         'url' => '/api/v1/admin/reindex',                           'verb' => 'POST'],
         ['name' => 'admin#reindex_case',        'url' => '/api/v1/admin/reindex/{caseId}',                  'verb' => 'POST'],
+
+        // ---------------------------------------------------------
+        // Custom fields (definitions require the OpenCase Administrator
+        // app role; per-case values require case-level access)
+        // ---------------------------------------------------------
+        ['name' => 'custom_field#index',           'url' => '/api/v1/admin/custom-fields',        'verb' => 'GET'],
+        ['name' => 'custom_field#create',          'url' => '/api/v1/admin/custom-fields',        'verb' => 'POST'],
+        ['name' => 'custom_field#update',          'url' => '/api/v1/admin/custom-fields/{id}',   'verb' => 'PUT'],
+        ['name' => 'custom_field#destroy',         'url' => '/api/v1/admin/custom-fields/{id}',   'verb' => 'DELETE'],
+        ['name' => 'custom_field#list_active',     'url' => '/api/v1/custom-fields',              'verb' => 'GET'],
+        ['name' => 'custom_field#applicable',      'url' => '/api/v1/custom-fields/applicable',   'verb' => 'GET'],
+        ['name' => 'custom_field#for_case',        'url' => '/api/v1/cases/{caseId}/custom-fields', 'verb' => 'GET'],
+        ['name' => 'custom_field#update_for_case', 'url' => '/api/v1/cases/{caseId}/custom-fields', 'verb' => 'PUT'],
     ],
 ];

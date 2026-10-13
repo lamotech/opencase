@@ -69,7 +69,7 @@ Eksporten indeholder følgende filer.
 
 | Fil | Indhold |
 |------|---------|
-| `case.xml` | Metadata for sagen og dens dokumenter. |
+| `case.xml` | Metadata for sagen og dens dokumenter, inkl. dokumentrelationer (fx bilag). |
 | `files/<dokument-id>/` | Dokumenternes tilhørende filer. |
 | `logs/case.xml` | Log over handlinger på sagen. |
 | `logs/document_<id>.xml` | Log over handlinger på det enkelte dokument. |

@@ -44,6 +44,7 @@ class CaseService {
         private AuditService $auditService,
         private LoggerInterface $logger,
         private PrivilegeService $privilegeService,
+        private DisposalService $disposalService,
     ) {
     }
 
@@ -131,6 +132,7 @@ class CaseService {
         if ($casetypeId !== null) {
             $entity->setCasetypeId($casetypeId);
         }
+        $this->disposalService->applyDisposalCode($entity);
 
         $entity = $this->caseMapper->insert($entity);
 
@@ -269,6 +271,10 @@ class CaseService {
             $entity->setResponsibleUserId($responsibleUserId);
         }
 
+        if (isset($changes['classification_code']) || isset($changes['classification_facet_uuid'])) {
+            $this->disposalService->applyDisposalCode($entity);
+        }
+
         $entity->setUpdatedAt(new \DateTime());
 
         $result = $this->caseMapper->update($entity);
@@ -317,6 +323,7 @@ class CaseService {
 
         $oldStatusId = $entity->getStatusId();
         $entity->setStatusId($newStatusId);
+        $this->disposalService->applyStatusChange($entity, $oldStatusId, $newStatusId);
         $entity->setUpdatedAt(new \DateTime());
 
         $result = $this->caseMapper->update($entity);
@@ -340,6 +347,20 @@ class CaseService {
         }
 
         return $this->checkReadAccessAndAudit($entity, $userId, $audit);
+    }
+
+    /**
+     * Resolve a case's KLE classification code (e.g. "27.69.00") via its
+     * access profile. Returns null if the case has no access profile or
+     * the profile has no classification subject set.
+     */
+    public function getClassificationCodeForCase(CaseEntity $case): ?string {
+        $profile = $this->accessProfileMapper->findById($case->getAccessProfileId());
+        if ($profile === null) {
+            return null;
+        }
+        $classSubject = $this->classificationSubjectMapper->findByUuid($profile->getClassSubjectUuid());
+        return $classSubject?->getCode();
     }
 
     /**
@@ -399,12 +420,14 @@ class CaseService {
         ?int $insightLevelId = null,
         ?string $responsibleUserId = null,
         ?int $casetypeId = null,
+        array $customFields = [],
     ): array {
         // The mapper resolves every access path (responsible user, direct grant,
         // access profile) in SQL — no pre-resolved profile ID list needed.
         $hasAdvancedFilters = $classificationCode !== null || $sensitivityKey !== null
             || $classificationFacetUuid !== null || $insightLevelId !== null
-            || $responsibleUserId !== null || $casetypeId !== null;
+            || $responsibleUserId !== null || $casetypeId !== null
+            || !empty($customFields);
 
         // Fast text-only path — only when no other filters are active
         if ($search !== null && trim($search) !== ''
@@ -428,11 +451,13 @@ class CaseService {
             $userId, $orgUuid, $year, $statusId,
             $search, $classificationFacetUuid, $insightLevelId, $responsibleUserId,
             $classificationCode, $sensitivityKey, $casetypeId,
+            $customFields,
         );
         $cases = $this->caseMapper->findWithFilters(
             $userId, $orgUuid, $year, $statusId, $limit, $offset,
             $search, $classificationFacetUuid, $insightLevelId, $responsibleUserId,
             $classificationCode, $sensitivityKey, $casetypeId,
+            $customFields,
         );
         return ['cases' => $cases, 'total' => $total];
     }
@@ -609,6 +634,7 @@ class CaseService {
         $entity->setCreatedBy('system');
         $entity->setIsInbox(true);
         $entity->setUuid(self::generateUuid());
+        $this->disposalService->applyDisposalCode($entity);
 
         $entity = $this->caseMapper->insert($entity);
 

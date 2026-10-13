@@ -96,7 +96,7 @@ export default {
 
 .opencase-move-to-case__error {
 	margin: 0;
-	color: var(--color-error);
+	color: #c62828;
 	font-size: 0.9em;
 }
 </style>

@@ -999,6 +999,11 @@ class SamlController extends Controller {
 						'kle'            => $kle,
 						'orgenhed'       => $orgenhed,
 					];
+
+				} elseif (str_contains($text, '/roles/usersystemrole/nextclouduser/1')) {
+					// Plain Nextcloud user: gets an enabled Nextcloud account but
+					// no OpenCase roles, privilege groups or organisations.
+					$isUser = true;
 				}
 			}
 		}

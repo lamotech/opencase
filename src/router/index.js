@@ -22,6 +22,9 @@ import SharedWithMeView from '../views/SharedWithMeView.vue'
 import InboundDocumentsView from '../views/InboundDocumentsView.vue'
 import FavoritesView from '../views/FavoritesView.vue'
 import MyDocumentsView from '../views/MyDocumentsView.vue'
+import BulkUpdateListView from '../views/BulkUpdateListView.vue'
+import BulkUpdateCaseCreateView from '../views/BulkUpdateCaseCreateView.vue'
+import BulkUpdateDocumentCreateView from '../views/BulkUpdateDocumentCreateView.vue'
 import ConfigurationView from '../views/ConfigurationView.vue'
 import AccessRequestDetailView from '../views/AccessRequestDetailView.vue'
 
@@ -156,6 +159,28 @@ export default createRouter({
 			name: 'favorites-documents',
 			component: FavoritesView,
 			props: () => ({ entity: 'document' }),
+		},
+		{
+			path: '/bulkupdate/cases',
+			name: 'bulkupdate-cases',
+			component: BulkUpdateListView,
+			props: () => ({ entity: 'case' }),
+		},
+		{
+			path: '/bulkupdate/cases/new',
+			name: 'bulkupdate-case-create',
+			component: BulkUpdateCaseCreateView,
+		},
+		{
+			path: '/bulkupdate/documents',
+			name: 'bulkupdate-documents',
+			component: BulkUpdateListView,
+			props: () => ({ entity: 'document' }),
+		},
+		{
+			path: '/bulkupdate/documents/new',
+			name: 'bulkupdate-document-create',
+			component: BulkUpdateDocumentCreateView,
 		},
 		{
 			path: '/configuration',

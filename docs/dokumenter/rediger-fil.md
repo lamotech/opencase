@@ -62,6 +62,25 @@ Læs mere i afsnittet [Filversioner](../dokumenter/filversioner.md).
 
 ---
 
+## Omdøb en fil
+
+En fil kan omdøbes, hvis du har redigeringsadgang til dokumentet.
+
+Klik på menuen (**…**) ud for filen på fanen **Filer**, og vælg **Omdøb**.
+
+Angiv det nye navn, og klik **Omdøb**. Filtypen (fx `.docx`) bevares altid, så
+filen fortsat kan åbnes i det rigtige program.
+
+!!! info "Filer på afsluttede dokumenter"
+
+    Filer på et dokument med en afsluttet status kan ikke omdøbes. Menupunktet
+    **Omdøb** vises kun, når dokumentet kan redigeres.
+
+Omdøbningen skrives i dokumentets log, hvor både det gamle og det nye filnavn
+fremgår.
+
+---
+
 ## Låsning under redigering
 
 Hvis en anden bruger allerede har filen åben, kan du som udgangspunkt stadig åbne og redigere den.

@@ -94,7 +94,8 @@ class TemplateService {
      * from the Nextcloud VFS and returned.  The caller MUST pass the returned
      * array to releaseLocalPath() when done to clean up any temporary file.
      *
-     * @throws NotFoundException if the template does not exist
+     * @throws NotFoundException if the template does not exist, or its stored
+     *                            file is missing from disk
      * @return array{path: string, is_temp: bool}
      */
     public function makeLocalCopy(int $id): array {
@@ -113,7 +114,20 @@ class TemplateService {
             return ['path' => $tmp, 'is_temp' => true];
         }
 
-        return ['path' => $this->templatesDir . '/' . $entity->getStorageFilename(), 'is_temp' => false];
+        $path = $this->templatesDir . '/' . $entity->getStorageFilename();
+        if (!is_file($path)) {
+            // Metadata row without its file — nothing can be merged from it
+            $this->logger->error('OpenCase: template {id} ({name}) has no file at {path}', [
+                'id'   => $id,
+                'name' => $entity->getName(),
+                'path' => $path,
+            ]);
+            throw new NotFoundException(
+                "Template file is missing on the server for template {$id} ({$entity->getName()})"
+            );
+        }
+
+        return ['path' => $path, 'is_temp' => false];
     }
 
     /**

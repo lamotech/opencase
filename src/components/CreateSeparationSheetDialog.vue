@@ -428,7 +428,7 @@ export default {
 
 .opencase-create-sepsheet__error {
 	margin: 0;
-	color: var(--color-error);
+	color: #c62828;
 	font-size: 0.85em;
 }
 </style>
