@@ -9,6 +9,8 @@ export default createStore({
 		searchMaxResultCount: loadState('opencase', 'search_max_result_count', 500),
 		// Whether Enterprise features (Datafordeler access) are enabled on this instance
 		enterpriseVersionEnabled: loadState('opencase', 'enterprise_version_enabled', false),
+		// Automatic masking via the redaction service (from server config: feature_redaction-service)
+		redactionServiceEnabled: loadState('opencase', 'redaction_service_enabled', false),
 		// Enterprise Digital Post feature (from server config: enterprise_version)
 		digitalPostEnabled: loadState('opencase', 'digital_post_enabled', false),
 		// Enterprise Datafordeler CPR (citizen) search (from server config: enterprise_version)

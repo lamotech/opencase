@@ -953,8 +953,8 @@
 
 		<div v-show="activeTab === 'masking'">
 			<NcSettingsSection :name="t('opencase', 'Maskeringstjeneste')">
-				<p v-if="!enterpriseVersion" class="enterprise-version-warning">
-					{{ t('opencase', 'Integrationen er kun tilgængelig i Enterprise versionen') }}
+				<p v-if="!redactionServiceEnabled" class="enterprise-version-warning">
+					{{ t('opencase', 'Integrationen kræver at feature er aktiveret') }}
 				</p>
 				<p>{{ t('opencase', 'Maskeringstjenesten finder personoplysninger i filer under aktindsigt og laver maskerede PDF-versioner, hvor oplysningerne er fjernet fra filen. Tjenesten kører som en Docker-container ved siden af Nextcloud – se redaction-service/README.md. Uden URL er automatisk maskering slået fra, og filer maskeres manuelt ved upload.') }}</p>
 				<p>{{ t('opencase', 'Hvad der søges efter, styres under OpenCase → Konfiguration → Maskeringsregler.') }}</p>
@@ -971,7 +971,7 @@
 								placeholder="http://127.0.0.1:8080"
 								autocomplete="off"
 								spellcheck="false"
-								:disabled="!enterpriseVersion"
+								:disabled="!redactionServiceEnabled"
 								:style="{ width: '400px', maxWidth: '100%', boxSizing: 'border-box' }"
 								@change="saveConfigValue('redaction_service_url', redactionServiceUrl.trim())">
 						</td>
@@ -985,7 +985,7 @@
 								v-model="redactionServiceApiKey"
 								type="password"
 								autocomplete="new-password"
-								:disabled="!enterpriseVersion"
+								:disabled="!redactionServiceEnabled"
 								:style="{ width: '400px', maxWidth: '100%', boxSizing: 'border-box' }"
 								@change="saveConfigValue('redaction_service_api_key', redactionServiceApiKey.trim())">
 						</td>
@@ -994,7 +994,7 @@
 				<p class="opencase-msoffice-hint">{{ t('opencase', 'Samme værdi som REDACTION_API_KEY i tjenestens container.') }}</p>
 
 				<div class="opencase-button-row">
-					<button class="primary" :disabled="!enterpriseVersion || testingRedactionService" @click="testRedactionService">
+					<button class="primary" :disabled="!redactionServiceEnabled || testingRedactionService" @click="testRedactionService">
 						{{ t('opencase', 'Test forbindelse') }}
 					</button>
 				</div>
@@ -2122,6 +2122,7 @@ export default {
 			activeTab: 'serviceplatformen',
 			appVersion,
 			enterpriseVersion: config.enterprise_version === '1',
+			redactionServiceEnabled: config['feature_redaction-service'] === '1',
 			groupfoldersEnabled: prerequisites.groupfolders || false,
 			fulltextsearchEnabled: prerequisites.fulltextsearch || false,
 			filesFulltextsearchEnabled: prerequisites.files_fulltextsearch || false,

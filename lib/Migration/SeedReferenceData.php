@@ -886,6 +886,14 @@ class SeedReferenceData implements IRepairStep {
             $output,
         );
 
+        $this->seedConfigEntry(
+            'feature_redaction-service',
+            '0',
+            'Maskeringstjeneste aktiveret',
+            'Sæt til 1 for at aktivere automatisk maskering af filer under aktindsigt via maskeringstjenesten (redaction-service). Sættes af installationsscriptet til Enterprise versionen.',
+            $output,
+        );
+
         $defaultExportFolder = rtrim($this->config->getSystemValueString('datadirectory', ''), '/')
             . '/opencase_storage/_export';
         $this->seedConfigEntry(

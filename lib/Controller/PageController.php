@@ -73,6 +73,11 @@ class PageController extends Controller {
         );
         $this->initialState->provideInitialState(
             'opencase',
+            'redaction_service_enabled',
+            $this->configuration->getConfigValue('feature_redaction-service', '0') === '1',
+        );
+        $this->initialState->provideInitialState(
+            'opencase',
             'search_max_result_count',
             (int)$this->configuration->getConfigValue('search_max_result_count', '500'),
         );

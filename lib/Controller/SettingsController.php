@@ -230,7 +230,7 @@ class SettingsController extends Controller {
      * API key. Response: { ok: true } or { ok: false, error: string }
      */
     public function testRedactionService(): JSONResponse {
-        if (!$this->maskingService->isEnterprise()) {
+        if (!$this->maskingService->isFeatureEnabled()) {
             return new JSONResponse(['ok' => false, 'error' => 'Integrationen er kun tilgængelig i Enterprise versionen']);
         }
         if (!$this->maskingService->isConfigured()) {

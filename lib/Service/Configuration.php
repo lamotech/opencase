@@ -144,6 +144,7 @@ class Configuration {
 			'msoffice_addin_port' => '1443',
 			'msoffice_addin_name' => 'OpenCase',
 			'enterprise_version' => '0',
+			'feature_redaction-service' => '0',
 			'entity_id_opencase_api' => 'http://opencase.dk/service/api/1',
 		];
 

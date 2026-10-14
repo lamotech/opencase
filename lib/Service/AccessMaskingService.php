@@ -26,8 +26,9 @@ use Psr\Log\LoggerInterface;
  * service and stores the returned PDF — with the text actually removed — as
  * the file's masked version, the same place a manually uploaded one goes.
  *
- * The feature is optional and Enterprise only: without enterprise_version=1
- * and a configured service URL isConfigured() is false and the UI only
+ * The feature is optional and Enterprise only: without
+ * feature_redaction-service=1 (set by the Enterprise install script) and a
+ * configured service URL isConfigured() is false and the UI only
  * offers manual upload.
  */
 class AccessMaskingService {
@@ -71,11 +72,11 @@ class AccessMaskingService {
     }
 
     public function isConfigured(): bool {
-        return $this->isEnterprise() && $this->serviceUrl() !== '';
+        return $this->isFeatureEnabled() && $this->serviceUrl() !== '';
     }
 
-    public function isEnterprise(): bool {
-        return $this->configuration->getConfigValue('enterprise_version', '0') === '1';
+    public function isFeatureEnabled(): bool {
+        return $this->configuration->getConfigValue('feature_redaction-service', '0') === '1';
     }
 
     public function supportsMimeType(?string $mimeType): bool {

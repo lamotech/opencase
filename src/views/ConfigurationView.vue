@@ -426,8 +426,8 @@ export default {
 				{ id: 'customfields', label: t('opencase', 'Tillægsfelter') },
 				// SagDokumentIndeks integration is Enterprise only
 				{ id: 'sapa', label: t('opencase', 'SAPA'), enterprise: true },
-				// Rules drive the redaction service, which is Enterprise only
-				{ id: 'maskrules', label: t('opencase', 'Maskeringsregler'), enterprise: true },
+				// Rules drive the redaction service (feature_redaction-service)
+				{ id: 'maskrules', label: t('opencase', 'Maskeringsregler'), feature: 'redactionServiceEnabled' },
 			],
 
 			// Settings tab
@@ -494,8 +494,10 @@ export default {
 
 	computed: {
 		tabs() {
-			const enterprise = this.$store.state.enterpriseVersionEnabled
-			return this.allTabs.filter(tab => !tab.enterprise || enterprise)
+			const state = this.$store.state
+			return this.allTabs
+				.filter(tab => !tab.enterprise || state.enterpriseVersionEnabled)
+				.filter(tab => !tab.feature || state[tab.feature])
 		},
 		sensitivityOptions() {
 			return this.$store.state.sensitivities.map(s => ({
