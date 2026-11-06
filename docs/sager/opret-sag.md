@@ -89,6 +89,11 @@ Mulige værdier er:
 Vælg den indsigtsgrad, som passer til organisationens retningslinjer.
 
 
+### Proces
+
+Vælg evt. en proces, der skal startes på sagen, når den er oprettet. Feltet vises kun, når der findes processer, som passer til sagens sagstype, organisation og KLE-nummer – valgmulighederne opdateres, når de ændres. Sagen åbnes på fanen **Processer**, når processen er startet. Se [Processer](processer.md).
+
+
 ### Sagsresume
 
 Her kan skrives det beskrives hvad sagen handler om.

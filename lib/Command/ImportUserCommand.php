@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OCA\OpenCase\Command;
 
+use OCA\OpenCase\Db\UserOrgMapper;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
@@ -78,7 +79,8 @@ class ImportUserCommand extends Command {
 
         $qb = $this->db->getQueryBuilder();
         $qb->delete('opencase_userorgs')
-            ->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId)));
+            ->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId)))
+            ->andWhere($qb->expr()->neq('source', $qb->createNamedParameter(UserOrgMapper::SOURCE_GROUP)));
         $qb->executeStatement();
 
         $qb = $this->db->getQueryBuilder();

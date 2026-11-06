@@ -19,7 +19,17 @@
 					@update:model-value="v => form.organisation = v?.id || ''" />
 			</div>
 
-			<div class="opencase-edit-case__field">
+			<div v-if="isGroupMode" class="opencase-edit-case__field">
+				<label>{{ t('opencase', 'Adgangsgruppe') }}</label>
+				<AccessGroupSelect v-model="form.group_id" :current-label="caseData.group_name" />
+			</div>
+
+			<div v-if="isEmneplan" class="opencase-edit-case__field">
+				<label>{{ t('opencase', 'Emne') }} *</label>
+				<ClassificationPlanSelect v-model="form.class_plan_uuid" :current-label="classPlanLabel" />
+			</div>
+
+			<div v-if="usesKle" class="opencase-edit-case__field">
 				<label>{{ t('opencase', 'KLE-nummer') }}</label>
 				<NcSelect v-model="selectedClassification"
 					:options="classificationOptions"
@@ -27,14 +37,14 @@
 					@update:model-value="v => form.classification_code = v?.id || ''" />
 			</div>
 
-			<div class="opencase-edit-case__field">
+			<div v-if="usesKle" class="opencase-edit-case__field">
 				<label>{{ t('opencase', 'Følsomhed') }}</label>
 				<NcSelect v-model="selectedSensitivity"
 					:options="sensitivityOptions"
 					@update:model-value="v => form.sensitivity = v?.id || null" />
 			</div>
 
-			<div class="opencase-edit-case__field">
+			<div v-if="usesKle" class="opencase-edit-case__field">
 				<label>{{ t('opencase', 'Handlingsfacet') }} *</label>
 				<NcSelect v-model="selectedClassificationFacet"
 					:options="classificationFacetOptions"
@@ -180,6 +190,9 @@ import StarterKit from '@tiptap/starter-kit'
 import Underline from '@tiptap/extension-underline'
 
 import api from '../services/api.js'
+import AccessGroupSelect from './AccessGroupSelect.vue'
+import ClassificationPlanSelect from './ClassificationPlanSelect.vue'
+import { classificationPlanLabel } from '../utils/classificationPlanLabel.js'
 
 export default {
 	name: 'EditCaseDialog',
@@ -199,6 +212,8 @@ export default {
 		FormatListBulletedIcon,
 		FormatListNumberedIcon,
 		FormatQuoteIcon,
+		AccessGroupSelect,
+		ClassificationPlanSelect,
 	},
 	props: {
 		caseData: { type: Object, required: true },
@@ -237,6 +252,8 @@ export default {
 				sensitivity: this.caseData.sensitivity_key || null,
 				insight_level_id: this.caseData.insight_level_id || null,
 				classification_facet_uuid: this.caseData.classification_facet_uuid || '',
+				group_id: this.caseData.group_id || '',
+				class_plan_uuid: this.caseData.class_plan_uuid || '',
 				responsible_user_id: responsibleUid,
 			},
 			selectedOrg: initialOrg,
@@ -272,6 +289,20 @@ export default {
 		}
 	},
 	computed: {
+		isGroupMode() {
+			return this.$store.state.accessProfileType === 'group'
+		},
+		// KLE number, sensitivity and Handlingsfacet: always with FK Adgang,
+		// with Grupper only with the KLE classification plan
+		usesKle() {
+			return !this.isGroupMode || this.$store.state.classificationPlan !== 'Emneplan'
+		},
+		isEmneplan() {
+			return this.$store.state.classificationPlan === 'Emneplan'
+		},
+		classPlanLabel() {
+			return classificationPlanLabel(this.caseData.class_plan_code, this.caseData.class_plan_title)
+		},
 		classificationOptions() {
 			return this.$store.state.classificationSubjects
 				.filter(s => /^\d{2}\.\d{2}\.\d{2}$/.test(s.code))
@@ -396,11 +427,19 @@ export default {
 		},
 
 		async save() {
+			if (this.isEmneplan && !this.form.class_plan_uuid) {
+				showError(t('opencase', 'Vælg et emne'))
+				return
+			}
 			this.saving = true
 			try {
+				const payload = { ...this.form, summary: this.summaryHtml() }
+				// Only touch the Emneplan item while the plan is in use, so a
+				// switch back to KLE doesn't clear it on the next save.
+				if (!this.isEmneplan) delete payload.class_plan_uuid
 				const updated = await this.$store.dispatch('updateCase', {
 					id: this.caseData.id,
-					payload: { ...this.form, summary: this.summaryHtml() },
+					payload,
 				})
 
 				if (this.customFields.length) {

@@ -29,8 +29,8 @@ class KombiPostAfsendCommand extends Command {
 	}
 
 	protected function execute(InputInterface $input, OutputInterface $output): int {
-		if ($this->configuration->getConfigValue('enterprise_version', '0') !== '1' || !class_exists(DigitalPostSendClient::class)) {
-			$output->writeln('<error>KombiPostAfsend is an Enterprise feature and is not enabled/installed on this instance.</error>');
+		if ($this->configuration->getConfigValue('feature_digital-post', '0') !== '1' || !class_exists(DigitalPostSendClient::class)) {
+			$output->writeln('<error>Digital Post is not enabled (feature_digital-post) or KombiPostAfsend is not installed on this instance.</error>');
 			return Command::FAILURE;
 		}
 

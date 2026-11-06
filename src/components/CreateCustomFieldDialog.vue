@@ -49,6 +49,8 @@
 					v-model="newScopeValueOption"
 					:options="orgOptions"
 					:placeholder="t('opencase', 'Vælg organisation')" />
+				<ClassificationPlanSelect v-else-if="newScopeType === 'class_plan'"
+					v-model="newScopeValue" />
 				<NcTextField v-else
 					v-model="newScopeValue"
 					:placeholder="t('opencase', 'F.eks. 27.69.00 eller 27.% for hele gruppen')" />
@@ -79,11 +81,13 @@ import NcTextField from '@nextcloud/vue/components/NcTextField'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import api from '../services/api.js'
+import ClassificationPlanSelect from './ClassificationPlanSelect.vue'
+import { caseScopeTypeLabel, classPlanScopeLabel, ensureClassificationPlanItems, scopeTypeOptions } from '../utils/caseScopes.js'
 
 export default {
 	name: 'CreateCustomFieldDialog',
 
-	components: { NcDialog, NcButton, NcTextField, NcSelect, NcCheckboxRadioSwitch },
+	components: { NcDialog, NcButton, NcTextField, NcSelect, NcCheckboxRadioSwitch, ClassificationPlanSelect },
 
 	props: {
 		caseTypes: { type: Array, default: () => [] },
@@ -120,11 +124,7 @@ export default {
 			},
 		},
 		scopeTypeOptions() {
-			return [
-				{ id: 'casetype', label: t('opencase', 'Sagstype') },
-				{ id: 'organisation', label: t('opencase', 'Organisation') },
-				{ id: 'kle', label: t('opencase', 'KLE-nummer') },
-			]
+			return scopeTypeOptions(this.$store.state)
 		},
 		newScopeTypeOption: {
 			get() {
@@ -152,6 +152,10 @@ export default {
 		},
 	},
 
+	mounted() {
+		ensureClassificationPlanItems(this.$store)
+	},
+
 	methods: {
 		caseTypeName(id) {
 			return this.caseTypes.find((c) => String(c.id) === String(id))?.name || id
@@ -162,14 +166,11 @@ export default {
 		scopeValueLabel(scope) {
 			if (scope.scope_type === 'casetype') return this.caseTypeName(scope.scope_value)
 			if (scope.scope_type === 'organisation') return this.orgName(scope.scope_value)
+			if (scope.scope_type === 'class_plan') return classPlanScopeLabel(this.$store.state, scope.scope_value)
 			return scope.scope_value
 		},
 		scopeTypeLabel(type) {
-			return {
-				casetype: t('opencase', 'Sagstype'),
-				organisation: t('opencase', 'Organisation'),
-				kle: t('opencase', 'KLE-nummer'),
-			}[type] || type
+			return caseScopeTypeLabel(type)
 		},
 		addScope() {
 			if (!this.newScopeValue) return

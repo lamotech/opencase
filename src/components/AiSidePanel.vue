@@ -565,9 +565,15 @@ export default {
 			const kleCode = (action.kle_number ?? action.kle ?? '').trim()
 			const facetCode = (action.action_facet ?? action.facet ?? '').trim()
 
+			const groupMode = this.$store.state.accessProfileType === 'group'
+			// KLE number, sensitivity and facet: always with FK Adgang, with
+			// Grupper only with the KLE classification plan
+			const usesKle = !groupMode || this.$store.state.classificationPlan !== 'Emneplan'
+
 			if (!title) throw new Error(t('opencase', 'Titel er påkrævet for at oprette en sag.'))
-			if (!kleCode) throw new Error(t('opencase', 'KLE-nummer er påkrævet for at oprette en sag.'))
-			if (!facetCode) throw new Error(t('opencase', 'Handlingsfacet er påkrævet for at oprette en sag.'))
+			if (usesKle && !kleCode) throw new Error(t('opencase', 'KLE-nummer er påkrævet for at oprette en sag.'))
+			if (usesKle && !facetCode) throw new Error(t('opencase', 'Handlingsfacet er påkrævet for at oprette en sag.'))
+			const classPlanUuid = await this._resolveClassPlan(action.emne, true)
 
 			let orgName = (action.organisation ?? '').trim()
 			// "#MinAfdeling" is a macro meaning "the user's own primary organisation" —
@@ -597,9 +603,11 @@ export default {
 				?? insightLevels[0]
 
 			const facetCodeLower = facetCode.toLowerCase()
-			const facet = facets.find(f => f.code?.toLowerCase() === facetCodeLower)
-				?? facets.find(f => f.code?.toLowerCase().includes(facetCodeLower))
-			if (!facet) throw new Error(t('opencase', 'Handlingsfacet \'{f}\' ikke fundet.', { f: facetCode }))
+			const facet = facetCode
+				? (facets.find(f => f.code?.toLowerCase() === facetCodeLower)
+					?? facets.find(f => f.code?.toLowerCase().includes(facetCodeLower)))
+				: null
+			if (facetCode && !facet) throw new Error(t('opencase', 'Handlingsfacet \'{f}\' ikke fundet.', { f: facetCode }))
 
 			const wantedCaseType = (action.casetype ?? action.case_type ?? '').trim().toLowerCase()
 			let caseType = null
@@ -609,15 +617,65 @@ export default {
 				if (!caseType) throw new Error(t('opencase', 'Sagstypen \'{c}\' blev ikke fundet.', { c: action.casetype ?? action.case_type }))
 			}
 
+			if (groupMode) {
+				return api.createCase({
+					title,
+					organisation:              orgName,
+					group_id:                  await this._resolveAccessGroup(action),
+					...(usesKle ? { classification_code: kleCode, sensitivity: sensitivity.key } : {}),
+					classification_facet_uuid: facet?.uuid ?? '',
+					class_plan_uuid:           classPlanUuid,
+					insight_level_id:          insightLevel?.id ?? null,
+					casetype_id:               caseType?.id ?? null,
+				})
+			}
+
 			return api.createCase({
 				title,
 				organisation:              orgName,
 				classification_code:       kleCode,
 				sensitivity:               sensitivity.key,
 				classification_facet_uuid: facet.uuid,
+				class_plan_uuid:           classPlanUuid,
 				insight_level_id:          insightLevel?.id ?? null,
 				casetype_id:               caseType?.id ?? null,
 			})
+		},
+
+		// Emneplan: the item named by the action's "emne" (code or name, exact
+		// match first), as its uuid. '' with KLE, or when none is given and it
+		// isn't required.
+		async _resolveClassPlan(value, required = false) {
+			if (this.$store.state.classificationPlan !== 'Emneplan') return ''
+			const wanted = (value ?? '').trim().toLowerCase()
+			if (!wanted) {
+				if (required) throw new Error(t('opencase', 'Emne er påkrævet for at oprette en sag.'))
+				return ''
+			}
+			await this.$store.dispatch('fetchClassificationPlanItems')
+			const items = this.$store.state.classificationPlanItems
+			const item = items.find(i => i.code.toLowerCase() === wanted || i.title.toLowerCase() === wanted)
+				?? items.find(i => `${i.code} ${i.title}`.toLowerCase() === wanted)
+				?? items.find(i => i.title.toLowerCase().includes(wanted))
+			if (!item) throw new Error(t('opencase', 'Emnet \'{e}\' blev ikke fundet.', { e: value }))
+			return item.uuid
+		},
+
+		// Grupper: the access group named by the action (access_group, by name or
+		// id), or else the first group the user is a member of.
+		async _resolveAccessGroup(action) {
+			await this.$store.dispatch('fetchAccessGroups')
+			const groups = this.$store.state.accessGroups
+			const wanted = (action.access_group ?? action.group ?? '').trim().toLowerCase()
+			const group = wanted
+				? groups.find(g => g.group_id.toLowerCase() === wanted || g.group_name.toLowerCase() === wanted)
+				: groups.find(g => g.can_write)
+			if (!group) {
+				throw new Error(wanted
+					? t('opencase', 'Adgangsgruppen \'{g}\' blev ikke fundet.', { g: action.access_group ?? action.group })
+					: t('opencase', 'Ingen adgangsgruppe fundet.'))
+			}
+			return group.group_id
 		},
 
 		async actionCreateCase(action, ctx, runtimeCtx = {}) {
@@ -663,7 +721,7 @@ export default {
 			let createdFile = null
 			if (action.template) {
 				const templateName = action.template.toLowerCase()
-				const templates = await api.getTemplates()
+				const templates = await api.getTemplates({ document_id: doc.id })
 				const template = templates.find(tmpl => tmpl.name?.toLowerCase() === templateName)
 					?? templates.find(tmpl => tmpl.name?.toLowerCase().includes(templateName))
 
@@ -712,7 +770,7 @@ export default {
 				return { ok: false, label: t('opencase', 'Intet dokument er åbent.') }
 			}
 			const templateName = (action.template ?? '').toLowerCase()
-			const templates = await api.getTemplates()
+			const templates = await api.getTemplates({ document_id: docId })
 			const template = templates.find(tmpl => tmpl.name?.toLowerCase() === templateName)
 				?? templates.find(tmpl => tmpl.name?.toLowerCase().includes(templateName))
 			if (!template) {
@@ -1301,11 +1359,19 @@ export default {
 					classification_code:       parent.classification_code,
 					sensitivity_key:           parent.sensitivity_key,
 					classification_facet_uuid: parent.classification_facet_uuid,
+					group_id:                  parent.group_id ?? '',
+					class_plan_uuid:           parent.class_plan_uuid ?? '',
 					insight_level_id:          parent.insight_level_id ?? null,
 				}
 			}
 			const pd = runtimeCtx.subCaseParentData
 			const kleOverride = (action.kle_number ?? action.kle ?? '').trim()
+			let classPlanOverride = ''
+			try {
+				classPlanOverride = await this._resolveClassPlan(action.emne)
+			} catch (e) {
+				return { ok: false, label: e.message }
+			}
 
 			const created = await api.createCase({
 				title,
@@ -1313,6 +1379,8 @@ export default {
 				classification_code:       kleOverride || pd.classification_code,
 				sensitivity:               pd.sensitivity_key,
 				classification_facet_uuid: pd.classification_facet_uuid,
+				group_id:                  pd.group_id,
+				class_plan_uuid:           classPlanOverride || pd.class_plan_uuid,
 				insight_level_id:          pd.insight_level_id,
 				parent_case_id:            parseInt(parentId),
 			})
@@ -1349,7 +1417,7 @@ export default {
 				})
 				if (action.document_template) {
 					const templateName = action.document_template.toLowerCase()
-					const templates = await api.getTemplates()
+					const templates = await api.getTemplates({ document_id: doc.id })
 					const template = templates.find(tmpl => tmpl.name?.toLowerCase() === templateName)
 						?? templates.find(tmpl => tmpl.name?.toLowerCase().includes(templateName))
 					if (template) {
@@ -1387,6 +1455,8 @@ export default {
 				classification_code:       source.classification_code,
 				sensitivity:               source.sensitivity_key,
 				classification_facet_uuid: source.classification_facet_uuid,
+				group_id:                  source.group_id ?? '',
+				class_plan_uuid:           source.class_plan_uuid ?? '',
 				insight_level_id:          source.insight_level_id ?? null,
 			})
 			this.$router.push({ name: 'case-detail', params: { id: String(created.id) } })

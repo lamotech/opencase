@@ -4,22 +4,23 @@ declare(strict_types=1);
 
 namespace OCA\OpenCase\Controller;
 
-use OCA\OpenCase\Db\AccessProfileMapper;
 use OCA\OpenCase\Db\CaseMapper;
 use OCA\OpenCase\Db\ClassificationFacetRepository;
-use OCA\OpenCase\Db\ClassificationSubjectMapper;
 use OCA\OpenCase\Db\ConfigMapper;
 use OCA\OpenCase\Db\OrganisationMapper;
 use OCA\OpenCase\Db\SensitivityMapper;
+use OCA\OpenCase\Service\AccessProfile\AccessProfileTypeResolver;
+use OCA\OpenCase\Service\CaseClassificationService;
 use OCA\OpenCase\Service\CaseNumberService;
+use OCA\OpenCase\Service\ClassificationPlanService;
 use OCA\OpenCase\Service\DisposalService;
-use OCA\OpenCase\Service\PrivilegeService;
 use OCA\OpenCase\Service\RoleService;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\ApiRoute;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\DataResponse;
 use OCP\AppFramework\OCSController;
+use OCP\IGroupManager;
 use OCP\IRequest;
 use Psr\Log\LoggerInterface;
 
@@ -37,6 +38,8 @@ class ConfigController extends OCSController {
         'incoming_kle',
         'incoming_facet',
         'incoming_insight_level',
+        AccessProfileTypeResolver::INBOX_GROUP_CONFIG_KEY,
+        ClassificationPlanService::INBOX_CONFIG_KEY,
     ];
 
     public function __construct(
@@ -48,12 +51,13 @@ class ConfigController extends OCSController {
         private RoleService $roleService,
         private OrganisationMapper $organisationMapper,
         private CaseMapper $caseMapper,
-        private AccessProfileMapper $accessProfileMapper,
-        private ClassificationSubjectMapper $classificationSubjectMapper,
+        private AccessProfileTypeResolver $accessProfileTypeResolver,
+        private CaseClassificationService $caseClassificationService,
         private SensitivityMapper $sensitivityMapper,
         private ClassificationFacetRepository $classificationFacetRepository,
-        private PrivilegeService $privilegeService,
         private DisposalService $disposalService,
+        private ClassificationPlanService $classificationPlanService,
+        private IGroupManager $groupManager,
         private LoggerInterface $logger,
     ) {
         parent::__construct($appName, $request);
@@ -96,6 +100,18 @@ class ConfigController extends OCSController {
 
         $value = (string)($this->request->getParam('value', ''));
 
+        if ($key === AccessProfileTypeResolver::INBOX_GROUP_CONFIG_KEY
+            && $value !== '' && !$this->groupManager->groupExists($value)) {
+            return new DataResponse(['error' => "Group not found: {$value}"], Http::STATUS_BAD_REQUEST);
+        }
+        if ($key === ClassificationPlanService::INBOX_CONFIG_KEY) {
+            try {
+                $this->classificationPlanService->validateUnlessCurrent($value, $this->configMapper->get($key, ''));
+            } catch (\InvalidArgumentException $e) {
+                return new DataResponse(['error' => $e->getMessage()], Http::STATUS_BAD_REQUEST);
+            }
+        }
+
         // Delegate to domain-specific service for keys that have validation.
         if ($key === 'case_number_mask') {
             try {
@@ -137,30 +153,33 @@ class ConfigController extends OCSController {
 
             $changed = false;
 
-            // ── Access profile (sensitivity + KLE) ─────────────────────
+            // ── Access profile (FK: sensitivity + KLE; Grupper: group) ──
             $sensitivityUuid = $this->configMapper->get('incoming_sensitivity', '31c09910-e011-46a5-86fb-254374421fe8');
             $kleCode         = $this->configMapper->get('incoming_kle', '00.01.00');
 
-            $sensitivity = $this->sensitivityMapper->findByUuid($sensitivityUuid);
-            if ($sensitivity !== null) {
-                $classSubject = $this->classificationSubjectMapper->findOrCreateByCode($kleCode);
-                $profile      = $this->accessProfileMapper->findOrCreate(
-                    $org->getOrgUuid(),
-                    $classSubject->getUuid(),
-                    $sensitivity->getUuid()
-                );
+            $inboxAccessConfigured = $this->accessProfileTypeResolver->isGroupMode()
+                ? $this->configMapper->get(AccessProfileTypeResolver::INBOX_GROUP_CONFIG_KEY, '') !== ''
+                : $this->sensitivityMapper->findByUuid($sensitivityUuid) !== null;
+            if ($inboxAccessConfigured) {
+                // Resolving also grants the profile to the users entitled to it,
+                // regardless of whether the profile is new or pre-existing.
+                $profile = $this->accessProfileTypeResolver->resolveInboxProfile($org->getOrgUuid(), fn() => [
+                    'classification_code' => $kleCode,
+                    'sensitivity_uuid'    => $sensitivityUuid,
+                ]);
                 if ($case->getAccessProfileId() !== $profile->getId()) {
                     $case->setAccessProfileId($profile->getId());
                     $changed = true;
                 }
-                // Grant access to all users whose privileges cover this profile,
-                // regardless of whether the profile is new or pre-existing.
-                $this->privilegeService->grantPrivilegedUsersToProfile(
-                    $profile->getId(),
-                    $org->getOrgUuid(),
-                    $classSubject->getUuid(),
-                    $sensitivity->getUuid()
-                );
+            }
+
+            // Grupper + KLE: KLE number and sensitivity are kept on the case
+            if ($this->caseClassificationService->onCase()) {
+                [$oldClass, $oldSens] = [$case->getClassSubjectUuid(), $case->getSensitivityUuid()];
+                $this->caseClassificationService->applyToInboxCase($case);
+                if ($case->getClassSubjectUuid() !== $oldClass || $case->getSensitivityUuid() !== $oldSens) {
+                    $changed = true;
+                }
             }
 
             // ── Facet ───────────────────────────────────────────────────
@@ -171,6 +190,17 @@ class ConfigController extends OCSController {
             if ($case->getClassificationFacetUuid() !== $facetUuid) {
                 $case->setClassificationFacetUuid($facetUuid);
                 $changed = true;
+            }
+
+            // ── Emneplan item ───────────────────────────────────────────
+            if ($this->classificationPlanService->isEmneplan()) {
+                // Null also when the chosen item is deactivated; the case then keeps its item
+                $classPlanUuid = $this->classificationPlanService->inboxClassPlanUuid();
+                $cleared = $this->configMapper->get(ClassificationPlanService::INBOX_CONFIG_KEY, '') === '';
+                if (($classPlanUuid !== null || $cleared) && $case->getClassPlanUuid() !== $classPlanUuid) {
+                    $case->setClassPlanUuid($classPlanUuid);
+                    $changed = true;
+                }
             }
 
             // ── Insight level ───────────────────────────────────────────

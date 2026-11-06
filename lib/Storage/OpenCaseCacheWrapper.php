@@ -305,13 +305,7 @@ class OpenCaseCacheWrapper extends CacheWrapper {
                 if (isset($denied[$name])) {
                     continue;
                 }
-                if (!$canWrite || isset($finalFiles[$name])) {
-                    $entry['permissions'] &= ~(
-                        \OCP\Constants::PERMISSION_UPDATE |
-                        \OCP\Constants::PERMISSION_CREATE |
-                        \OCP\Constants::PERMISSION_DELETE
-                    );
-                }
+                $this->applyFileWriteAccess($entry, $canWrite && !isset($finalFiles[$name]));
                 $result[] = $entry;
             }
             return $result;
@@ -381,6 +375,25 @@ class OpenCaseCacheWrapper extends CacheWrapper {
         return false;
     }
 
+    /**
+     * Set the write bits of a file entry for a user with case access.
+     *
+     * The ceiling in the filecache only knows about profile-based writers, while
+     * the responsible user and direct grants write without being in the profile.
+     * So, as for file shares, the UPDATE bit must be set from the user's own
+     * rights, not just masked out of whatever the ceiling happens to contain.
+     */
+    private function applyFileWriteAccess(ICacheEntry $entry, bool $writable): void {
+        $entry['permissions'] &= ~(
+            \OCP\Constants::PERMISSION_UPDATE |
+            \OCP\Constants::PERMISSION_CREATE |
+            \OCP\Constants::PERMISSION_DELETE
+        );
+        if ($writable) {
+            $entry['permissions'] |= \OCP\Constants::PERMISSION_UPDATE;
+        }
+    }
+
     private function formatFileEntry(ICacheEntry $entry, array $parts, string $uid): ICacheEntry|false {
         // parts = [year, month, day, case_number, filename]
         $caseNumber = $parts[3];
@@ -398,13 +411,7 @@ class OpenCaseCacheWrapper extends CacheWrapper {
             }
 
             $finalFiles = $this->getFinalMemo($caseId);
-            if (!$this->getWriteMemo($uid, $caseId) || isset($finalFiles[$filename])) {
-                $entry['permissions'] &= ~(
-                    \OCP\Constants::PERMISSION_UPDATE |
-                    \OCP\Constants::PERMISSION_CREATE |
-                    \OCP\Constants::PERMISSION_DELETE
-                );
-            }
+            $this->applyFileWriteAccess($entry, $this->getWriteMemo($uid, $caseId) && !isset($finalFiles[$filename]));
             return $entry;
         }
 

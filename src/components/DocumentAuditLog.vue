@@ -178,9 +178,16 @@ export default {
 			case 'document_note_deleted':          return DeleteIcon
 			case 'document_relation_added':        return PaperclipIcon
 			case 'document_relation_deleted':      return DeleteIcon
+			case 'digital_post_queued':            return EmailArrowRightIcon
 			case 'digital_post_sent':              return EmailArrowRightIcon
 			case 'digital_post_failed':            return EmailAlertIcon
-			case 'document_sent_by_email':         return EmailFastOutlineIcon
+			case 'document_sent_by_email':
+			case 'document_link_sent_by_email':
+			case 'document_pdf_sent_by_email':     return EmailFastOutlineIcon
+			case 'document_link_sent_by_email':
+				return t('opencase', 'Link til dokumentet sendt med email til {to}', { to: (d.to || []).join(', ') || '' })
+			case 'document_pdf_sent_by_email':
+				return t('opencase', 'Dokument sendt som PDF med email til {to}', { to: (d.to || []).join(', ') || '' })
 			case 'document_send_by_email_failed':  return EmailAlertIcon
 			case 'distribution_receipt_sent':      return ReceiptSendOutlineIcon
 			case 'distribution_receipt_failed':    return AlertCircleOutlineIcon
@@ -275,6 +282,8 @@ export default {
 					number: d.related_document_number || '',
 					title: d.related_title || '',
 				})
+			case 'digital_post_queued':
+				return t('opencase', 'Digital post sat i kø til {names}', { names: (d.receivers || []).filter(Boolean).join(', ') })
 			case 'digital_post_sent':
 				return t('opencase', 'Digital post sendt til {name}', { name: d.receiver_name || maskCpr(d.cpr_cvr) || '' })
 			case 'digital_post_failed':

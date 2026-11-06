@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\OpenCase\Controller;
 
 use OCA\OpenCase\Db\ClassificationFacetRepository;
+use OCA\OpenCase\Db\ClassificationPlanMapper;
 use OCA\OpenCase\Db\ClassificationSubjectMapper;
 use OCA\OpenCase\Db\InsightLevelMapper;
 use OCA\OpenCase\Db\OrganisationMapper;
@@ -12,6 +13,7 @@ use OCA\OpenCase\Db\SensitivityMapper;
 use OCA\OpenCase\Db\SeparationSheet;
 use OCA\OpenCase\Service\RoleService;
 use OCA\OpenCase\Service\SeparationSheetService;
+use OCA\OpenCase\Service\AccessProfile\AccessGroupNaming;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\ApiRoute;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
@@ -40,11 +42,13 @@ class SeparationSheetController extends OCSController {
         private RoleService $roleService,
         private OrganisationMapper $organisationMapper,
         private ClassificationSubjectMapper $classSubjectMapper,
+        private ClassificationPlanMapper $classificationPlanMapper,
         private SensitivityMapper $sensitivityMapper,
         private ClassificationFacetRepository $classFacetRepository,
         private InsightLevelMapper $insightLevelMapper,
         private IFactory $l10nFactory,
         private IUserManager $userManager,
+        private AccessGroupNaming $accessGroupNaming,
     ) {
         parent::__construct($appName, $request);
     }
@@ -150,6 +154,7 @@ class SeparationSheetController extends OCSController {
             'subjects'      => $this->classSubjectMapper->getByUuids($idsOf(fn(SeparationSheet $s) => $s->getClassSubjectUuid())),
             'sensitivities' => $this->sensitivityMapper->getByUuids($idsOf(fn(SeparationSheet $s) => $s->getSensitivityUuid())),
             'facets'        => $facets,
+            'classPlans'    => $this->classificationPlanMapper->getByUuids($idsOf(fn(SeparationSheet $s) => $s->getClassPlanUuid())),
             'insightLevels' => $this->insightLevelMapper->getNamesByIds(
                 $idsOf(fn(SeparationSheet $s) => $s->getInsightLevelId()),
                 $this->getUserLanguage(),
@@ -176,7 +181,9 @@ class SeparationSheetController extends OCSController {
         $subject         = $labels['subjects'][$sheet->getClassSubjectUuid()] ?? null;
         $sensitivity     = $labels['sensitivities'][$sheet->getSensitivityUuid()] ?? null;
         $facet           = $labels['facets'][$sheet->getClassificationFacetUuid()] ?? null;
+        $classPlan       = $labels['classPlans'][(string)$sheet->getClassPlanUuid()] ?? null;
         $insightLevelId  = $sheet->getInsightLevelId();
+        $groupId         = $sheet->getGroupId();
         $responsibleUid  = $sheet->getResponsibleUserId();
         $responsibleUser = $responsibleUid ? $this->userManager->get($responsibleUid) : null;
 
@@ -193,9 +200,14 @@ class SeparationSheetController extends OCSController {
             'class_subject_title'           => $subject?->getTitle() ?? '',
             'sensitivity_uuid'              => $sheet->getSensitivityUuid(),
             'sensitivity_title'             => $sensitivity?->getTitle() ?? '',
+            'group_id'                      => $groupId,
+            'group_name'                    => $groupId !== null ? $this->accessGroupNaming->displayName($groupId) : '',
             'classification_facet_uuid'     => $sheet->getClassificationFacetUuid(),
             'classification_facet_code'     => $facet['code'] ?? '',
             'classification_facet_title'    => $facet['title'] ?? '',
+            'class_plan_uuid'               => $sheet->getClassPlanUuid(),
+            'class_plan_code'               => $classPlan?->getCode() ?? '',
+            'class_plan_title'              => $classPlan?->getTitle() ?? '',
             'insight_level_id'              => $insightLevelId,
             'insight_level_name'            => $insightLevelId ? ($labels['insightLevels'][$insightLevelId] ?? '') : '',
             'responsible_user_id'           => $responsibleUid,

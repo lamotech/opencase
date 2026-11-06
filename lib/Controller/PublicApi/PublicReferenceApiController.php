@@ -7,6 +7,7 @@ namespace OCA\OpenCase\Controller\PublicApi;
 use OCA\OpenCase\Db\CaseStatusMapper;
 use OCA\OpenCase\Db\CaseTypeMapper;
 use OCA\OpenCase\Db\ClassificationFacetRepository;
+use OCA\OpenCase\Db\ClassificationPlanMapper;
 use OCA\OpenCase\Db\ClassificationSubjectMapper;
 use OCA\OpenCase\Db\ContactRoleMapper;
 use OCA\OpenCase\Db\DocumentCategoryMapper;
@@ -16,6 +17,8 @@ use OCA\OpenCase\Db\InsightLevelMapper;
 use OCA\OpenCase\Db\ParticipantRoleMapper;
 use OCA\OpenCase\Db\SensitivityMapper;
 use OCA\OpenCase\Db\UserRoleMapper;
+use OCA\OpenCase\Service\AccessProfile\AccessProfileTypeResolver;
+use OCA\OpenCase\Service\AccessProfile\GroupAccessProfileType;
 use OCA\OpenCase\Service\CaseService;
 use OCA\OpenCase\Service\TemplateService;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
@@ -54,11 +57,14 @@ class PublicReferenceApiController extends AbstractPublicDataApiController {
         private ParticipantRoleMapper $participantRoleMapper,
         private ClassificationSubjectMapper $classificationSubjectMapper,
         private ClassificationFacetRepository $classificationFacetRepository,
+        private ClassificationPlanMapper $classificationPlanMapper,
         private SensitivityMapper $sensitivityMapper,
         private UserRoleMapper $userRoleMapper,
         private IUserManager $userManager,
         private CaseService $caseService,
         private TemplateService $templateService,
+        private AccessProfileTypeResolver $accessProfileTypeResolver,
+        private GroupAccessProfileType $groupAccessProfileType,
         IUserSession $userSession,
     ) {
         parent::__construct($appName, $request, $userSession);
@@ -195,6 +201,25 @@ class PublicReferenceApiController extends AbstractPublicDataApiController {
     }
 
     /**
+     * Access groups (Grupper access profile type): the Nextcloud groups a
+     * case can be given via GroupId. Empty with FK Adgang.
+     */
+    #[PublicPage]
+    #[NoAdminRequired]
+    #[NoCSRFRequired]
+    public function groups(): Response {
+        $items = [];
+        if ($this->accessProfileTypeResolver->isGroupMode()) {
+            $items = array_map(fn (array $g) => [
+                'GroupId' => $g['group_id'],
+                'Name'    => $g['group_name'],
+            ], $this->groupAccessProfileType->listGroupProfiles([]));
+        }
+
+        return $this->respondList('Groups', 'Group', $items);
+    }
+
+    /**
      * KLE numbers (classification subjects / "emneord").
      */
     #[PublicPage]
@@ -208,6 +233,26 @@ class PublicReferenceApiController extends AbstractPublicDataApiController {
         ], $this->classificationSubjectMapper->findAllActive());
 
         return $this->respondList('KleNumbers', 'KleNumber', $items);
+    }
+
+    /**
+     * The customer's own classification plan (Emneplan), used instead of
+     * KLE when the classification_plan config is 'Emneplan' — the items a
+     * case can be given via ClassPlanUuid. Code equals Title for plans that
+     * identify a topic by its name.
+     */
+    #[PublicPage]
+    #[NoAdminRequired]
+    #[NoCSRFRequired]
+    public function classificationPlan(): Response {
+        $items = array_map(fn ($i) => [
+            'Uuid'        => $i->getUuid(),
+            'Code'        => $i->getCode(),
+            'Title'       => $i->getTitle(),
+            'Description' => $i->getDescription() ?? '',
+        ], $this->classificationPlanMapper->findAllActive());
+
+        return $this->respondList('ClassificationPlanItems', 'ClassificationPlanItem', $items);
     }
 
     /**
@@ -276,14 +321,17 @@ class PublicReferenceApiController extends AbstractPublicDataApiController {
     #[NoAdminRequired]
     #[NoCSRFRequired]
     public function templates(): Response {
+        $orgScopes = $this->templateService->orgScopes();
         $items = array_map(fn ($t) => [
             'Id'               => $t->getId(),
             'Name'             => $t->getName(),
             'OriginalFilename' => $t->getOriginalFilename(),
             'MimeType'         => $t->getMimeType(),
-            'Size'             => $t->getSize(),
+            'Size'             => $this->templateService->fileSize($t),
             'UploadedBy'       => $t->getUploadedBy(),
             'CreatedAt'        => $t->getCreatedAt()?->format('c'),
+            // Organisations the template is limited to ([] = all cases)
+            'OrgUuids'         => $orgScopes[$t->getId()] ?? [],
         ], $this->templateService->list());
 
         return $this->respondList('Templates', 'Template', $items);

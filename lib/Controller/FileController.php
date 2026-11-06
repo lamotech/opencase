@@ -4,13 +4,11 @@ declare(strict_types=1);
 
 namespace OCA\OpenCase\Controller;
 
-use OCA\OpenCase\Db\CaseMapper;
 use OCA\OpenCase\Db\DocumentMapper;
 use OCA\OpenCase\Service\AuditService;
 use OCA\OpenCase\Service\FileService;
 use OCA\OpenCase\Service\NotFoundException;
-use OCA\OpenCase\Service\TemplateMergeService;
-use OCA\OpenCase\Service\TemplateService;
+use OCA\OpenCase\Service\TemplateFileService;
 use OCP\AppFramework\ApiController;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\ApiRoute;
@@ -48,11 +46,9 @@ class FileController extends ApiController {
         string $appName,
         IRequest $request,
         private FileService $fileService,
-        private TemplateService $templateService,
-        private TemplateMergeService $templateMergeService,
+        private TemplateFileService $templateFileService,
         private AuditService $auditService,
         private DocumentMapper $documentMapper,
-        private CaseMapper $caseMapper,
         private LoggerInterface $logger,
         private ?string $userId,
         private IURLGenerator $urlGenerator,
@@ -220,6 +216,9 @@ class FileController extends ApiController {
      *   template_id — ID of the template to use
      *   filename    — optional name for the new file; the template's extension
      *                 is always kept. Defaults to the template's own filename.
+     *   phrase_ids  — optional array of the template's phrases to merge into
+     *                 {{fraser.indhold}}; required phrases are always included.
+     *                 Omitted → the template's pre-selected phrases.
      *
      * Placeholders in the template file (e.g. {{case.number}}, {{sag.titel}})
      * are replaced with live metadata from the parent case and document before
@@ -235,82 +234,28 @@ class FileController extends ApiController {
         if ($templateId <= 0) {
             return new DataResponse(['error' => 'template_id is required'], Http::STATUS_BAD_REQUEST);
         }
-        $requestedFilename = trim((string) $this->request->getParam('filename', ''));
+        $phraseIds = $this->request->getParam('phrase_ids');
 
-        // Load template metadata
         try {
-            $template = $this->templateService->get($templateId);
-        } catch (NotFoundException) {
-            return new DataResponse(['error' => 'Template not found'], Http::STATUS_NOT_FOUND);
-        }
-
-        // Load document and case for placeholder resolution
-        $document = $this->documentMapper->findById($docId);
-        if ($document === null) {
-            return new DataResponse(['error' => 'Document not found'], Http::STATUS_NOT_FOUND);
-        }
-
-        $case = $this->caseMapper->findById($document->getCaseId());
-        if ($case === null) {
-            return new DataResponse(['error' => 'Case not found'], Http::STATUS_NOT_FOUND);
-        }
-
-        $tempPath  = null;
-        $localCopy = null;
-        $stream    = null;
-        try {
-            // Build placeholder values and merge into a temp file.
-            // makeLocalCopy() handles both regular and NC-backed templates.
-            $values    = $this->templateMergeService->buildValues($case, $document);
-            $localCopy = $this->templateService->makeLocalCopy($templateId);
-            $tempPath  = $this->templateMergeService->mergeToTempFile(
-                $localCopy['path'],
-                $template->getMimeType(),
-                $values,
-            );
-
-            $stream = fopen($tempPath, 'rb');
-            if ($stream === false) {
-                throw new \RuntimeException("Failed to open merged temp file: {$tempPath}");
-            }
-
-            // The user may name the new file; the template's extension is kept.
-            $filename = $template->getOriginalFilename();
-            if ($requestedFilename !== '') {
-                try {
-                    $filename = FileService::sanitiseFilename($requestedFilename, $filename);
-                } catch (\InvalidArgumentException) {
-                    return new DataResponse(['error' => 'Invalid filename'], Http::STATUS_BAD_REQUEST);
-                }
-            }
-
-            $entity = $this->fileService->upload(
+            $entity = $this->templateFileService->createFile(
                 $docId,
-                $filename,
-                $template->getMimeType(),
-                $stream,
+                $templateId,
+                (string) $this->request->getParam('filename', ''),
+                is_array($phraseIds) ? $phraseIds : null,
                 $this->userId ?? '',
             );
-
+            $document = $this->documentMapper->findById($docId);
             return new DataResponse(
-                ['file' => $this->serializeFile($entity, $document->getDocumentNumber())],
+                ['file' => $this->serializeFile($entity, $document?->getDocumentNumber())],
                 Http::STATUS_CREATED,
             );
         } catch (NotFoundException $e) {
             return new DataResponse(['error' => $e->getMessage()], Http::STATUS_NOT_FOUND);
+        } catch (\InvalidArgumentException $e) {
+            return new DataResponse(['error' => $e->getMessage()], Http::STATUS_BAD_REQUEST);
         } catch (\Throwable $e) {
             $this->logger->error('OpenCase: createFromTemplate failed: {msg}', ['msg' => $e->getMessage()]);
             return new DataResponse(['error' => 'Failed to create file from template'], Http::STATUS_INTERNAL_SERVER_ERROR);
-        } finally {
-            if (is_resource($stream)) {
-                fclose($stream);
-            }
-            if ($tempPath !== null && file_exists($tempPath)) {
-                @unlink($tempPath);
-            }
-            if ($localCopy !== null) {
-                $this->templateService->releaseLocalCopy($localCopy);
-            }
         }
     }
 

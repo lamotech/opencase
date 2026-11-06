@@ -213,11 +213,13 @@ class CaseParticipantMapper extends QBMapper {
         string $housenumber,
         string $zipcode,
         string $zipdistrict,
+        string $userId,
     ): array {
         $qb = $this->db->getQueryBuilder();
         $qb->select(['cpr_cvr', 'name', 'streetname', 'housenumber', 'floor', 'door', 'zipcode', 'zipdistrict', 'phone', 'email', 'has_address_protection', 'pnumber'])
-            ->from($this->getTableName())
-            ->where($qb->expr()->isNotNull('cpr_cvr'))
+            ->from($this->getTableName(), 'cp')
+            ->where($this->caseMapper->readableCaseExists($qb, $userId, 'cp.case_id'))
+            ->andWhere($qb->expr()->isNotNull('cpr_cvr'))
             ->andWhere($qb->expr()->neq('cpr_cvr', $qb->createNamedParameter('')));
 
         if ($cpr !== '') {

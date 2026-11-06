@@ -8,6 +8,7 @@ use OCA\OpenCase\BackgroundJob\AccessDeadlineNotificationJob;
 use OCA\OpenCase\BackgroundJob\BulkReindexJob;
 use OCA\OpenCase\BackgroundJob\DispatchDigitalPostJob;
 use OCA\OpenCase\BackgroundJob\ExportClosedCasesJob;
+use OCA\OpenCase\BackgroundJob\GroupAccessSyncJob;
 use OCA\OpenCase\BackgroundJob\ProcessBulkUpdate;
 use OCA\OpenCase\BackgroundJob\ProcessDigitalPostReceivementsJob;
 use OCA\OpenCase\BackgroundJob\ProcessDistributionReceivementsJob;
@@ -15,6 +16,15 @@ use OCA\OpenCase\BackgroundJob\ProcessImportsJob;
 use OCA\OpenCase\BackgroundJob\ProcessMessageReceivementsJob;
 use OCA\OpenCase\BackgroundJob\ReminderDeadlineNotificationJob;
 use OCA\OpenCase\BackgroundJob\WorkflowDeadlineNotificationJob;
+use OCA\OpenCase\BackgroundJob\ProcessSyncJob;
+use OCA\OpenCase\BackgroundJob\ProcessTaskDeadlineNotificationJob;
+use OCA\OpenCase\BackgroundJob\ProcessWorkerJob;
+use OCA\OpenCase\Event\CaseAccessProfileChangedEvent;
+use OCA\OpenCase\Event\CaseResponsibleChangedEvent;
+use OCA\OpenCase\Event\CaseStatusChangedEvent;
+use OCA\OpenCase\Listener\CaseClosedProcessListener;
+use OCA\OpenCase\Listener\CaseAccessProfileListener;
+use OCA\OpenCase\Listener\CaseResponsibleProcessListener;
 use OCA\OpenCase\BackgroundJob\IndexFileJob;
 use OCA\OpenCase\BackgroundJob\SyncFilecache;
 use OCA\OpenCase\Dashboard\FavoritesWidget;
@@ -33,6 +43,8 @@ use OCA\OpenCase\Db\SensitivityMapper;
 use OCA\OpenCase\Event\FileUpdatedEvent;
 use OCA\OpenCase\Listener\FileUpdatedListener;
 use OCA\OpenCase\Listener\FilesIntegrationListener;
+use OCA\OpenCase\Listener\GroupAccessListener;
+use OCA\OpenCase\Listener\UserInfoLoginListener;
 use OCA\OpenCase\Listener\TalkIntegrationListener;
 use OCA\Files\Event\LoadAdditionalScriptsEvent as FilesLoadAdditionalScriptsEvent;
 use OCP\Collaboration\Resources\LoadAdditionalScriptsEvent;
@@ -47,6 +59,7 @@ use OCA\OpenCase\Controller\PublicApi\PublicMessageReceiverController;
 use OCA\OpenCase\Middleware\PublicApiMiddleware;
 use OCA\OpenCase\Middleware\PublicDataApiMiddleware;
 use OCA\OpenCase\Middleware\RoleMiddleware;
+use OCA\OpenCase\Mount\BrevdesignerMountProvider;
 use OCA\OpenCase\Mount\OpenCaseMountProvider;
 use OCA\OpenCase\Notification\FileShareNotifier;
 use OCA\OpenCase\Search\OpenCaseCasesSearchProvider;
@@ -68,6 +81,10 @@ use OCP\AppFramework\Bootstrap\IRegistrationContext;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\BackgroundJob\IJobList;
 use OCP\Files\Config\IMountProviderCollection;
+use OCP\Group\Events\GroupCreatedEvent;
+use OCP\Group\Events\GroupDeletedEvent;
+use OCP\Group\Events\UserAddedEvent;
+use OCP\Group\Events\UserRemovedEvent;
 use OCP\Http\Client\IClientService;
 use OCP\ICacheFactory;
 use OCP\IConfig;
@@ -77,6 +94,8 @@ use OCP\IDBConnection;
 use OCP\INavigationManager;
 use OCP\IURLGenerator;
 use OCP\IUserSession;
+use OCP\User\Events\PostLoginEvent;
+use OCP\User\Events\UserDeletedEvent;
 use Psr\Log\LoggerInterface;
 use Throwable;
 
@@ -133,6 +152,32 @@ class Application extends App implements IBootstrap {
         $context->registerEventListener(
             FileUpdatedEvent::class,
             FileUpdatedListener::class
+        );
+
+        // Keep 'group' access-profile grants and roles from groups in step
+        // with group membership (also reconciled for the user at login), and
+        // register new groups named with the access group prefix.
+        foreach ([PostLoginEvent::class, GroupCreatedEvent::class, UserAddedEvent::class, UserRemovedEvent::class, GroupDeletedEvent::class, UserDeletedEvent::class] as $eventClass) {
+            $context->registerEventListener($eventClass, GroupAccessListener::class);
+        }
+        // Create the user's opencase_userinfo row at login when missing
+        // (logins other than SAML, e.g. Microsoft Entra ID).
+        $context->registerEventListener(PostLoginEvent::class, UserInfoLoginListener::class);
+        // Process module: cancel running processes when a case is closed.
+        $context->registerEventListener(
+            CaseStatusChangedEvent::class,
+            CaseClosedProcessListener::class
+        );
+        // Process module: keep caseResponsible of running processes current.
+        $context->registerEventListener(
+            CaseResponsibleChangedEvent::class,
+            CaseResponsibleProcessListener::class
+        );
+
+        // Search index and filecache follow a case to its new access profile.
+        $context->registerEventListener(
+            CaseAccessProfileChangedEvent::class,
+            CaseAccessProfileListener::class
         );
 
         // Inject the Talk integration script whenever Talk renders its page.
@@ -211,6 +256,9 @@ class Application extends App implements IBootstrap {
 		if (!$jobList->has(SyncOrganisationsJob::class, null)) {
 			$jobList->add(SyncOrganisationsJob::class);
 		}
+		if (!$jobList->has(GroupAccessSyncJob::class, null)) {
+			$jobList->add(GroupAccessSyncJob::class);
+		}
 		// IndexFileJob and BulkReindexJob are QueuedJobs: they are enqueued on
 		// demand with a payload (fileId / caseId) and must never be registered
 		// as standing jobs here — a null-argument instance just runs and warns.
@@ -244,7 +292,10 @@ class Application extends App implements IBootstrap {
 			$jobList->remove(ProcessMessageReceivementsJob::class);
 		}
 
-		if ($enterpriseVersionEnabled && class_exists(DispatchDigitalPostJob::class)) {
+		// Digital Post has its own feature flag (feature_digital-post); the
+		// components themselves still ship only in the Enterprise package.
+		$digitalPostEnabled = $server->get(Configuration::class)->getConfigValue('feature_digital-post', '0') === '1';
+		if ($digitalPostEnabled && class_exists(DispatchDigitalPostJob::class)) {
 			if (!$jobList->has(DispatchDigitalPostJob::class, null)) {
 				$jobList->add(DispatchDigitalPostJob::class);
 			}
@@ -252,7 +303,7 @@ class Application extends App implements IBootstrap {
 			$jobList->remove(DispatchDigitalPostJob::class);
 		}
 
-		if ($enterpriseVersionEnabled && class_exists(ProcessDigitalPostReceivementsJob::class)) {
+		if ($digitalPostEnabled && class_exists(ProcessDigitalPostReceivementsJob::class)) {
 			if (!$jobList->has(ProcessDigitalPostReceivementsJob::class, null)) {
 				$jobList->add(ProcessDigitalPostReceivementsJob::class);
 			}
@@ -285,9 +336,17 @@ class Application extends App implements IBootstrap {
 			AccessDeadlineNotificationJob::class,
 			ReminderDeadlineNotificationJob::class,
 			WorkflowDeadlineNotificationJob::class,
+			ProcessTaskDeadlineNotificationJob::class,
 		] as $notificationJob) {
 			if (!$jobList->has($notificationJob, null)) {
 				$jobList->add($notificationJob);
+			}
+		}
+		// Process module: keep running processes in step with the process engine.
+		// The job itself does nothing while the engine isn't configured.
+		foreach ([ProcessSyncJob::class, ProcessWorkerJob::class] as $processJob) {
+			if (!$jobList->has($processJob, null)) {
+				$jobList->add($processJob);
 			}
 		}
 		// ProcessImportsJob is a basic/community-edition job (not Enterprise-gated).
@@ -624,7 +683,9 @@ class Application extends App implements IBootstrap {
     public function registerMountProvider(
         IMountProviderCollection $mountProviderCollection,
         OpenCaseMountProvider $mountProvider,
+        BrevdesignerMountProvider $brevdesignerMountProvider,
     ): void {
         $mountProviderCollection->registerProvider($mountProvider);
+        $mountProviderCollection->registerProvider($brevdesignerMountProvider);
     }
 }

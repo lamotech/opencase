@@ -23,8 +23,12 @@ use OCP\AppFramework\Db\Entity;
  * @method void   setClassSubjectUuid(?string $classSubjectUuid)
  * @method string|null getSensitivityUuid()
  * @method void   setSensitivityUuid(?string $sensitivityUuid)
+ * @method string|null getGroupId()
+ * @method void   setGroupId(?string $groupId)
  * @method string|null getClassificationFacetUuid()
  * @method void   setClassificationFacetUuid(?string $classificationFacetUuid)
+ * @method string|null getClassPlanUuid()
+ * @method void   setClassPlanUuid(?string $classPlanUuid)
  * @method int|null getInsightLevelId()
  * @method void   setInsightLevelId(?int $insightLevelId)
  * @method string|null getResponsibleUserId()
@@ -39,7 +43,9 @@ class SeparationSheet extends Entity {
     protected ?string $orgUuid = null;
     protected ?string $classSubjectUuid = null;
     protected ?string $sensitivityUuid = null;
+    protected ?string $groupId = null;
     protected ?string $classificationFacetUuid = null;
+    protected ?string $classPlanUuid = null;
     protected ?int $insightLevelId = null;
     protected ?string $responsibleUserId = null;
 
@@ -52,7 +58,9 @@ class SeparationSheet extends Entity {
         $this->addType('orgUuid', 'string');
         $this->addType('classSubjectUuid', 'string');
         $this->addType('sensitivityUuid', 'string');
+        $this->addType('groupId', 'string');
         $this->addType('classificationFacetUuid', 'string');
+        $this->addType('classPlanUuid', 'string');
         $this->addType('insightLevelId', 'integer');
         $this->addType('responsibleUserId', 'string');
     }

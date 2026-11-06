@@ -118,7 +118,7 @@ class ProcessBulkUpdate extends TimedJob {
 
     /**
      * Snapshot of a case's current value for each field about to be
-     * overwritten. organisation/classification_code/sensitivity live on the
+     * overwritten. classification_code/sensitivity/group_id live on the
      * case's access profile, not the case row itself, so they need an extra
      * lookup; the rest read straight off the entity.
      */
@@ -128,23 +128,27 @@ class ProcessBulkUpdate extends TimedJob {
             throw new \RuntimeException("Case {$caseId} not found");
         }
 
-        $needsProfile = array_intersect($fields, ['organisation', 'classification_code', 'sensitivity']);
-        $profile      = $needsProfile ? $this->accessProfileMapper->findById($case->getAccessProfileId()) : null;
+        $needsProfile     = array_intersect($fields, ['classification_code', 'sensitivity', 'group_id']);
+        $profile          = $needsProfile ? $this->accessProfileMapper->findById($case->getAccessProfileId()) : null;
+        $classSubjectUuid = $case->effectiveClassSubjectUuid($profile);
+        $sensitivityUuid  = $case->effectiveSensitivityUuid($profile);
 
         $values = [];
         foreach ($fields as $field) {
             $values[$field] = match ($field) {
                 'title' => $case->getTitle(),
-                'organisation' => $profile
-                    ? $this->organisationMapper->findByUuid($profile->getOrgUuid())?->getOrgName()
+                'organisation' => $case->getOrgUuid() !== null
+                    ? $this->organisationMapper->findByUuid($case->getOrgUuid())?->getOrgName()
                     : null,
-                'classification_code' => $profile
-                    ? $this->classificationSubjectMapper->findByUuid($profile->getClassSubjectUuid())?->getCode()
+                'classification_code' => $classSubjectUuid !== null
+                    ? $this->classificationSubjectMapper->findByUuid($classSubjectUuid)?->getCode()
                     : null,
-                'sensitivity' => $profile
-                    ? $this->sensitivityMapper->findByUuid($profile->getSensitivityUuid())?->getKey()
+                'sensitivity' => $sensitivityUuid !== null
+                    ? $this->sensitivityMapper->findByUuid($sensitivityUuid)?->getKey()
                     : null,
+                'group_id' => $profile?->getGroupId(),
                 'classification_facet_uuid' => $case->getClassificationFacetUuid(),
+                'class_plan_uuid' => $case->getClassPlanUuid(),
                 'insight_level_id' => $case->getInsightLevelId(),
                 'responsible_user_id' => $case->getResponsibleUserId(),
                 'summary' => $case->getSummary(),
@@ -160,8 +164,10 @@ class ProcessBulkUpdate extends TimedJob {
             $caseId,
             $updates['title'] ?? null,
             $updates['organisation'] ?? null,
-            $updates['classification_code'] ?? null,
-            $updates['sensitivity'] ?? null,
+            array_map('strval', array_filter(
+                array_intersect_key($updates, array_flip(['classification_code', 'sensitivity', 'group_id'])),
+                fn($v) => $v !== null && $v !== ''
+            )),
             $userId,
             $updates['responsible_user_id'] ?? null,
             isset($updates['insight_level_id']) ? (int)$updates['insight_level_id'] : null,
@@ -170,6 +176,10 @@ class ProcessBulkUpdate extends TimedJob {
             array_key_exists('classification_facet_uuid', $updates),
             $updates['summary'] ?? null,
             array_key_exists('summary', $updates),
+            // An Emneplan item is required while the plan is in use, so an
+            // empty value leaves the case's item unchanged.
+            $updates['class_plan_uuid'] ?? null,
+            !empty($updates['class_plan_uuid']),
         );
     }
 

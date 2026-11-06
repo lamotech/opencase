@@ -16,7 +16,10 @@ use OCP\IDBConnection;
  */
 class DocumentContactMapper extends QBMapper {
 
-    public function __construct(IDBConnection $db) {
+    public function __construct(
+        IDBConnection $db,
+        private CaseMapper $caseMapper,
+    ) {
         parent::__construct($db, 'opencase_documentcontacts', DocumentContact::class);
     }
 
@@ -164,36 +167,49 @@ class DocumentContactMapper extends QBMapper {
         string $housenumber,
         string $zipcode,
         string $zipdistrict,
+        string $userId,
     ): array {
         $qb = $this->db->getQueryBuilder();
-        $qb->select(['cpr_cvr', 'name', 'streetname', 'housenumber', 'floor', 'door', 'zipcode', 'zipdistrict', 'phone', 'email', 'has_address_protection', 'pnumber'])
-            ->from($this->getTableName())
-            ->where($qb->expr()->isNotNull('cpr_cvr'))
-            ->andWhere($qb->expr()->neq('cpr_cvr', $qb->createNamedParameter('')));
+        $qb->select(['dc.cpr_cvr', 'dc.name', 'dc.streetname', 'dc.housenumber', 'dc.floor', 'dc.door', 'dc.zipcode', 'dc.zipdistrict', 'dc.phone', 'dc.email', 'dc.has_address_protection', 'dc.pnumber'])
+            ->from($this->getTableName(), 'dc')
+            ->innerJoin('dc', 'opencase_documents', 'd', $qb->expr()->eq('d.id', 'dc.document_id'))
+            ->leftJoin('dc', 'opencase_doc_user_access', 'dua', $qb->expr()->andX(
+                $qb->expr()->eq('dua.document_id', 'dc.document_id'),
+                $qb->expr()->eq('dua.user_id', $qb->createNamedParameter($userId)),
+                $qb->expr()->eq('dua.access_level', $qb->createNamedParameter('deny')),
+            ))
+            ->where($this->caseMapper->readableCaseExists($qb, $userId, 'd.case_id'))
+            ->andWhere($qb->expr()->isNull('dua.document_id'))
+            ->andWhere($qb->expr()->orX(
+                $qb->expr()->isNull('d.is_deleted'),
+                $qb->expr()->eq('d.is_deleted', $qb->createNamedParameter(false, IQueryBuilder::PARAM_BOOL)),
+            ))
+            ->andWhere($qb->expr()->isNotNull('dc.cpr_cvr'))
+            ->andWhere($qb->expr()->neq('dc.cpr_cvr', $qb->createNamedParameter('')));
 
         if ($cpr !== '') {
             $qb->andWhere($qb->expr()->eq(
-                $qb->createFunction("REPLACE(cpr_cvr, '-', '')"),
+                $qb->createFunction("REPLACE(dc.cpr_cvr, '-', '')"),
                 $qb->createNamedParameter(preg_replace('/\D/', '', $cpr)),
             ));
         } else {
             if ($firstname !== '') {
-                $qb->andWhere($qb->expr()->iLike('name', $qb->createNamedParameter('%' . $this->db->escapeLikeParameter($firstname) . '%')));
+                $qb->andWhere($qb->expr()->iLike('dc.name', $qb->createNamedParameter('%' . $this->db->escapeLikeParameter($firstname) . '%')));
             }
             if ($lastname !== '') {
-                $qb->andWhere($qb->expr()->iLike('name', $qb->createNamedParameter('%' . $this->db->escapeLikeParameter($lastname) . '%')));
+                $qb->andWhere($qb->expr()->iLike('dc.name', $qb->createNamedParameter('%' . $this->db->escapeLikeParameter($lastname) . '%')));
             }
             if ($streetname !== '') {
-                $qb->andWhere($qb->expr()->iLike('streetname', $qb->createNamedParameter('%' . $this->db->escapeLikeParameter($streetname) . '%')));
+                $qb->andWhere($qb->expr()->iLike('dc.streetname', $qb->createNamedParameter('%' . $this->db->escapeLikeParameter($streetname) . '%')));
             }
             if ($housenumber !== '') {
-                $qb->andWhere($qb->expr()->eq('housenumber', $qb->createNamedParameter($housenumber)));
+                $qb->andWhere($qb->expr()->eq('dc.housenumber', $qb->createNamedParameter($housenumber)));
             }
             if ($zipcode !== '') {
-                $qb->andWhere($qb->expr()->eq('zipcode', $qb->createNamedParameter($zipcode)));
+                $qb->andWhere($qb->expr()->eq('dc.zipcode', $qb->createNamedParameter($zipcode)));
             }
             if ($zipdistrict !== '') {
-                $qb->andWhere($qb->expr()->iLike('zipdistrict', $qb->createNamedParameter('%' . $this->db->escapeLikeParameter($zipdistrict) . '%')));
+                $qb->andWhere($qb->expr()->iLike('dc.zipdistrict', $qb->createNamedParameter('%' . $this->db->escapeLikeParameter($zipdistrict) . '%')));
             }
         }
 

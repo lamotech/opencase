@@ -18,7 +18,8 @@ Administratorvejledningen er opdelt i en række afsnit, som følger den naturlig
 |------|-------------|
 | [Installation – Basic-version](installation-basic-version/) | Installation og grundkonfiguration af OpenCase Basic. |
 | [Installation – Enterprise-version](installation-enterprise-version/) | Installation af Enterprise-funktioner og integrationer. |
-| [Administrer skabeloner](administrer-skabeloner/) | Oprettelse og vedligeholdelse af dokumentskabeloner. |
+| [Administrer processer](administrer-processer/) | Design og versionering af processer for sagsbehandlingen. |
+| [Administrer brevdesigner](administrer-skabeloner/) | Oprettelse og vedligeholdelse af skabeloner, fraser og organisationslogoer. |
 | [Konfiguration](konfiguration/) | Konfiguration af systemindstillinger, værdilister og standardværdier. |
 | [Lokale Nextcloud-brugere](lokale-brugere.md) | Rettigheder lor Lokale Nextcloud-brugere. |
 | [Transaktionslog](transaktionslog.md) | Søgning efter brugerhandlinger i en transaktionslog. |
@@ -96,7 +97,7 @@ Hvis du installerer OpenCase første gang, anbefales det at følge vejledningen 
 1. Installation – Basic-version
 2. Installation – Enterprise-version (hvis relevant)
 3. Konfiguration
-4. Administrer skabeloner
+4. Administrer brevdesigner
 5. Fejlfinding
 6. Logfiler
 7. OCC-kommandoer

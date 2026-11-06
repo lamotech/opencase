@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OCA\OpenCase\Service;
 
+use OCA\OpenCase\Db\AccessProfile;
 use OCA\OpenCase\Db\AccessProfileMapper;
 use OCA\OpenCase\Db\CaseEntity;
 use OCA\OpenCase\Db\CaseMapper;
@@ -11,13 +12,18 @@ use OCA\OpenCase\Db\CaseUserEntity;
 use OCA\OpenCase\Db\ClassificationSubjectMapper;
 use OCA\OpenCase\Db\DocumentMapper;
 use OCA\OpenCase\Db\FileMapper;
+use OCA\OpenCase\Db\Organisation;
 use OCA\OpenCase\Db\OrganisationMapper;
 use OCA\OpenCase\Db\SensitivityMapper;
+use OCA\OpenCase\Event\CaseAccessProfileChangedEvent;
+use OCA\OpenCase\Event\CaseResponsibleChangedEvent;
+use OCA\OpenCase\Event\CaseStatusChangedEvent;
+use OCP\EventDispatcher\IEventDispatcher;
 use Psr\Log\LoggerInterface;
 use OCA\OpenCase\Service\AuditService;
 use OCA\OpenCase\Service\CaseNumberService;
 use OCA\OpenCase\Service\FileService;
-use OCA\OpenCase\Service\PrivilegeService;
+use OCA\OpenCase\Service\AccessProfile\AccessProfileTypeResolver;
 
 /**
  * Business logic for case management.
@@ -43,8 +49,11 @@ class CaseService {
         private FileService $fileService,
         private AuditService $auditService,
         private LoggerInterface $logger,
-        private PrivilegeService $privilegeService,
+        private AccessProfileTypeResolver $accessProfileTypeResolver,
+        private ClassificationPlanService $classificationPlanService,
+        private CaseClassificationService $caseClassificationService,
         private DisposalService $disposalService,
+        private IEventDispatcher $eventDispatcher,
     ) {
     }
 
@@ -53,16 +62,23 @@ class CaseService {
      *
      * The case number is generated automatically from the administrator-defined
      * mask stored in opencase_config. Resolves (or creates) the access profile
-     * for the given organisation/classification/sensitivity tuple.
+     * from $access with the active access profile type:
      *
+     *   FK Adgang: ['classification_code' => ..., 'sensitivity' => ...] — the
+     *              profile is the (organisation, KLE, sensitivity) tuple.
+     *   Grupper:   ['group_id' => ...] — the organisation is only stored on
+     *              the case. With the KLE classification plan, $access also
+     *              holds classification_code and sensitivity, which are stored
+     *              on the case (see CaseClassificationService).
+     *
+     * @param array<string, string> $access
      * @throws \InvalidArgumentException on validation failure
      * @throws NotFoundException if user lacks permission
      */
     public function create(
         string $title,
         string $organisation,
-        string $classificationCode,
-        string $sensitivity,
+        array $access,
         string $userId,
         ?string $responsibleUserId = null,
         ?int $insightLevelId = null,
@@ -70,29 +86,23 @@ class CaseService {
         ?int $parentCaseId = null,
         ?int $casetypeId = null,
         ?string $summary = null,
+        ?string $classPlanUuid = null,
     ): CaseEntity {
         // Validate
         if (trim($title) === '') {
             throw new \InvalidArgumentException('Case title is required');
         }
+        // A sub-case keeps its parent's item, also when it has been deactivated
+        $parentClassPlanUuid = $parentCaseId !== null ? $this->caseMapper->findById($parentCaseId)?->getClassPlanUuid() : null;
+        if ($classPlanUuid !== $parentClassPlanUuid) {
+            $classPlanUuid = $this->classificationPlanService->validateForCase($classPlanUuid);
+        }
 
-        // Resolve (or create) the organisation, classification subject, and sensitivity, then the access profile
-        $org          = $this->organisationMapper->findOrCreateByName($organisation);
-        $classSubject = $this->classificationSubjectMapper->findOrCreateByCode($classificationCode);
-        $sens         = $this->sensitivityMapper->findOrCreateByKey($sensitivity);
-        $profile      = $this->accessProfileMapper->findOrCreate(
-            $org->getOrgUuid(),
-            $classSubject->getUuid(),
-            $sens->getUuid()
-        );
-
-        // Grant access to all users whose SAML privilege constraints cover this profile.
-        // This is idempotent — if the profile already existed the inserts are silently skipped.
-        $this->privilegeService->grantPrivilegedUsersToProfile(
-            (int)$profile->getId(),
-            $org->getOrgUuid(),
-            $classSubject->getUuid(),
-            $sens->getUuid()
+        // Resolve (or create) the organisation, then the access profile. Resolving
+        // also grants the profile to the users entitled to it (idempotent).
+        $org     = $this->organisationMapper->findOrCreateByName($organisation);
+        $profile = $this->accessProfileTypeResolver->active()->resolveProfile(
+            ['org_uuid' => $org->getOrgUuid()] + $access
         );
 
         // Verify user has write access to this profile. The responsible user
@@ -126,6 +136,8 @@ class CaseService {
         $entity->setResponsibleUserId($responsibleUserId ?? $userId);
         $entity->setInsightLevelId($insightLevelId);
         $entity->setClassificationFacetUuid($classificationFacetUuid);
+        $entity->setClassPlanUuid($classPlanUuid);
+        $this->caseClassificationService->applyToNewCase($entity, $access);
         $entity->setUuid(self::generateUuid());
         $entity->setParentCaseId($parentCaseId);
         $entity->setSummary($summary);
@@ -148,14 +160,19 @@ class CaseService {
     /**
      * Update a case's metadata.
      *
+     * $access holds the access fields to change, with the keys create() takes
+     * for the active access profile type (FK Adgang: classification_code,
+     * sensitivity; Grupper: group_id, and classification_code / sensitivity
+     * with the KLE classification plan). Fields left out keep their value.
+     *
+     * @param array<string, string> $access
      * @throws NotFoundException
      */
     public function update(
         int $caseId,
         ?string $title,
         ?string $organisation,
-        ?string $classificationCode,
-        ?string $sensitivity,
+        array $access,
         string $userId,
         ?string $responsibleUserId = null,
         ?int $insightLevelId = null,
@@ -164,6 +181,8 @@ class CaseService {
         bool $facetUuidProvided = false,
         ?string $summary = null,
         bool $summaryProvided = false,
+        ?string $classPlanUuid = null,
+        bool $classPlanProvided = false,
     ): CaseEntity {
         $entity = $this->caseMapper->findById($caseId);
         if ($entity === null) {
@@ -184,60 +203,104 @@ class CaseService {
             $entity->setTitle($title);
         }
 
-        // If any part of the access profile tuple changed, resolve new profile
-        if ($organisation !== null || $classificationCode !== null || $sensitivity !== null) {
-            $currentProfile = $this->accessProfileMapper->findById($entity->getAccessProfileId());
-
-            // Resolve current org name from the UUID stored on the profile
-            $currentOrgUuid = $currentProfile->getOrgUuid();
-            $currentOrg     = $this->organisationMapper->findByUuid($currentOrgUuid);
-            $currentOrgName = $currentOrg?->getOrgName() ?? '';
-
-            $newOrgName = $organisation ?? $currentOrgName;
-            if ($organisation !== null && $organisation !== $currentOrgName) {
+        if ($organisation !== null) {
+            $currentOrgName = $this->organisationMapper->findByUuid((string)$entity->getOrgUuid())?->getOrgName() ?? '';
+            if ($organisation !== $currentOrgName) {
                 $changes['organisation'] = ['from' => $currentOrgName, 'to' => $organisation];
             }
+            $entity->setOrgUuid($this->organisationMapper->findOrCreateByName($organisation)->getOrgUuid());
+        }
 
-            // Resolve classification: if a new code is provided, look it up; otherwise keep current UUID
-            if ($classificationCode !== null) {
-                $currentClassSubject = $this->classificationSubjectMapper->findByUuid($currentProfile->getClassSubjectUuid());
-                $oldCode             = $currentClassSubject?->getCode() ?? '';
-                if ($classificationCode !== $oldCode) {
-                    $changes['classification_code'] = ['from' => $oldCode, 'to' => $classificationCode];
+        $oldAccessProfileId = $entity->getAccessProfileId();
+        $accessType = $this->accessProfileTypeResolver->active();
+        if ($accessType->key() === AccessProfile::TYPE_GROUP) {
+            // The organisation is not part of a group profile — only the group is.
+            $groupId        = $access['group_id'] ?? null;
+            $currentProfile = $this->accessProfileMapper->findById($entity->getAccessProfileId());
+            if ($groupId !== null) {
+                $currentGroupId = $currentProfile?->getGroupId() ?? '';
+                // The current group is not resolved again: it may have been deleted
+                $newProfile     = $currentProfile !== null && $groupId === $currentGroupId ? $currentProfile : $accessType->resolveProfile(['group_id' => $groupId]);
+                if ($newProfile->getId() !== $entity->getAccessProfileId()) {
+                    $changes['group'] = ['from' => $currentGroupId, 'to' => $groupId];
+                    $entity->setAccessProfileId($newProfile->getId());
                 }
-                $newClassSubject = $this->classificationSubjectMapper->findOrCreateByCode($classificationCode);
-                $newClassUuid    = $newClassSubject->getUuid();
-            } else {
-                $newClassUuid = $currentProfile->getClassSubjectUuid();
             }
 
-            // Resolve sensitivity: if a new key is provided, look it up; otherwise keep current UUID
-            if ($sensitivity !== null) {
-                $currentSens = $this->sensitivityMapper->findByUuid($currentProfile->getSensitivityUuid());
-                $oldKey      = $currentSens?->getKey() ?? '';
-                if ($sensitivity !== $oldKey) {
-                    $changes['sensitivity'] = ['from' => $oldKey, 'to' => $sensitivity];
+            // With the KLE classification plan the case keeps its own KLE
+            // number and sensitivity. A case moved over from an FK Adgang
+            // profile keeps the profile's values unless new ones are given.
+            if ($this->caseClassificationService->onCase()) {
+                $currentClassUuid = $entity->effectiveClassSubjectUuid($currentProfile);
+                $currentSensUuid  = $entity->effectiveSensitivityUuid($currentProfile);
+                $resolved         = $this->caseClassificationService->resolve($access);
+                $newClassUuid     = $resolved['class_subject_uuid'] ?? $currentClassUuid;
+                $newSensUuid      = $resolved['sensitivity_uuid'] ?? $currentSensUuid;
+                if ($newClassUuid !== $currentClassUuid) {
+                    $changes['classification_code'] = [
+                        'from' => $currentClassUuid !== null ? ($this->classificationSubjectMapper->findByUuid($currentClassUuid)?->getCode() ?? '') : '',
+                        'to'   => $this->classificationSubjectMapper->findByUuid((string)$newClassUuid)?->getCode() ?? '',
+                    ];
                 }
-                $newSens     = $this->sensitivityMapper->findOrCreateByKey($sensitivity);
-                $newSensUuid = $newSens->getUuid();
-            } else {
-                $newSensUuid = $currentProfile->getSensitivityUuid();
+                if ($newSensUuid !== $currentSensUuid) {
+                    $changes['sensitivity'] = [
+                        'from' => $currentSensUuid !== null ? ($this->sensitivityMapper->findByUuid($currentSensUuid)?->getKey() ?? '') : '',
+                        'to'   => $this->sensitivityMapper->findByUuid((string)$newSensUuid)?->getKey() ?? '',
+                    ];
+                }
+                $entity->setClassSubjectUuid($newClassUuid);
+                $entity->setSensitivityUuid($newSensUuid);
             }
+        } else {
+            $classificationCode = $access['classification_code'] ?? null;
+            $sensitivity        = $access['sensitivity'] ?? null;
 
-            $newOrg     = $this->organisationMapper->findOrCreateByName($newOrgName);
-            $newProfile = $this->accessProfileMapper->findOrCreate(
-                $newOrg->getOrgUuid(),
-                $newClassUuid,
-                $newSensUuid
-            );
-            $this->privilegeService->grantPrivilegedUsersToProfile(
-                (int)$newProfile->getId(),
-                $newOrg->getOrgUuid(),
-                $newClassUuid,
-                $newSensUuid
-            );
-            $entity->setAccessProfileId($newProfile->getId());
-            $entity->setOrgUuid($newOrg->getOrgUuid());
+            // If any part of the access profile tuple changed, resolve new profile
+            if ($organisation !== null || $classificationCode !== null || $sensitivity !== null) {
+                // A case moved over from a group profile brings its own KLE
+                // number and sensitivity (Grupper + KLE) to the FK profile.
+                $currentProfile   = $this->accessProfileMapper->findById($entity->getAccessProfileId());
+                $currentClassUuid = $entity->effectiveClassSubjectUuid($currentProfile);
+                $currentSensUuid  = $entity->effectiveSensitivityUuid($currentProfile);
+
+                // Resolve classification: if a new code is provided, look it up; otherwise keep current UUID
+                if ($classificationCode !== null) {
+                    $currentClassSubject = $currentClassUuid !== null ? $this->classificationSubjectMapper->findByUuid($currentClassUuid) : null;
+                    $oldCode             = $currentClassSubject?->getCode() ?? '';
+                    if ($classificationCode !== $oldCode) {
+                        $changes['classification_code'] = ['from' => $oldCode, 'to' => $classificationCode];
+                    }
+                    $newClassSubject = $this->classificationSubjectMapper->findOrCreateByCode($classificationCode);
+                    $newClassUuid    = $newClassSubject->getUuid();
+                } else {
+                    $newClassUuid = $currentClassUuid;
+                }
+
+                // Resolve sensitivity: if a new key is provided, look it up; otherwise keep current UUID
+                if ($sensitivity !== null) {
+                    $currentSens = $currentSensUuid !== null ? $this->sensitivityMapper->findByUuid($currentSensUuid) : null;
+                    $oldKey      = $currentSens?->getKey() ?? '';
+                    if ($sensitivity !== $oldKey) {
+                        $changes['sensitivity'] = ['from' => $oldKey, 'to' => $sensitivity];
+                    }
+                    $newSens     = $this->sensitivityMapper->findOrCreateByKey($sensitivity);
+                    $newSensUuid = $newSens->getUuid();
+                } else {
+                    $newSensUuid = $currentSensUuid;
+                }
+
+                // A case moved over from a group profile has no KLE/sensitivity
+                // to keep, so resolveProfile() then requires both to be given.
+                $newProfile = $accessType->resolveProfile([
+                    'org_uuid'           => (string)$entity->getOrgUuid(),
+                    'class_subject_uuid' => $newClassUuid,
+                    'sensitivity_uuid'   => $newSensUuid,
+                ]);
+                $entity->setAccessProfileId($newProfile->getId());
+                // Now part of the FK profile — not kept on the case as well
+                $entity->setClassSubjectUuid(null);
+                $entity->setSensitivityUuid(null);
+            }
         }
 
         if ($insightLevelProvided && $insightLevelId !== $entity->getInsightLevelId()) {
@@ -256,6 +319,17 @@ class CaseService {
             $entity->setClassificationFacetUuid($classificationFacetUuid);
         }
 
+        // Only a new item is validated: the case keeps its item when it is
+        // deactivated, and clients send it back unchanged.
+        if ($classPlanProvided && ($classPlanUuid ?: null) !== $entity->getClassPlanUuid()) {
+            $classPlanUuid = $this->classificationPlanService->validateForCase($classPlanUuid);
+            $changes['class_plan_uuid'] = [
+                'from' => $entity->getClassPlanUuid(),
+                'to'   => $classPlanUuid,
+            ];
+            $entity->setClassPlanUuid($classPlanUuid);
+        }
+
         if ($summaryProvided && $summary !== $entity->getSummary()) {
             // The summary is rich-text HTML and can run long — record only that
             // it changed rather than two full copies in the audit log details.
@@ -271,7 +345,7 @@ class CaseService {
             $entity->setResponsibleUserId($responsibleUserId);
         }
 
-        if (isset($changes['classification_code']) || isset($changes['classification_facet_uuid'])) {
+        if (isset($changes['classification_code']) || isset($changes['classification_facet_uuid']) || isset($changes['class_plan_uuid'])) {
             $this->disposalService->applyDisposalCode($entity);
         }
 
@@ -279,6 +353,12 @@ class CaseService {
 
         $result = $this->caseMapper->update($entity);
         $this->auditService->logCaseMetadataChanged($caseId, $userId, $changes);
+        if ($entity->getAccessProfileId() !== $oldAccessProfileId) {
+            $this->eventDispatcher->dispatchTyped(new CaseAccessProfileChangedEvent($caseId, $entity->getAccessProfileId()));
+        }
+        if (isset($changes['responsible_user_id'])) {
+            $this->eventDispatcher->dispatchTyped(new CaseResponsibleChangedEvent($caseId, $changes['responsible_user_id']['from'], $responsibleUserId));
+        }
 
         return $result;
     }
@@ -328,6 +408,7 @@ class CaseService {
 
         $result = $this->caseMapper->update($entity);
         $this->auditService->logCaseStatusChanged($caseId, $userId, $oldStatusId, $newStatusId);
+        $this->eventDispatcher->dispatchTyped(new CaseStatusChangedEvent($caseId, $oldStatusId, $newStatusId, $userId));
 
         return $result;
     }
@@ -350,16 +431,17 @@ class CaseService {
     }
 
     /**
-     * Resolve a case's KLE classification code (e.g. "27.69.00") via its
-     * access profile. Returns null if the case has no access profile or
-     * the profile has no classification subject set.
+     * Resolve a case's KLE classification code (e.g. "27.69.00"): the
+     * case's own (Grupper + KLE), else its access profile's (FK Adgang).
+     * Returns null if neither has one.
      */
     public function getClassificationCodeForCase(CaseEntity $case): ?string {
         $profile = $this->accessProfileMapper->findById($case->getAccessProfileId());
-        if ($profile === null) {
+        $classSubjectUuid = $case->effectiveClassSubjectUuid($profile);
+        if ($classSubjectUuid === null) {
             return null;
         }
-        $classSubject = $this->classificationSubjectMapper->findByUuid($profile->getClassSubjectUuid());
+        $classSubject = $this->classificationSubjectMapper->findByUuid($classSubjectUuid);
         return $classSubject?->getCode();
     }
 
@@ -421,13 +503,14 @@ class CaseService {
         ?string $responsibleUserId = null,
         ?int $casetypeId = null,
         array $customFields = [],
+        ?string $classPlanCode = null,
     ): array {
         // The mapper resolves every access path (responsible user, direct grant,
         // access profile) in SQL — no pre-resolved profile ID list needed.
         $hasAdvancedFilters = $classificationCode !== null || $sensitivityKey !== null
             || $classificationFacetUuid !== null || $insightLevelId !== null
             || $responsibleUserId !== null || $casetypeId !== null
-            || !empty($customFields);
+            || $classPlanCode !== null || !empty($customFields);
 
         // Fast text-only path — only when no other filters are active
         if ($search !== null && trim($search) !== ''
@@ -451,13 +534,13 @@ class CaseService {
             $userId, $orgUuid, $year, $statusId,
             $search, $classificationFacetUuid, $insightLevelId, $responsibleUserId,
             $classificationCode, $sensitivityKey, $casetypeId,
-            $customFields,
+            $customFields, $classPlanCode,
         );
         $cases = $this->caseMapper->findWithFilters(
             $userId, $orgUuid, $year, $statusId, $limit, $offset,
             $search, $classificationFacetUuid, $insightLevelId, $responsibleUserId,
             $classificationCode, $sensitivityKey, $casetypeId,
-            $customFields,
+            $customFields, $classPlanCode,
         );
         return ['cases' => $cases, 'total' => $total];
     }
@@ -472,12 +555,18 @@ class CaseService {
     }
 
     /**
-     * Get distinct organisation names accessible to the current user,
-     * derived from their access profiles (not from existing cases).
+     * Get distinct organisation names accessible to the current user.
+     *
+     * FK Adgang: derived from their access profiles (not from existing cases).
+     * Grupper: access does not depend on the organisation, so all active
+     * organisations.
      *
      * @return string[]
      */
     public function getAccessibleOrganisations(string $userId): array {
+        if ($this->accessProfileTypeResolver->isGroupMode()) {
+            return array_map(fn($o) => $o['org_name'], $this->getAllActiveOrganisations());
+        }
         $profileIds = $this->permissionService->getAccessProfileIdsForUser($userId);
         return $this->permissionService->getAccessibleOrganisations($profileIds);
     }
@@ -486,8 +575,21 @@ class CaseService {
      * @return list<array{org_uuid: string, org_name: string}>
      */
     public function getAccessibleOrganisationsWithUuid(string $userId): array {
+        if ($this->accessProfileTypeResolver->isGroupMode()) {
+            return $this->getAllActiveOrganisations();
+        }
         $profileIds = $this->permissionService->getAccessProfileIdsForUser($userId);
         return $this->permissionService->getAccessibleOrganisationsWithUuid($profileIds);
+    }
+
+    /**
+     * @return list<array{org_uuid: string, org_name: string}>
+     */
+    private function getAllActiveOrganisations(): array {
+        return array_map(fn(Organisation $o) => [
+            'org_uuid' => $o->getOrgUuid(),
+            'org_name' => $o->getOrgName(),
+        ], $this->organisationMapper->findAllActive());
     }
 
     // ---------------------------------------------------------------

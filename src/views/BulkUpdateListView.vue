@@ -123,6 +123,7 @@ import PlaylistEditIcon from 'vue-material-design-icons/PlaylistEdit.vue'
 
 import BulkUpdateStatusBadge from '../components/BulkUpdateStatusBadge.vue'
 import api from '../services/api.js'
+import { classificationPlanLabel } from '../utils/classificationPlanLabel.js'
 import { showError } from '@nextcloud/dialogs'
 
 const UPDATE_FIELD_LABELS = {
@@ -131,6 +132,8 @@ const UPDATE_FIELD_LABELS = {
 	classification_code: 'KLE-nummer',
 	sensitivity: 'Følsomhed',
 	classification_facet_uuid: 'Handlingsfacet',
+	group_id: 'Adgangsgruppe',
+	class_plan_uuid: 'Emne',
 	insight_level_id: 'Indsigtsgrad',
 	responsible_user_id: 'Ansvarlig',
 	summary: 'Sagsresume',
@@ -220,6 +223,12 @@ export default {
 		this.$store.dispatch('fetchClassificationSubjects').catch(() => {})
 		this.$store.dispatch('fetchSensitivities').catch(() => {})
 		this.$store.dispatch('fetchClassificationFacets').catch(() => {})
+		if (this.$store.state.accessProfileType === 'group') {
+			this.$store.dispatch('fetchAccessGroups').catch(() => {})
+		}
+		if (this.$store.state.classificationPlan === 'Emneplan') {
+			this.$store.dispatch('fetchClassificationPlanItems').catch(() => {})
+		}
 		this.$store.dispatch('fetchInsightLevels').catch(() => {})
 		this.$store.dispatch('fetchDocumentStatuses').catch(() => {})
 	},
@@ -292,6 +301,14 @@ export default {
 			case 'classification_facet_uuid': {
 				const match = this.$store.state.classificationFacets.find(f => f.uuid === value)
 				return match ? (match.code ? `${match.code} – ${match.title}` : match.title) : value
+			}
+			case 'group_id': {
+				const match = this.$store.state.accessGroups.find(g => g.group_id === value)
+				return match ? match.group_name : value
+			}
+			case 'class_plan_uuid': {
+				const match = this.$store.state.classificationPlanItems.find(i => i.uuid === value)
+				return match ? classificationPlanLabel(match.code, match.title) : value
 			}
 			case 'insight_level_id': {
 				const match = this.$store.state.insightLevels.find(l => l.id === value || l.id === Number(value))

@@ -1,3 +1,5 @@
+import { classificationPlanLabel } from './classificationPlanLabel.js'
+
 const TYPE_LABELS = {
 	'existing case': t('opencase', 'Eksisterende sag'),
 	'new case': t('opencase', 'Ny sag'),
@@ -30,7 +32,9 @@ function valueRows(sheet) {
 		{ label: t('opencase', 'Ansvarlig'), value: sheet.responsible_user_display_name },
 		{ label: t('opencase', 'Organisation'), value: sheet.organisation_name },
 		{ label: t('opencase', 'KLE-nummer'), value: kle },
+		{ label: t('opencase', 'Emne'), value: classificationPlanLabel(sheet.class_plan_code, sheet.class_plan_title) },
 		{ label: t('opencase', 'Følsomhed'), value: sheet.sensitivity_title },
+		{ label: t('opencase', 'Adgangsgruppe'), value: sheet.group_name },
 		{ label: t('opencase', 'Handlingsfacet'), value: facet },
 		{ label: t('opencase', 'Indsigtsgrad'), value: sheet.insight_level_name },
 	].filter(row => row.value)

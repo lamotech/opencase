@@ -60,9 +60,10 @@ class MeController extends OCSController {
             $roleIdToName[$role->getId()] = $role->getName();
         }
 
-        $names = array_values(array_filter(
+        // A role can be held from several sources (privilege, group) — list it once.
+        $names = array_values(array_unique(array_filter(
             array_map(fn($id) => $roleIdToName[$id] ?? null, $roleIds),
-        ));
+        )));
 
         return new DataResponse(['roles' => $names]);
     }

@@ -62,7 +62,17 @@
 						@search="onIncomingOrgSearch" />
 				</div>
 
-				<div class="opencase-configuration__entry">
+				<div v-if="isGroupMode" class="opencase-configuration__entry">
+					<label class="opencase-configuration__label">{{ t('opencase', 'Adgangsgruppe') }}</label>
+					<AccessGroupSelect v-model="incomingGroupId" />
+				</div>
+
+				<div v-if="isEmneplan" class="opencase-configuration__entry">
+					<label class="opencase-configuration__label">{{ t('opencase', 'Emne') }}</label>
+					<ClassificationPlanSelect v-model="incomingClassPlanUuid" />
+				</div>
+
+				<div v-if="usesKle" class="opencase-configuration__entry">
 					<label class="opencase-configuration__label">{{ t('opencase', 'Følsomhed') }}</label>
 					<NcSelect v-model="selectedIncomingSensitivity"
 						:options="sensitivityOptions"
@@ -70,7 +80,7 @@
 						:placeholder="t('opencase', 'Vælg følsomhed')" />
 				</div>
 
-				<div class="opencase-configuration__entry">
+				<div v-if="usesKle" class="opencase-configuration__entry">
 					<label class="opencase-configuration__label">{{ t('opencase', 'KLE-nummer') }}</label>
 					<NcSelect v-model="selectedIncomingKle"
 						:options="kleOptions"
@@ -78,7 +88,7 @@
 						:placeholder="t('opencase', 'Vælg KLE-emneord')" />
 				</div>
 
-				<div class="opencase-configuration__entry">
+				<div v-if="usesKle" class="opencase-configuration__entry">
 					<label class="opencase-configuration__label">{{ t('opencase', 'Handlingsfacet') }}</label>
 					<NcSelect v-model="selectedIncomingFacet"
 						:options="facetOptions"
@@ -239,6 +249,88 @@
 				@updated="onCustomFieldUpdated" />
 		</div>
 
+		<!-- Emneplan tab (classification_plan = Emneplan) -->
+		<div v-if="activeTab === 'classificationplan'" class="opencase-configuration__content opencase-configuration__content--wide">
+			<p class="opencase-configuration__description">
+				{{ t('opencase', 'Emneplanen er den klassifikationsplan sager klassificeres efter i stedet for KLE-numre. Emner kan tilføjes og rettes her eller importeres fra en CSV-fil.') }}
+			</p>
+			<p class="opencase-configuration__description">
+				{{ t('opencase', 'CSV-format (semikolonsepareret, med overskriftsrække): uuid;code;title;description;active. uuid kan være tom – så findes emnet ud fra koden. code kan også være tom, hvis emnerne ikke har en kode – så bruges emnets navn (title). En valgfri 6. kolonne, deletion_deadline, angiver emnets slettefrist med kode (f.eks. P1825D) eller navn (f.eks. 5 år). Emner der ikke er med i filen, deaktiveres.') }}
+			</p>
+
+			<div class="opencase-configuration__toolbar">
+				<NcButton type="primary" @click="editingPlanItem = {}">
+					{{ t('opencase', 'Tilføj emne') }}
+				</NcButton>
+				<input ref="planFileInput"
+					type="file"
+					accept=".csv,text/csv"
+					style="display:none"
+					@change="onPlanFileSelected">
+				<NcButton :disabled="importingPlan" @click="$refs.planFileInput.click()">
+					<template #icon>
+						<NcLoadingIcon v-if="importingPlan" :size="20" />
+					</template>
+					{{ t('opencase', 'Importér CSV-fil') }}
+				</NcButton>
+				<NcTextField v-model="planFilter"
+					class="opencase-configuration__filter"
+					:label="t('opencase', 'Filtrér')" />
+			</div>
+
+			<p v-if="planImportResult" class="opencase-configuration__description">
+				{{ t('opencase', 'Importeret: {fetched} rækker, {created} oprettet, {updated} opdateret, {deactivated} deaktiveret.', planImportResult) }}
+			</p>
+
+			<NcLoadingIcon v-if="planLoading" :size="32" />
+			<p v-else-if="planItems.length === 0" class="opencase-configuration__description">
+				{{ t('opencase', 'Emneplanen er tom.') }}
+			</p>
+			<table v-else class="opencase-configuration__table">
+				<thead>
+					<tr>
+						<th>{{ t('opencase', 'Emne') }}</th>
+						<th>{{ t('opencase', 'Kode') }}</th>
+						<th>{{ t('opencase', 'Beskrivelse') }}</th>
+						<th>{{ t('opencase', 'Slettefrist') }}</th>
+						<th>{{ t('opencase', 'Aktiv') }}</th>
+						<th></th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr v-for="item in filteredPlanItems" :key="item.uuid">
+						<td>{{ item.title }}</td>
+						<td><code v-if="item.code !== item.title">{{ item.code }}</code></td>
+						<td class="opencase-configuration__plan-description" :title="item.description">
+							{{ item.description }}
+						</td>
+						<td>{{ deletionDeadlineName(item.deletion_deadline_id) }}</td>
+						<td>
+							<NcCheckboxRadioSwitch :model-value="item.active"
+								type="switch"
+								@update:model-value="setPlanItemActive(item, $event)" />
+						</td>
+						<td>
+							<div class="opencase-configuration__row-actions">
+								<NcButton @click="editingPlanItem = item">
+									{{ t('opencase', 'Rediger') }}
+								</NcButton>
+								<NcButton type="error" @click="deletePlanItem(item)">
+									{{ t('opencase', 'Slet') }}
+								</NcButton>
+							</div>
+						</td>
+					</tr>
+				</tbody>
+			</table>
+
+			<ClassificationPlanItemDialog v-if="editingPlanItem"
+				:item="editingPlanItem.uuid ? editingPlanItem : null"
+				:deletion-deadlines="deletionDeadlines"
+				@close="editingPlanItem = null"
+				@saved="onPlanItemSaved" />
+		</div>
+
 		<!-- SAPA (SagDokumentIndeks) transfer rules tab -->
 		<div v-if="activeTab === 'sapa'" class="opencase-configuration__content opencase-configuration__content--wide">
 			<p class="opencase-configuration__description">
@@ -395,8 +487,13 @@ import CreateCustomFieldDialog from '../components/CreateCustomFieldDialog.vue'
 import EditCustomFieldDialog from '../components/EditCustomFieldDialog.vue'
 import MaskRuleDialog from '../components/MaskRuleDialog.vue'
 import SapaRuleDialog from '../components/SapaRuleDialog.vue'
+import ClassificationPlanItemDialog from '../components/ClassificationPlanItemDialog.vue'
+import ClassificationPlanSelect from '../components/ClassificationPlanSelect.vue'
+import { classificationPlanLabel } from '../utils/classificationPlanLabel.js'
 import { generateAndPrintSeparationSheetPdf } from '../utils/generateSeparationSheetPdf.js'
 import api from '../services/api.js'
+import { caseScopeTypeLabel, classPlanScopeLabel, ensureClassificationPlanItems } from '../utils/caseScopes.js'
+import AccessGroupSelect from '../components/AccessGroupSelect.vue'
 
 const SEPARATION_SHEET_TYPE_LABELS = {
 	'existing case': 'Eksisterende sag',
@@ -413,7 +510,7 @@ const SETTINGS_KEYS = ['case_number_mask', 'search_max_result_count', 'search_pa
 export default {
 	name: 'ConfigurationView',
 
-	components: { NcButton, NcTextField, NcLoadingIcon, NcSelect, NcCheckboxRadioSwitch, OverflowTabs, CodeListDialog, CreateSeparationSheetDialog, CreateCustomFieldDialog, EditCustomFieldDialog, MaskRuleDialog, SapaRuleDialog },
+	components: { NcButton, NcTextField, NcLoadingIcon, NcSelect, NcCheckboxRadioSwitch, AccessGroupSelect, OverflowTabs, CodeListDialog, CreateSeparationSheetDialog, CreateCustomFieldDialog, EditCustomFieldDialog, MaskRuleDialog, SapaRuleDialog, ClassificationPlanItemDialog, ClassificationPlanSelect },
 
 	data() {
 		return {
@@ -424,8 +521,11 @@ export default {
 				{ id: 'incoming', label: t('opencase', 'Indkommende dokumenter') },
 				{ id: 'separationsheets', label: t('opencase', 'Separationsark') },
 				{ id: 'customfields', label: t('opencase', 'Tillægsfelter') },
-				// SagDokumentIndeks integration is Enterprise only
-				{ id: 'sapa', label: t('opencase', 'SAPA'), enterprise: true },
+				// The customer's own classification plan, used instead of KLE
+				{ id: 'classificationplan', label: t('opencase', 'Emneplan'), plan: 'Emneplan' },
+				// SagDokumentIndeks integration is Enterprise only, and needs the
+				// KLE/sensitivity of FK Adgang access profiles
+				{ id: 'sapa', label: t('opencase', 'SAPA'), enterprise: true, fkOnly: true },
 				// Rules drive the redaction service (feature_redaction-service)
 				{ id: 'maskrules', label: t('opencase', 'Maskeringsregler'), feature: 'redactionServiceEnabled' },
 			],
@@ -459,6 +559,8 @@ export default {
 			selectedIncomingKle: null,
 			selectedIncomingFacet: null,
 			selectedIncomingInsightLevel: null,
+			incomingGroupId: '',
+			incomingClassPlanUuid: '',
 
 			// Separation sheets tab
 			separationSheetsLoading: true,
@@ -477,6 +579,15 @@ export default {
 			cfOrgUnits: [],
 			showCreateCustomFieldDialog: false,
 			editingCustomField: null,
+
+			// Emneplan tab
+			planItems: [],
+			planLoading: true,
+			planFilter: '',
+			editingPlanItem: null,
+			importingPlan: false,
+			planImportResult: null,
+			deletionDeadlines: [],
 
 			// SAPA rules tab
 			sapaRules: [],
@@ -498,6 +609,26 @@ export default {
 			return this.allTabs
 				.filter(tab => !tab.enterprise || state.enterpriseVersionEnabled)
 				.filter(tab => !tab.feature || state[tab.feature])
+				.filter(tab => !tab.fkOnly || !this.isGroupMode)
+				.filter(tab => !tab.plan || state.classificationPlan === tab.plan)
+		},
+		filteredPlanItems() {
+			const filter = this.planFilter.trim().toLowerCase()
+			if (!filter) return this.planItems
+			return this.planItems.filter(i => i.code.toLowerCase().includes(filter)
+				|| i.title.toLowerCase().includes(filter)
+				|| i.description.toLowerCase().includes(filter))
+		},
+		isGroupMode() {
+			return this.$store.state.accessProfileType === 'group'
+		},
+		// KLE number, sensitivity and Handlingsfacet: always with FK Adgang,
+		// with Grupper only with the KLE classification plan
+		usesKle() {
+			return !this.isGroupMode || this.$store.state.classificationPlan !== 'Emneplan'
+		},
+		isEmneplan() {
+			return this.$store.state.classificationPlan === 'Emneplan'
 		},
 		sensitivityOptions() {
 			return this.$store.state.sensitivities.map(s => ({
@@ -531,6 +662,7 @@ export default {
 	},
 
 	async mounted() {
+		ensureClassificationPlanItems(this.$store)
 		try {
 			const [allEntries] = await Promise.all([
 				api.getConfig(),
@@ -573,12 +705,17 @@ export default {
 		this.fetchCustomFields()
 		this.fetchCustomFieldReferenceData()
 		this.fetchMaskRules()
+		if (this.$store.state.classificationPlan === 'Emneplan') {
+			this.fetchPlanItems()
+		}
 		if (this.$store.state.enterpriseVersionEnabled) {
 			this.fetchSapaRules()
 		}
 	},
 
 	methods: {
+		classificationPlanLabel,
+
 		// ── Separation sheets tab ───────────────────────────────────────
 		async fetchSeparationSheets() {
 			this.separationSheetsLoading = true
@@ -720,6 +857,9 @@ export default {
 				if (f) this.selectedIncomingFacet = { id: f.uuid, label: `${f.code} – ${f.title}` }
 			}
 
+			this.incomingGroupId = cfg['incoming_group'] || ''
+			this.incomingClassPlanUuid = cfg.incoming_class_plan || ''
+
 			const insightRaw = cfg['incoming_insight_level']
 			if (insightRaw) {
 				const insightId = parseInt(insightRaw)
@@ -747,12 +887,24 @@ export default {
 			this.incomingSaving = true
 			try {
 				const insightId = this.selectedIncomingInsightLevel?.id
+				// The access fields depend on the access profile type: an access
+				// group with Grupper, sensitivity/KLE/facet with FK Adgang and
+				// with Grupper + KLE (kept on the inbox case).
+				const accessUpdates = [
+					...(this.isGroupMode ? [api.updateConfigValue('incoming_group', this.incomingGroupId || '')] : []),
+					...(this.usesKle
+						? [
+							api.updateConfigValue('incoming_sensitivity', this.selectedIncomingSensitivity?.id || ''),
+							api.updateConfigValue('incoming_kle', this.selectedIncomingKle?.id || ''),
+							api.updateConfigValue('incoming_facet', this.selectedIncomingFacet?.id || ''),
+						]
+						: []),
+				]
 				await Promise.all([
 					api.updateConfigValue('incoming_organisation', this.selectedIncomingOrg?.id || ''),
-					api.updateConfigValue('incoming_sensitivity', this.selectedIncomingSensitivity?.id || ''),
-					api.updateConfigValue('incoming_kle', this.selectedIncomingKle?.id || ''),
-					api.updateConfigValue('incoming_facet', this.selectedIncomingFacet?.id || ''),
+					...accessUpdates,
 					api.updateConfigValue('incoming_insight_level', insightId != null ? String(insightId) : ''),
+					...(this.isEmneplan ? [api.updateConfigValue('incoming_class_plan', this.incomingClassPlanUuid || '')] : []),
 				])
 				showSuccess(t('opencase', 'Konfiguration gemt'))
 			} catch (e) {
@@ -798,14 +950,13 @@ export default {
 			if (scope.scope_type === 'organisation') {
 				return this.cfOrgName(scope.scope_value)
 			}
+			if (scope.scope_type === 'class_plan') {
+				return classPlanScopeLabel(this.$store.state, scope.scope_value)
+			}
 			return scope.scope_value
 		},
 		cfScopeTypeLabel(type) {
-			return {
-				casetype: t('opencase', 'Sagstype'),
-				organisation: t('opencase', 'Organisation'),
-				kle: t('opencase', 'KLE-nummer'),
-			}[type] || type
+			return caseScopeTypeLabel(type)
 		},
 		cfFieldTypeLabel(type) {
 			return {
@@ -836,6 +987,72 @@ export default {
 				this.customFieldsError = t('opencase', 'Kunne ikke slette feltet')
 			}
 		},
+		// ── Emneplan tab ──────────────────────────────────────────────
+		async fetchPlanItems() {
+			this.planLoading = true
+			try {
+				if (this.deletionDeadlines.length === 0) {
+					api.getDeletionDeadlines().then(list => { this.deletionDeadlines = list }).catch(() => {})
+				}
+				this.planItems = await api.getAllClassificationPlanItems()
+			} catch (e) {
+				showError(t('opencase', 'Kunne ikke hente emneplanen'))
+			} finally {
+				this.planLoading = false
+			}
+		},
+		deletionDeadlineName(id) {
+			if (!id) return ''
+			return this.deletionDeadlines.find(d => d.id === id)?.name ?? ''
+		},
+		// Keep the active items the case forms use in step with the tab
+		refreshStorePlanItems() {
+			this.$store.dispatch('fetchClassificationPlanItems').catch(() => {})
+		},
+		async onPlanItemSaved() {
+			this.editingPlanItem = null
+			showSuccess(t('opencase', 'Emnet er gemt'))
+			await this.fetchPlanItems()
+			this.refreshStorePlanItems()
+		},
+		async setPlanItemActive(item, active) {
+			try {
+				const saved = await api.updateClassificationPlanItem(item.uuid, { ...item, active })
+				Object.assign(item, saved)
+				this.refreshStorePlanItems()
+			} catch (e) {
+				showError(t('opencase', 'Emnet kunne ikke gemmes'))
+			}
+		},
+		async deletePlanItem(item) {
+			if (!window.confirm(t('opencase', 'Er du sikker på, at du vil slette emnet "{name}"?', { name: classificationPlanLabel(item.code, item.title) }))) {
+				return
+			}
+			try {
+				await api.deleteClassificationPlanItem(item.uuid)
+				this.planItems = this.planItems.filter(i => i.uuid !== item.uuid)
+				this.refreshStorePlanItems()
+			} catch (e) {
+				showError(e?.response?.data?.ocs?.data?.error ?? t('opencase', 'Emnet kunne ikke slettes'))
+			}
+		},
+		async onPlanFileSelected(event) {
+			const file = event.target.files?.[0]
+			event.target.value = ''
+			if (!file) return
+			this.importingPlan = true
+			this.planImportResult = null
+			try {
+				this.planImportResult = await api.importClassificationPlan(file)
+				await this.fetchPlanItems()
+				this.refreshStorePlanItems()
+			} catch (e) {
+				showError(e?.response?.data?.ocs?.data?.error ?? t('opencase', 'CSV-filen kunne ikke importeres'))
+			} finally {
+				this.importingPlan = false
+			}
+		},
+
 		// ── SAPA rules tab ─────────────────────────────────────────────
 		async fetchSapaRules() {
 			this.sapaRulesLoading = true
@@ -975,6 +1192,18 @@ export default {
 	text-align: left;
 	padding: 8px 12px;
 	border-bottom: 1px solid var(--color-border);
+}
+
+.opencase-configuration__toolbar .opencase-configuration__filter {
+	margin-inline-start: auto;
+	max-width: 240px;
+}
+
+.opencase-configuration__plan-description {
+	max-width: 320px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .opencase-configuration__row-actions {

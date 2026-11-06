@@ -22,6 +22,7 @@ use OCA\OpenCase\Service\DocumentRelationService;
 use OCA\OpenCase\Service\DocumentService;
 use OCA\OpenCase\Service\FileService;
 use OCA\OpenCase\Service\NotFoundException;
+use OCA\OpenCase\Service\PhraseService;
 use OCA\OpenCase\Service\TemplateMergeService;
 use OCA\OpenCase\Service\TemplateService;
 use OCP\AppFramework\Http;
@@ -106,6 +107,7 @@ class PublicDocumentApiController extends AbstractPublicDataApiController {
         private FileService $fileService,
         private TemplateService $templateService,
         private TemplateMergeService $templateMergeService,
+        private PhraseService $phraseService,
         private CaseMapper $caseMapper,
         private DocumentRelationService $documentRelationService,
         private DocumentRelationTypeMapper $documentRelationTypeMapper,
@@ -642,6 +644,8 @@ class PublicDocumentApiController extends AbstractPublicDataApiController {
     /**
      * Create a file on a document by merging a template (see GET .../templates)
      * with case/document metadata (e.g. {{case.number}}, {{sag.titel}}).
+     * The template's pre-selected and required phrases are merged into
+     * {{fraser.indhold}}.
      */
     #[PublicPage]
     #[NoAdminRequired]
@@ -680,16 +684,26 @@ class PublicDocumentApiController extends AbstractPublicDataApiController {
             return $this->errorResponse('Case not found', Http::STATUS_NOT_FOUND);
         }
 
-        $tempPath  = null;
-        $localCopy = null;
-        $stream    = null;
+        if (!$this->templateService->isAvailableForOrg($templateId, $caseEntity->getOrgUuid())) {
+            return $this->errorResponse("The template is not available for this case's organisation", Http::STATUS_BAD_REQUEST);
+        }
+
+        $tempPath    = null;
+        $localCopy   = null;
+        $stream      = null;
+        $phraseFiles = [];
         try {
-            $values    = $this->templateMergeService->buildValues($caseEntity, $documentEntity);
-            $localCopy = $this->templateService->makeLocalCopy($templateId);
-            $tempPath  = $this->templateMergeService->mergeToTempFile(
+            $values      = $this->templateMergeService->buildValues($caseEntity, $documentEntity);
+            $localCopy   = $this->templateService->makeLocalCopy($templateId);
+            $phraseFiles = $this->phraseService->exportToTempFiles(
+                $this->phraseService->selectForTemplate($templateId, null, $caseEntity),
+            );
+            $tempPath    = $this->templateMergeService->mergeToTempFile(
                 $localCopy['path'],
                 $template->getMimeType(),
                 $values,
+                $phraseFiles,
+                $this->templateMergeService->logoForCase($caseEntity),
             );
 
             $stream = fopen($tempPath, 'rb');
@@ -718,6 +732,7 @@ class PublicDocumentApiController extends AbstractPublicDataApiController {
             if ($localCopy !== null) {
                 $this->templateService->releaseLocalCopy($localCopy);
             }
+            $this->phraseService->removeTempFiles($phraseFiles);
         }
 
         $fields = $this->caseExportService->fileFieldsFromEntity($fileEntity, $documentEntity->getId());

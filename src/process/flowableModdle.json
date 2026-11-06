@@ -1,0 +1,170 @@
+{
+	"name": "Flowable",
+	"prefix": "flowable",
+	"uri": "http://flowable.org/bpmn",
+	"xml": {
+		"tagAlias": "lowerCase"
+	},
+	"associations": [],
+	"types": [
+		{
+			"name": "UserTaskProperties",
+			"extends": [
+				"bpmn:UserTask"
+			],
+			"properties": [
+				{
+					"name": "assignee",
+					"isAttr": true,
+					"type": "String"
+				},
+				{
+					"name": "candidateUsers",
+					"isAttr": true,
+					"type": "String"
+				},
+				{
+					"name": "candidateGroups",
+					"isAttr": true,
+					"type": "String"
+				},
+				{
+					"name": "dueDate",
+					"isAttr": true,
+					"type": "String"
+				},
+				{
+					"name": "priority",
+					"isAttr": true,
+					"type": "String"
+				},
+				{
+					"name": "formKey",
+					"isAttr": true,
+					"type": "String"
+				}
+			]
+		},
+		{
+			"name": "ServiceTaskProperties",
+			"extends": [
+				"bpmn:ServiceTask"
+			],
+			"properties": [
+				{
+					"name": "type",
+					"isAttr": true,
+					"type": "String"
+				},
+				{
+					"name": "topic",
+					"isAttr": true,
+					"type": "String"
+				},
+				{
+					"name": "class",
+					"isAttr": true,
+					"type": "String"
+				},
+				{
+					"name": "expression",
+					"isAttr": true,
+					"type": "String"
+				},
+				{
+					"name": "delegateExpression",
+					"isAttr": true,
+					"type": "String"
+				},
+				{
+					"name": "exclusive",
+					"isAttr": true,
+					"type": "Boolean"
+				}
+			]
+		},
+		{
+			"name": "FormProperty",
+			"superClass": [
+				"Element"
+			],
+			"properties": [
+				{
+					"name": "id",
+					"isAttr": true,
+					"type": "String"
+				},
+				{
+					"name": "name",
+					"isAttr": true,
+					"type": "String"
+				},
+				{
+					"name": "type",
+					"isAttr": true,
+					"type": "String"
+				},
+				{
+					"name": "required",
+					"isAttr": true,
+					"type": "Boolean"
+				},
+				{
+					"name": "fieldType",
+					"isAttr": true,
+					"type": "String"
+				},
+				{
+					"name": "datePattern",
+					"isAttr": true,
+					"type": "String"
+				},
+				{
+					"name": "values",
+					"type": "Value",
+					"isMany": true
+				}
+			]
+		},
+		{
+			"name": "Value",
+			"superClass": [
+				"Element"
+			],
+			"properties": [
+				{
+					"name": "id",
+					"isAttr": true,
+					"type": "String"
+				},
+				{
+					"name": "name",
+					"isAttr": true,
+					"type": "String"
+				}
+			]
+		},
+		{
+			"name": "Field",
+			"superClass": [
+				"Element"
+			],
+			"properties": [
+				{
+					"name": "name",
+					"isAttr": true,
+					"type": "String"
+				},
+				{
+					"name": "stringValue",
+					"isAttr": true,
+					"type": "String"
+				},
+				{
+					"name": "string",
+					"type": "String"
+				}
+			]
+		}
+	]
+}

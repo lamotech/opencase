@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace OCA\OpenCase\Controller;
 
+use OCA\OpenCase\Db\AccessProfile;
+use OCA\OpenCase\Service\AccessProfile\AccessProfileTypeResolver;
+use OCA\OpenCase\Service\ClassificationPlanService;
 use OCA\OpenCase\Service\Configuration;
 use OCP\App\IAppManager;
 use OCP\AppFramework\Controller;
@@ -31,6 +34,7 @@ class PageController extends Controller {
         private IInitialStateService $initialState,
         private IAppManager $appManager,
         private Configuration $configuration,
+        private ClassificationPlanService $classificationPlanService,
     ) {
         parent::__construct($appName, $request);
     }
@@ -78,6 +82,26 @@ class PageController extends Controller {
         );
         $this->initialState->provideInitialState(
             'opencase',
+            'disposal_enabled',
+            $this->configuration->getConfigValue('feature_disposal', '1') === '1',
+        );
+        $this->initialState->provideInitialState(
+            'opencase',
+            'accessprofile_type',
+            $this->configuration->getConfigValue(AccessProfileTypeResolver::CONFIG_KEY, AccessProfile::TYPE_FK) ?? AccessProfile::TYPE_FK,
+        );
+        $this->initialState->provideInitialState(
+            'opencase',
+            'classification_plan',
+            $this->classificationPlanService->activePlan(),
+        );
+        $this->initialState->provideInitialState(
+            'opencase',
+            'process_engine_enabled',
+            $this->configuration->getConfigValue('feature_process-engine', '0') === '1',
+        );
+        $this->initialState->provideInitialState(
+            'opencase',
             'search_max_result_count',
             (int)$this->configuration->getConfigValue('search_max_result_count', '500'),
         );
@@ -89,7 +113,7 @@ class PageController extends Controller {
         $this->initialState->provideInitialState(
             'opencase',
             'digital_post_enabled',
-            $enterpriseVersionEnabled,
+            $this->configuration->getConfigValue('feature_digital-post', '0') === '1',
         );
         $this->initialState->provideInitialState(
             'opencase',

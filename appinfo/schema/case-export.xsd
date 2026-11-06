@@ -38,8 +38,13 @@
             <xs:element name="ClassificationCode" type="xs:string" minOccurs="0"/>
             <xs:element name="ClassificationFacetUuid" type="xs:string" minOccurs="0"/>
             <xs:element name="ClassificationFacetCode" type="xs:string" minOccurs="0"/>
+            <xs:element name="ClassPlanUuid" type="xs:string" minOccurs="0"/>
+            <xs:element name="ClassPlanCode" type="xs:string" minOccurs="0"/>
+            <xs:element name="ClassPlanTitle" type="xs:string" minOccurs="0"/>
             <xs:element name="SensitivityUuid" type="xs:string" minOccurs="0"/>
             <xs:element name="SensitivityName" type="xs:string" minOccurs="0"/>
+            <xs:element name="GroupId" type="xs:string" minOccurs="0"/>
+            <xs:element name="GroupName" type="xs:string" minOccurs="0"/>
             <xs:element name="CreatedAt" type="xs:dateTime"/>
             <xs:element name="UpdatedAt" type="xs:dateTime"/>
             <xs:element name="CreatedBy" type="xs:string"/>

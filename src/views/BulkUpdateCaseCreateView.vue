@@ -45,20 +45,26 @@
 						:options="casetypeOptions"
 						:clearable="true" />
 				</div>
-				<div class="oc-bu-create__field">
+				<div v-if="usesKle" class="oc-bu-create__field">
 					<label class="oc-bu-create__label">{{ t('opencase', 'KLE-nummer') }}</label>
 					<NcTextField v-model="form.classificationCode"
 						:placeholder="t('opencase', 'f.eks. 27.69.00')"
 						@keyup.enter="doSearch" />
 				</div>
-				<div class="oc-bu-create__field">
+				<div v-if="isEmneplan" class="oc-bu-create__field">
+					<label class="oc-bu-create__label">{{ t('opencase', 'Emne') }}</label>
+					<NcTextField v-model="form.classPlanCode"
+						:placeholder="t('opencase', 'Emnets navn eller kode')"
+						@keyup.enter="doSearch" />
+				</div>
+				<div v-if="usesKle" class="oc-bu-create__field">
 					<label class="oc-bu-create__label">{{ t('opencase', 'Følsomhed') }}</label>
 					<NcSelect v-model="form.sensitivity"
 						:placeholder="t('opencase', 'Alle følsomhedsniveauer')"
 						:options="sensitivityOptions"
 						:clearable="true" />
 				</div>
-				<div class="oc-bu-create__field">
+				<div v-if="usesKle" class="oc-bu-create__field">
 					<label class="oc-bu-create__label">{{ t('opencase', 'Handlingsfacet') }}</label>
 					<NcSelect v-model="form.classificationFacet"
 						:placeholder="t('opencase', 'Alle handlingsfacetter')"
@@ -119,7 +125,29 @@
 				</div>
 			</div>
 
-			<div class="oc-bu-create__edit-field">
+			<div v-if="isGroupMode" class="oc-bu-create__edit-field">
+				<NcCheckboxRadioSwitch v-model="editEnabled.group_id" type="switch" />
+				<div class="oc-bu-create__edit-control">
+					<label>{{ t('opencase', 'Adgangsgruppe') }}</label>
+					<NcSelect v-model="editForm.group_id"
+						:disabled="!editEnabled.group_id"
+						:options="accessGroupOptions"
+						:placeholder="t('opencase', 'Vælg adgangsgruppe')" />
+				</div>
+			</div>
+
+			<div v-if="isEmneplan" class="oc-bu-create__edit-field">
+				<NcCheckboxRadioSwitch v-model="editEnabled.class_plan_uuid" type="switch" />
+				<div class="oc-bu-create__edit-control">
+					<label>{{ t('opencase', 'Emne') }}</label>
+					<NcSelect v-model="editForm.class_plan_uuid"
+						:disabled="!editEnabled.class_plan_uuid"
+						:options="classPlanOptions"
+						:placeholder="t('opencase', 'Vælg emne')" />
+				</div>
+			</div>
+
+			<div v-if="usesKle" class="oc-bu-create__edit-field">
 				<NcCheckboxRadioSwitch v-model="editEnabled.classification_code" type="switch" />
 				<div class="oc-bu-create__edit-control">
 					<label>{{ t('opencase', 'KLE-nummer') }}</label>
@@ -130,7 +158,7 @@
 				</div>
 			</div>
 
-			<div class="oc-bu-create__edit-field">
+			<div v-if="usesKle" class="oc-bu-create__edit-field">
 				<NcCheckboxRadioSwitch v-model="editEnabled.sensitivity" type="switch" />
 				<div class="oc-bu-create__edit-control">
 					<label>{{ t('opencase', 'Følsomhed') }}</label>
@@ -141,7 +169,7 @@
 				</div>
 			</div>
 
-			<div class="oc-bu-create__edit-field">
+			<div v-if="usesKle" class="oc-bu-create__edit-field">
 				<NcCheckboxRadioSwitch v-model="editEnabled.classification_facet_uuid" type="switch" />
 				<div class="oc-bu-create__edit-control">
 					<label>{{ t('opencase', 'Handlingsfacet') }}</label>
@@ -259,6 +287,7 @@ import MagnifyIcon from 'vue-material-design-icons/Magnify.vue'
 import OverflowTabs from '../components/OverflowTabs.vue'
 import CaseStatusBadge from '../components/CaseStatusBadge.vue'
 import api from '../services/api.js'
+import { classificationPlanLabel } from '../utils/classificationPlanLabel.js'
 import { showError, showSuccess } from '@nextcloud/dialogs'
 
 const EDIT_FIELD_LABELS = {
@@ -267,6 +296,8 @@ const EDIT_FIELD_LABELS = {
 	classification_code: 'KLE-nummer',
 	sensitivity: 'Følsomhed',
 	classification_facet_uuid: 'Handlingsfacet',
+	group_id: 'Adgangsgruppe',
+	class_plan_uuid: 'Emne',
 	insight_level_id: 'Indsigtsgrad',
 	responsible_user_id: 'Ansvarlig',
 	summary: 'Sagsresume',
@@ -304,6 +335,7 @@ export default {
 				status: null,
 				casetype: null,
 				classificationCode: '',
+				classPlanCode: '',
 				sensitivity: null,
 				classificationFacet: null,
 				insightLevel: null,
@@ -315,6 +347,8 @@ export default {
 				classification_code: false,
 				sensitivity: false,
 				classification_facet_uuid: false,
+				group_id: false,
+				class_plan_uuid: false,
 				insight_level_id: false,
 				responsible_user_id: false,
 				summary: false,
@@ -325,6 +359,8 @@ export default {
 				classification_code: null,
 				sensitivity: null,
 				classification_facet_uuid: null,
+				group_id: null,
+				class_plan_uuid: null,
 				insight_level_id: null,
 				responsible_user_id: null,
 				summary: '',
@@ -343,6 +379,26 @@ export default {
 	computed: {
 		limit() {
 			return this.$store.state.searchPageSize
+		},
+		isGroupMode() {
+			return this.$store.state.accessProfileType === 'group'
+		},
+		// KLE number, sensitivity and Handlingsfacet: always with FK Adgang,
+		// with Grupper only with the KLE classification plan
+		usesKle() {
+			return !this.isGroupMode || this.$store.state.classificationPlan !== 'Emneplan'
+		},
+		isEmneplan() {
+			return this.$store.state.classificationPlan === 'Emneplan'
+		},
+		classPlanOptions() {
+			return this.$store.state.classificationPlanItems.map(i => ({
+				id: i.uuid,
+				label: classificationPlanLabel(i.code, i.title),
+			}))
+		},
+		accessGroupOptions() {
+			return this.$store.state.accessGroups.map(g => ({ id: g.group_id, label: g.group_name }))
 		},
 		organisationOptions() {
 			return this.$store.state.organisations.map(o => ({ id: o, label: o }))
@@ -377,7 +433,7 @@ export default {
 		enabledFields() {
 			const selectKeys = [
 				'organisation', 'classification_code', 'sensitivity',
-				'classification_facet_uuid', 'insight_level_id', 'responsible_user_id',
+				'classification_facet_uuid', 'group_id', 'class_plan_uuid', 'insight_level_id', 'responsible_user_id',
 			]
 			return Object.keys(this.editEnabled)
 				.filter(key => this.editEnabled[key])
@@ -397,8 +453,14 @@ export default {
 		this.$store.dispatch('fetchCaseTypes').catch(() => {})
 		this.$store.dispatch('fetchSensitivities').catch(() => {})
 		this.$store.dispatch('fetchClassificationFacets').catch(() => {})
+		if (this.isGroupMode) {
+			this.$store.dispatch('fetchAccessGroups').catch(() => {})
+		}
 		this.$store.dispatch('fetchInsightLevels').catch(() => {})
 		this.$store.dispatch('fetchClassificationSubjects').catch(() => {})
+		if (this.isEmneplan) {
+			this.$store.dispatch('fetchClassificationPlanItems').catch(() => {})
+		}
 		this.$store.dispatch('fetchOrganisations').catch(() => {})
 	},
 
@@ -411,6 +473,7 @@ export default {
 			if (this.form.status) params.status_id = this.form.status.id
 			if (this.form.casetype) params.casetype_id = this.form.casetype.id
 			if (this.form.classificationCode.trim()) params.classification_code = this.form.classificationCode.trim()
+			if (this.form.classPlanCode.trim()) params.class_plan_code = this.form.classPlanCode.trim()
 			if (this.form.sensitivity) params.sensitivity_key = this.form.sensitivity.id
 			if (this.form.classificationFacet) params.classification_facet_uuid = this.form.classificationFacet.id
 			if (this.form.insightLevel) params.insight_level_id = this.form.insightLevel.id
@@ -460,6 +523,8 @@ export default {
 			if (this.editEnabled.classification_code) out.classification_code = this.editForm.classification_code?.id || ''
 			if (this.editEnabled.sensitivity) out.sensitivity = this.editForm.sensitivity?.id || null
 			if (this.editEnabled.classification_facet_uuid) out.classification_facet_uuid = this.editForm.classification_facet_uuid?.id || ''
+			if (this.editEnabled.group_id) out.group_id = this.editForm.group_id?.id || ''
+			if (this.editEnabled.class_plan_uuid) out.class_plan_uuid = this.editForm.class_plan_uuid?.id || ''
 			if (this.editEnabled.insight_level_id) out.insight_level_id = this.editForm.insight_level_id?.id || null
 			if (this.editEnabled.responsible_user_id) out.responsible_user_id = this.editForm.responsible_user_id?.id || null
 			if (this.editEnabled.summary) out.summary = this.editForm.summary

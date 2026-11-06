@@ -93,19 +93,26 @@
 					<!-- Filenames for the picked templates — one per staged file -->
 					<div v-if="pendingTemplates.length > 0" class="ndd-template-names">
 						<span class="ndd-template-names__title">{{ t('opencase', 'Filnavne') }}</span>
-						<div v-for="tpl in pendingTemplates" :key="'n' + tpl.id" class="ndd-template-names__row">
-							<NcButton type="tertiary"
-								class="ndd-template-names__remove"
-								:aria-label="t('opencase', 'Fravælg {name}', { name: tpl.name })"
-								:title="t('opencase', 'Fravælg skabelonen')"
-								@click="removeTemplate(tpl.id)">
-								<template #icon><CloseIcon :size="16" /></template>
-							</NcButton>
-							<component :is="mimeIcon(tpl.mime_type)" :size="18" class="ndd-template-list__icon" />
-							<NcTextField v-model="tpl.filename"
-								:label="tpl.name"
-								:placeholder="baseNameOf(tpl.original_filename)" />
-							<span class="ndd-template-names__ext">.{{ extensionOf(tpl.original_filename) }}</span>
+						<div v-for="tpl in pendingTemplates" :key="'n' + tpl.id" class="ndd-template-names__item">
+							<div class="ndd-template-names__row">
+								<NcButton type="tertiary"
+									class="ndd-template-names__remove"
+									:aria-label="t('opencase', 'Fravælg {name}', { name: tpl.name })"
+									:title="t('opencase', 'Fravælg skabelonen')"
+									@click="removeTemplate(tpl.id)">
+									<template #icon><CloseIcon :size="16" /></template>
+								</NcButton>
+								<component :is="mimeIcon(tpl.mime_type)" :size="18" class="ndd-template-list__icon" />
+								<NcTextField v-model="tpl.filename"
+									:label="tpl.name"
+									:placeholder="baseNameOf(tpl.original_filename)" />
+								<span class="ndd-template-names__ext">.{{ extensionOf(tpl.original_filename) }}</span>
+							</div>
+							<!-- Phrases merged into the phrase field (fraser.indhold) for this file -->
+							<div v-if="tpl.phrase_count" class="ndd-template-names__phrases">
+								<span class="ndd-template-names__phrases-title">{{ t('opencase', 'Fraser') }}</span>
+								<TemplatePhraseSelector v-model="tpl.phraseIds" :template-id="tpl.id" :case-id="caseId" />
+							</div>
 						</div>
 					</div>
 					<p v-else class="ndd-files-section__empty">
@@ -199,6 +206,7 @@ import EmailOutlineIcon from 'vue-material-design-icons/EmailOutline.vue'
 import OverflowTabs from './OverflowTabs.vue'
 import DocumentContactList from './DocumentContactList.vue'
 import RichTextEditor from './RichTextEditor.vue'
+import TemplatePhraseSelector from './TemplatePhraseSelector.vue'
 import api from '../services/api.js'
 
 const MIME_ICONS = {
@@ -218,7 +226,7 @@ export default {
 	components: {
 		NcDialog, NcButton, NcTextField, NcSelect, NcLoadingIcon,
 		UploadIcon, CloseIcon, CheckIcon, FileIcon, FileWordIcon, FileExcelIcon, FilePdfIcon,
-		OverflowTabs, DocumentContactList, RichTextEditor,
+		OverflowTabs, DocumentContactList, RichTextEditor, TemplatePhraseSelector,
 	},
 	props: {
 		caseId: { type: Number, required: true },
@@ -323,9 +331,9 @@ export default {
 			showError(t('opencase', 'Kunne ikke hente dokumenttyper'))
 		}
 
-		// Load templates
+		// Load templates available for the case's organisation
 		try {
-			this.templates = await api.getTemplates()
+			this.templates = await api.getTemplates({ case_id: this.caseId })
 		} catch (e) {
 			// silently ignore — show empty state
 		} finally {
@@ -365,7 +373,9 @@ export default {
 			} else {
 				// Staged copy, so the user can name the file that gets created
 				// without touching the template itself
-				this.pendingTemplates.push({ ...tpl, filename: this.baseNameOf(tpl.original_filename) })
+				// phraseIds: null = the template's default phrases until the
+				// phrase selector has loaded them
+				this.pendingTemplates.push({ ...tpl, filename: this.baseNameOf(tpl.original_filename), phraseIds: null })
 			}
 		},
 
@@ -434,7 +444,7 @@ export default {
 				// 3. Create staged template files
 				for (const tpl of this.pendingTemplates) {
 					try {
-						await api.createFileFromTemplate(doc.id, tpl.id, (tpl.filename || '').trim())
+						await api.createFileFromTemplate(doc.id, tpl.id, (tpl.filename || '').trim(), tpl.phraseIds)
 					} catch (e) {
 						showError(t('opencase', 'Kunne ikke oprette fil fra skabelon {name}', { name: tpl.name }))
 					}
@@ -669,6 +679,31 @@ export default {
 .ndd-template-names__title {
 	font-weight: 600;
 	font-size: 0.9em;
+}
+
+.ndd-template-names__item {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.ndd-template-names__item + .ndd-template-names__item {
+	padding-top: 8px;
+	border-top: 1px dashed var(--color-border);
+}
+
+.ndd-template-names__phrases {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	/* align with the filename field, past the remove button */
+	margin-left: 44px;
+}
+
+.ndd-template-names__phrases-title {
+	font-weight: 600;
+	font-size: 0.85em;
+	color: var(--color-text-maxcontrast);
 }
 
 .ndd-template-names__row {

@@ -7,6 +7,7 @@ namespace OCA\OpenCase\Db;
 use OCP\AppFramework\Db\QBMapper;
 use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\IDBConnection;
+use OCP\IUser;
 
 /**
  * @extends QBMapper<UserInfo>
@@ -97,6 +98,24 @@ class UserInfoMapper extends QBMapper {
             }
         }
         return $userIds;
+    }
+
+    /**
+     * The user's row, created from the Nextcloud account when missing (users
+     * not provisioned from Serviceplatformen, e.g. Microsoft Entra ID logins).
+     * An existing row is never changed.
+     */
+    public function ensureForUser(IUser $user): UserInfo {
+        $existing = $this->findByUserId($user->getUID());
+        if ($existing !== null) {
+            return $existing;
+        }
+        $data = random_bytes(16);
+        $data[6] = chr(ord($data[6]) & 0x0f | 0x40);
+        $data[8] = chr(ord($data[8]) & 0x3f | 0x80);
+        $uuid = vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($data), 4));
+        $this->upsert($uuid, $user->getUID(), $user->getDisplayName(), $user->getEMailAddress() ?? '', '', '', $user->getUID());
+        return $this->findByUuid($uuid) ?? throw new \RuntimeException("Could not create user info for {$user->getUID()}");
     }
 
     public function upsert(string $uuid, string $username, string $personname, string $email, string $phone, string $location, string $userId): void {

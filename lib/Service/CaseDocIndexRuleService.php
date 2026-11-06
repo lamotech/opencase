@@ -218,7 +218,7 @@ class CaseDocIndexRuleService {
             if ($scopeValue === '') {
                 continue;
             }
-            if (!in_array($scopeType, CaseScopeMatcher::SCOPE_TYPES, true)) {
+            if (!in_array($scopeType, CaseScopeMatcher::SAPA_SCOPE_TYPES, true)) {
                 throw new \InvalidArgumentException("Invalid scope_type '{$scopeType}'");
             }
             $entity = new CaseDocIndexScope();

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OCA\OpenCase\Middleware;
 
+use OCA\OpenCase\Controller\DesktopApiController;
 use OCA\OpenCase\Controller\SamlController;
 use OCA\OpenCase\Exception\NotPermittedByRoleException;
 use OCA\OpenCase\Service\RoleService;
@@ -36,6 +37,12 @@ class RoleMiddleware extends Middleware {
         // SAML endpoints are infrastructure-level (IdP fetches metadata, posts
         // assertions) and must not be gated by application roles.
         if ($controller instanceof SamlController) {
+            return;
+        }
+
+        // The desktop client asks who the user is and reads isOpenCaseUser
+        // from the answer, so that call must also work for non-users.
+        if ($controller instanceof DesktopApiController && $methodName === 'me') {
             return;
         }
 

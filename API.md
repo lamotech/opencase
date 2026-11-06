@@ -179,6 +179,263 @@ for organisations, years, and document types.
 
 ---
 
+## Brevdesigner (phrases, templates, logos)
+
+Reading is open to every OpenCase user; creating, changing and deleting
+requires the **Administrator** or **Template Designer** role (403
+otherwise). Validation errors are returned as `{ "error": "..." }` with 400,
+in the user's language.
+
+### Phrase categories
+| Method & path | Purpose |
+|---|---|
+| `GET /phrase-categories` | `{ "categories": [{id, name, description, parent_id, sort_order, phrase_count, created_at, created_by, updated_at, updated_by}] }` |
+| `POST /phrase-categories` | Create. Body: `name` (required), `description`, `parent_id`, `sort_order` |
+| `PUT /phrase-categories/{id}` | Update any of the above. A category cannot be moved under itself or a sub-category |
+| `DELETE /phrase-categories/{id}` | Delete — 409 while it has sub-categories or phrases |
+
+### Phrases
+A phrase's letter text is its **file** (`.docx`/`.odt`) if it has one,
+otherwise its rich text **`content`** (HTML from the phrase editor; sanitised
+on save to paragraphs, headings 1–3, lists, quotes, line breaks, bold,
+italic, underline, strike-through). `description` is only a description.
+`status` is `draft`, `active` or `archived`; only active phrases go into
+letters. `scopes` limit a phrase to case types, organisations (incl.
+sub-organisations) and KLE numbers, like custom fields.
+
+All phrase endpoints are for Administrators and Template Designers.
+
+| Method & path | Purpose |
+|---|---|
+| `GET /phrases` | `{ "phrases": [{id, category_id, title, description, content, has_content, original_filename, mime_type, size, has_file, status, scopes, created_at, created_by, updated_at, updated_by}] }` |
+| `POST /phrases` | Create. Body: `title` (required), `description`, `content`, `category_id`, `status`, `scopes: [{scope_type: casetype\|organisation\|kle, scope_value}]` |
+| `PUT /phrases/{id}` | Update any of the above (`scopes` replaces all scopes) |
+| `DELETE /phrases/{id}` | Delete — also removes it from the templates it is attached to |
+| `GET /phrases/{id}/templates` | Templates using it: `{ "templates": [{id, name, original_filename, is_required, is_default, org_uuids, matches_orgs}] }` |
+| `POST /phrases/{id}/file` | Upload/replace the file (multipart `file`, `.docx`/`.odt`) |
+| `POST /phrases/{id}/new-blank` | Give it a blank document; response includes `nc_file_id` |
+| `POST /phrases/{id}/open-for-edit` | `{ "nc_file_id" }` — open `/f/{nc_file_id}` in Nextcloud Office |
+| `GET /phrases/{id}/download` | The phrase file |
+
+### Templates
+Template files are `.docx`, `.odt`, `.xlsx` or `.ods`; they live only in
+`<data dir>/opencase_storage/_templates` (phrases in `_phrases`) and are edited
+there in place in Nextcloud Office — no per-user copies.
+
+| Method & path | Purpose |
+|---|---|
+| `GET /templates` | `{ "templates": [{id, name, original_filename, mime_type, size, uploaded_by, created_at, phrase_count, org_uuids}] }`. Optional `?document_id=` or `?case_id=`: only templates available for that case's organisation |
+| `POST /templates` | Upload (multipart): `file`, `name`, and optionally `org_uuids` and `phrases` as JSON strings — all in one request; nothing is kept if any part is invalid |
+| `POST /templates/new-blank` | Create a blank document. Body: `name`, optional `org_uuids`, `phrases`. Response includes `nc_file_id` |
+| `PUT /templates/{id}` | Body: any of `name`, `org_uuids` (`[]` = all cases) |
+| `DELETE /templates/{id}` | Delete |
+| `GET /templates/{id}/phrases` | `{ "phrases": [{phrase_id, sort_order, is_default, is_required, title, description, category_id, status, has_file, has_content}] }`. Optional `?document_id=` / `?case_id=`: only phrases usable in a letter for that case (active, with content, scopes matching the case) |
+| `PUT /templates/{id}/phrases` | Replace the attached phrases. Body: `phrases: [{phrase_id, is_default, is_required}]` in order. A required phrase is always pre-selected; phrases must match the template's organisations |
+| `POST /templates/{id}/open-for-edit` | `{ "nc_file_id" }` — open in Nextcloud Office |
+| `GET /templates/{id}/download` | The template file |
+
+A template limited to organisations (`org_uuids`) is available only for cases
+in those organisations and their sub-organisations, and only phrases whose
+organisation scope covers one of them (or that have none) can be attached.
+
+### Create a file from a template
+```
+POST /documents/{docId}/files/from-template
+{ "template_id": 7, "filename": "Afgørelse", "phrase_ids": [3, 5] }
+```
+`phrase_ids` (optional): the phrases to merge into `{{fraser.indhold}}`.
+Required phrases are always included; omitted → the template's pre-selected
+phrases. Only phrases usable for the case are merged. The organisation's logo
+is inserted at `{{organisation.logo}}`. Returns 400 when the template is not
+available for the case's organisation.
+
+### Organisation logos
+| Method & path | Purpose |
+|---|---|
+| `GET /org/{orgUuid}/logo-info` | `{ has_own_logo, logo_org_uuid, logo_org_name }` — the logo used in templates: the organisation's own or the nearest parent's |
+| `GET /org/{orgUuid}/logo` | The organisation's own logo (404 without one) |
+| `POST /org/{orgUuid}/logo` | Upload/replace (multipart `file`: PNG, JPEG, GIF or SVG, max 5 MB) |
+| `DELETE /org/{orgUuid}/logo` | Remove — the parent's logo is used again |
+
+Logos are stored in `<data dir>/opencase_storage/_logos`.
+
+### Merge fields
+The full list is on the *Skabelonfelter* page (`/apps/opencase/templates/fields`).
+Brevdesigner fields: `{{fraser.indhold}}` / `{{phrases.content}}` (place it
+alone in a paragraph to keep the phrases' formatting), `{{organisation.logo}}`
+(as text: a 2 cm logo; as the alt text of a picture: the logo fitted into the
+picture), `{{organisation.email}}`, `{{organisation.telefon}}` /
+`{{organisation.phone}}`, `{{organisation.adresse}}` / `{{organisation.location}}`,
+`{{sag.ansvarlig.email|telefon|adresse}}`, `{{sag.indsigtsgrad}}`,
+`{{sag.handlingsfacet}}`, `{{dokument.kategori}}`, `{{dokument.dokumentdato}}`,
+`{{dokument.modtagetdato}}`, `{{dokument.registreretdato}}`,
+`{{dokument.indsigtsgrad}}` (English forms on the fields page).
+`{{adresse.*}}` fields are filled per recipient when the document is sent
+with Digital Post.
+
+---
+
+## Desktop API (Office desktop clients)
+
+Not under `/api/v1` — full paths are `/index.php/apps/opencase/desktop/v1/api/...`.
+Authenticated with Basic auth (login name + app password). Login (`POST /login`,
+`POST /login/poll`) and logout (`POST /logout`) are described in
+[README.md](README.md#login-and-backend-api).
+
+### Current user
+```
+GET /index.php/apps/opencase/desktop/v1/api/me
+```
+`{id, displayName, isOpenCaseUser, canManageTemplates, canSendDigitalPost, registerSearch:{citizens, companies}}`.
+Also answers users without OpenCase access (`isOpenCaseUser: false`). See
+[README.md](README.md#the-current-user).
+
+### Favorite documents
+```
+GET /index.php/apps/opencase/desktop/v1/api/documents/favorites
+```
+
+### Recently accessed documents
+```
+GET /index.php/apps/opencase/desktop/v1/api/documents/recent
+```
+
+### Documents created by the user
+```
+GET /index.php/apps/opencase/desktop/v1/api/documents/my-documents?limit=50&offset=0
+```
+Same response as `recent`. Total count in the `X-Total-Count` header.
+
+### Saving a file to a case
+```
+GET  /index.php/apps/opencase/desktop/v1/api/cases?search=2026-00003
+GET  /index.php/apps/opencase/desktop/v1/api/document-categories
+GET  /index.php/apps/opencase/desktop/v1/api/document-types
+GET  /index.php/apps/opencase/desktop/v1/api/insight-levels
+POST /index.php/apps/opencase/desktop/v1/api/documents
+POST /index.php/apps/opencase/desktop/v1/api/documents/{id}/files
+```
+Fields and responses: see [README.md](README.md#saving-a-file-to-a-case).
+
+### Document info for a file
+```
+GET /index.php/apps/opencase/desktop/v1/api/files/{fileId}/document
+```
+`fileId` is the Nextcloud file ID. Response: see [README.md](README.md#document-info-for-a-file).
+Also puts the document on the user's recent list, so call it whenever a file is opened.
+
+### Templates
+```
+GET /index.php/apps/opencase/desktop/v1/api/templates?search=brev&caseId=3
+```
+Response: see [README.md](README.md#templates).
+
+### Template merge fields
+```
+GET /index.php/apps/opencase/desktop/v1/api/templates/fields
+```
+Response: see [README.md](README.md#merge-fields).
+
+### Creating a template
+```
+GET  /index.php/apps/opencase/desktop/v1/api/organisations
+GET  /index.php/apps/opencase/desktop/v1/api/phrases?orgUuids=…&templateFormat=blank
+POST /index.php/apps/opencase/desktop/v1/api/templates
+```
+Fields and responses: see [README.md](README.md#creating-a-template).
+
+### New file from a template
+```
+GET  /index.php/apps/opencase/desktop/v1/api/templates?documentId={id}
+GET  /index.php/apps/opencase/desktop/v1/api/templates/{templateId}/phrases?documentId={id}
+POST /index.php/apps/opencase/desktop/v1/api/documents/{id}/files/from-template
+```
+Fields and responses: see [README.md](README.md#new-file-from-a-template).
+
+### Document panel: status, favourite, contacts, notes
+```
+GET    /index.php/apps/opencase/desktop/v1/api/document-statuses
+PUT    /index.php/apps/opencase/desktop/v1/api/documents/{id}/status
+PUT    /index.php/apps/opencase/desktop/v1/api/documents/{id}/favorite
+DELETE /index.php/apps/opencase/desktop/v1/api/documents/{id}/favorite
+GET    /index.php/apps/opencase/desktop/v1/api/contact-roles
+GET    /index.php/apps/opencase/desktop/v1/api/citizens/search
+GET    /index.php/apps/opencase/desktop/v1/api/companies/search
+GET    /index.php/apps/opencase/desktop/v1/api/documents/{id}/contacts
+POST   /index.php/apps/opencase/desktop/v1/api/documents/{id}/contacts
+DELETE /index.php/apps/opencase/desktop/v1/api/documents/{id}/contacts/{contactId}
+POST   /index.php/apps/opencase/desktop/v1/api/documents/{id}/contacts/{contactId}/address
+GET    /index.php/apps/opencase/desktop/v1/api/documents/{id}/notes
+POST   /index.php/apps/opencase/desktop/v1/api/documents/{id}/notes
+PUT    /index.php/apps/opencase/desktop/v1/api/documents/{id}/notes/{noteId}
+DELETE /index.php/apps/opencase/desktop/v1/api/documents/{id}/notes/{noteId}
+```
+Fields and responses: see [README.md](README.md#document-panel-status-favourite-senders-and-recipients-notes).
+
+### Sending: Digital Post, link by email, PDF by email
+```
+GET  /index.php/apps/opencase/desktop/v1/api/documents/{id}/digital-post
+GET  /index.php/apps/opencase/desktop/v1/api/documents/{id}/digital-post/draft
+GET  /index.php/apps/opencase/desktop/v1/api/documents/{id}/contacts/{contactId}/digital-post-subscription
+POST /index.php/apps/opencase/desktop/v1/api/documents/{id}/digital-post
+GET  /index.php/apps/opencase/desktop/v1/api/digital-post/files/{fileId}/pdf
+GET  /index.php/apps/opencase/desktop/v1/api/digital-post/receivers/{receiverId}/pdf
+GET  /index.php/apps/opencase/desktop/v1/api/email/account
+GET  /index.php/apps/opencase/desktop/v1/api/documents/{id}/email/recipients?q=…
+POST /index.php/apps/opencase/desktop/v1/api/documents/{id}/email/access
+POST /index.php/apps/opencase/desktop/v1/api/documents/{id}/email/link
+POST /index.php/apps/opencase/desktop/v1/api/documents/{id}/email/pdf
+```
+Fields and responses: see [README.md](README.md#sending-digital-post-link-by-email-pdf-by-email).
+
+### Phrases
+```
+GET  /index.php/apps/opencase/desktop/v1/api/phrases?search=…&status=active
+POST /index.php/apps/opencase/desktop/v1/api/phrases
+GET  /index.php/apps/opencase/desktop/v1/api/phrases/{id}
+PUT  /index.php/apps/opencase/desktop/v1/api/phrases/{id}
+POST /index.php/apps/opencase/desktop/v1/api/phrases/{id}/file
+GET  /index.php/apps/opencase/desktop/v1/api/phrases/{id}/file
+GET  /index.php/apps/opencase/desktop/v1/api/phrases/{id}/content
+GET  /index.php/apps/opencase/desktop/v1/api/phrase-categories
+GET  /index.php/apps/opencase/desktop/v1/api/case-types
+```
+Fields and responses: see [README.md](README.md#phrases-fraser).
+
+### Full-text search (files)
+```
+GET /index.php/apps/opencase/desktop/v1/api/documents/fulltextsearch?q=kommune&limit=50&offset=0
+```
+Filters, facets and response format: see [README.md](README.md#full-text-search).
+
+Query parameters:
+| Parameter | Description |
+|-----------|-------------|
+| client | Editor to build `editorUrl` for (default `eurooffice`) |
+| limit | Max documents (default 50, max 200) |
+
+Deleted documents and documents the user can no longer read are left out.
+Response (JSON array, newest first):
+```json
+[
+  {
+    "id": 6,
+    "documentnumber": "2026-00003-1",
+    "title": "Kommunens styrelse i almindelighed",
+    "url": "https://<server>/apps/opencase/document/6",
+    "files": [
+      {
+        "fileId": 2911,
+        "name": "Kommunens styrelse i almindelighed.docx",
+        "editorUrl": "https://<server>/index.php/apps/eurooffice/2911?filePath=/.Sager/2026/10/25/2026-00003/Kommunens%20styrelse%20i%20almindelighed.docx"
+      }
+    ]
+  }
+]
+```
+
+---
+
 ## Admin (requires admin privileges)
 
 ### Access profiles
@@ -383,7 +640,8 @@ GET /cases/search?organisation=Børn+og+Unge&year=2024&search=vandløb&limit=50&
 Query parameters (all optional): `search`, `organisation`, `year`,
 `status_id`, `classification_code`, `sensitivity_key`,
 `classification_facet_uuid`, `insight_level_id`, `responsible_user_id`,
-`casetype_id`, `limit` (default 50, max 1000), `offset`. Response:
+`casetype_id`, `class_plan_code` (Emneplan item — matches part of its code or
+title), `limit` (default 50, max 1000), `offset`. Response:
 `{ "CaseSearchResult": { "Total", "Limit", "Offset", "Cases": [CaseType, ...] } }`.
 
 #### Create a case
@@ -408,8 +666,25 @@ POST /cases
 via `GET /organisations`, `/kle-numbers`, `/sensitivities`; the plain
 variants take the name/code/key directly. `ResponsibleUserId`,
 `InsightLevelId`, `CasetypeId`, `ParentCaseId`, `Summary` are optional.
+
+That is with the default access profile type, FK Adgang. With Grupper
+(`accessprofile_type` = `group`) access is given by a Nextcloud group instead:
+`GroupId` (or `group_id`, see `GET /groups`) is required. With the KLE
+classification plan, `ClassificationCodeUuid`, `SensitivityUuid` and
+`ClassificationFacetUuid` are still required and are stored on the case; with
+an Emneplan (`classification_plan` = `Emneplan`) they are not, and
+`ClassPlanUuid` is required instead. `CaseType` carries `GroupId`/`GroupName`
+for such cases.
 Lowercase/snake_case field names are also accepted throughout. Response
 (201): `{ "Case": CaseType }`.
+
+With the classification plan Emneplan (`classification_plan` = `Emneplan`)
+the case is also classified by an item of the customer's own Emneplan:
+`ClassPlanUuid` (see `GET /classification-plan`) or `class_plan_code`
+(matched by code — which is the topic name for plans without codes) is then
+required. The KLE fields still apply with FK Adgang, where the KLE number is
+part of the access profile. `CaseType` carries `ClassPlanUuid`,
+`ClassPlanCode` and `ClassPlanTitle`.
 
 #### Update a case
 ```json
@@ -575,6 +850,13 @@ required. Merges the template with case/document metadata
 (e.g. `{{case.number}}`, `{{sag.titel}}`) and attaches the result as a new
 file. Response (201): `{ "File": FileType }`.
 
+The template's pre-selected and required phrases that are usable for the
+case (active, scopes matching the case) are merged into `{{fraser.indhold}}`,
+and the case organisation's logo (or its nearest parent's) into
+`{{organisation.logo}}`. A template limited to organisations (see
+`OrgUuids` in `GET /templates`) can only be used for cases in those
+organisations or below them — otherwise 400.
+
 ### Files — `PublicFileApiController`
 
 | Method & path | Purpose |
@@ -633,10 +915,12 @@ only active/non-expired entries.
 | `GET /participantroles` | `{ "ParticipantRoles": [{Id, Name, Expired}, ...] }` |
 | `GET /organisations` | `{ "Organisations": [{Uuid, Name}, ...] }` — scoped to the acting user's access, like `GET /cases/search` |
 | `GET /kle-numbers` | `{ "KleNumbers": [{Uuid, Code, Title}, ...] }` — KLE classification subjects ("emneord") |
+| `GET /classification-plan` | `{ "ClassificationPlanItems": [{Uuid, Code, Title, Description}, ...] }` — the Emneplan items for `ClassPlanUuid` on `POST /cases`; Code equals Title when the plan has no codes |
 | `GET /classification-facets` | `{ "ClassificationFacets": [{Uuid, Code, Title}, ...] }` — "handlingsfacetter" |
 | `GET /sensitivities` | `{ "Sensitivities": [{Uuid, Key, Title}, ...] }` — `Key` is what `POST /cases` expects as `sensitivity` |
+| `GET /groups` | `{ "Groups": [{GroupId, Name}, ...] }` — access groups for `GroupId` on `POST /cases`; empty unless the access profile type is Grupper |
 | `GET /users` | `{ "Users": [{Id, DisplayName}, ...] }` — Nextcloud users with an OpenCase role, sorted by display name |
-| `GET /templates` | `{ "Templates": [{Id, Name, OriginalFilename, MimeType, Size, UploadedBy, CreatedAt}, ...] }` |
+| `GET /templates` | `{ "Templates": [{Id, Name, OriginalFilename, MimeType, Size, UploadedBy, CreatedAt, OrgUuids}, ...] }` — `OrgUuids`: the organisations a template is limited to (`[]` = all cases) |
 
 Note the fields in this section are plain JSON types (numbers/booleans),
 **not** the string-encoded scheme used by the Case/Document/File resources

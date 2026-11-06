@@ -123,6 +123,46 @@ export default {
 		return ocsData(await axios.get(`${baseUrl}/sensitivities`)).sensitivities
 	},
 
+	// ---------------------------------------------------------------
+	// Emneplan (the customer's own classification plan)
+	// ---------------------------------------------------------------
+
+	async getClassificationPlanItems() {
+		return ocsData(await axios.get(`${baseUrl}/classification-plan`)).items
+	},
+
+	async getAllClassificationPlanItems() {
+		return ocsData(await axios.get(`${baseUrl}/admin/classification-plan`)).items
+	},
+
+	async createClassificationPlanItem(payload) {
+		return ocsData(await axios.post(`${baseUrl}/admin/classification-plan`, payload)).item
+	},
+
+	async updateClassificationPlanItem(uuid, payload) {
+		return ocsData(await axios.put(`${baseUrl}/admin/classification-plan/${encodeURIComponent(uuid)}`, payload)).item
+	},
+
+	async deleteClassificationPlanItem(uuid) {
+		return ocsData(await axios.delete(`${baseUrl}/admin/classification-plan/${encodeURIComponent(uuid)}`))
+	},
+
+	async getDeletionDeadlines() {
+		return ocsData(await axios.get(`${baseUrl}/admin/deletion-deadlines`)).deletion_deadlines
+	},
+
+	async importClassificationPlan(file) {
+		const formData = new FormData()
+		formData.append('file', file)
+		return ocsData(await axios.post(`${baseUrl}/admin/classification-plan/import`, formData, {
+			headers: { 'Content-Type': 'multipart/form-data' },
+		}))
+	},
+
+	async getAccessGroups() {
+		return ocsData(await axios.get(`${baseUrl}/access-groups`))
+	},
+
 	async getCaseStatuses() {
 		return ocsData(await axios.get(`${baseUrl}/case-statuses`)).case_statuses
 	},
@@ -211,10 +251,21 @@ export default {
 		return ocsData(await axios.get(`${baseUrl}/documents/${documentId}/files`, { params })).files
 	},
 
-	async createFileFromTemplate(documentId, templateId, filename = '') {
+	/**
+	 * @param {number} documentId - Document to add the file to
+	 * @param {number} templateId - Template to merge
+	 * @param {string} filename - New file name ('' = template filename)
+	 * @param {number[]|null} phraseIds - Phrases to merge into {{fraser.indhold}};
+	 *   null = the template's pre-selected phrases. Required phrases are always included.
+	 */
+	async createFileFromTemplate(documentId, templateId, filename = '', phraseIds = null) {
+		const payload = { template_id: templateId, filename }
+		if (phraseIds !== null) {
+			payload.phrase_ids = phraseIds
+		}
 		return ocsData(await axios.post(
 			`${baseUrl}/documents/${documentId}/files/from-template`,
-			{ template_id: templateId, filename },
+			payload,
 		)).file
 	},
 
@@ -436,6 +487,41 @@ export default {
 		return ocsData(await axios.get(`${baseUrl}/org/${encodeURIComponent(orgUuid)}/members`)).members
 	},
 
+	/**
+	 * The logo used for an organisation in templates (its own or an ancestor's).
+	 *
+	 * @param {string} orgUuid - Organisation
+	 * @return {Promise<{has_own_logo: boolean, logo_org_uuid: ?string, logo_org_name: ?string}>}
+	 */
+	async getOrgLogoInfo(orgUuid) {
+		return ocsData(await axios.get(`${baseUrl}/org/${encodeURIComponent(orgUuid)}/logo-info`))
+	},
+
+	/**
+	 * An organisation's own logo as an object URL (caller revokes it).
+	 *
+	 * @param {string} orgUuid - Organisation
+	 * @return {Promise<string>}
+	 */
+	async getOrgLogoUrl(orgUuid) {
+		const response = await axios.get(`${baseUrl}/org/${encodeURIComponent(orgUuid)}/logo`, { responseType: 'blob' })
+		return URL.createObjectURL(response.data)
+	},
+
+	async uploadOrgLogo(orgUuid, file) {
+		const formData = new FormData()
+		formData.append('file', file)
+		return ocsData(await axios.post(
+			`${baseUrl}/org/${encodeURIComponent(orgUuid)}/logo`,
+			formData,
+			{ headers: { 'Content-Type': 'multipart/form-data' } },
+		))
+	},
+
+	async deleteOrgLogo(orgUuid) {
+		await axios.delete(`${baseUrl}/org/${encodeURIComponent(orgUuid)}/logo`)
+	},
+
 	async searchEmployees(params) {
 		return ocsData(await axios.get(`${baseUrl}/employees/search`, { params })).employees
 	},
@@ -458,6 +544,10 @@ export default {
 
 	async getEmployeePrivileges(uuid) {
 		return ocsData(await axios.get(`${baseUrl}/employees/${encodeURIComponent(uuid)}/privileges`)).privileges
+	},
+
+	async getEmployeeAccessGroups(uuid) {
+		return ocsData(await axios.get(`${baseUrl}/employees/${encodeURIComponent(uuid)}/access-groups`)).access_groups
 	},
 
 	async getCaseworkers(caseId) {
@@ -810,15 +900,35 @@ export default {
 	// Templates
 	// ---------------------------------------------------------------
 
-	async getTemplates() {
-		return ocsData(await axios.get(`${baseUrl}/templates`)).templates
+	/**
+	 * @param {object} params - Optional filter: { document_id } or { case_id } =
+	 *   only templates available for that document's / case's organisation
+	 */
+	async getTemplates(params = {}) {
+		return ocsData(await axios.get(`${baseUrl}/templates`, { params })).templates
 	},
 
-	async uploadTemplate(file, name, onProgress) {
+	async getTemplateFields() {
+		return ocsData(await axios.get(`${baseUrl}/templates/fields`)).groups
+	},
+
+	/**
+	 * @param {File} file - Template file (.docx, .odt, .xlsx, .ods)
+	 * @param {string|null} name - Display name (null = filename)
+	 * @param {Function} onProgress - Upload progress callback
+	 * @param {object} setup - Optional { org_uuids, phrases } applied in the same
+	 *   request; the template is not kept if they are invalid
+	 */
+	async uploadTemplate(file, name, onProgress, setup = {}) {
 		const formData = new FormData()
 		formData.append('file', file)
 		if (name) {
 			formData.append('name', name)
+		}
+		for (const key of ['org_uuids', 'phrases']) {
+			if (setup[key]?.length) {
+				formData.append(key, JSON.stringify(setup[key]))
+			}
 		}
 		return ocsData(await axios.post(
 			`${baseUrl}/templates`,
@@ -830,12 +940,33 @@ export default {
 		)).template
 	},
 
-	async createBlankTemplate(name) {
-		return ocsData(await axios.post(`${baseUrl}/templates/new-blank`, { name })).template
+	/**
+	 * @param {string} name - Display name
+	 * @param {object} setup - Optional { org_uuids, phrases } (see uploadTemplate)
+	 */
+	async createBlankTemplate(name, setup = {}) {
+		return ocsData(await axios.post(`${baseUrl}/templates/new-blank`, { name, ...setup })).template
 	},
 
 	async openTemplateForEdit(id) {
 		return ocsData(await axios.post(`${baseUrl}/templates/${id}/open-for-edit`)).nc_file_id
+	},
+
+	async updateTemplate(id, payload) {
+		return ocsData(await axios.put(`${baseUrl}/templates/${id}`, payload)).template
+	},
+
+	/**
+	 * @param {number} id - Template
+	 * @param {object} params - Optional { document_id } or { case_id }: only the
+	 *   phrases usable in a letter for that case (active, matching its scopes)
+	 */
+	async getTemplatePhrases(id, params = {}) {
+		return ocsData(await axios.get(`${baseUrl}/templates/${id}/phrases`, { params })).phrases
+	},
+
+	async setTemplatePhrases(id, phrases) {
+		return ocsData(await axios.put(`${baseUrl}/templates/${id}/phrases`, { phrases })).phrases
 	},
 
 	async deleteTemplate(id) {
@@ -844,6 +975,87 @@ export default {
 
 	async downloadTemplate(id, filename) {
 		const response = await axios.get(`${baseUrl}/templates/${id}/download`, {
+			responseType: 'blob',
+		})
+		const url = URL.createObjectURL(response.data)
+		const link = document.createElement('a')
+		link.href = url
+		link.download = filename
+		document.body.appendChild(link)
+		link.click()
+		document.body.removeChild(link)
+		URL.revokeObjectURL(url)
+	},
+
+	// ---------------------------------------------------------------
+	// Brevdesigner — phrase categories & phrases
+	// ---------------------------------------------------------------
+
+	async getPhraseCategories() {
+		return ocsData(await axios.get(`${baseUrl}/phrase-categories`)).categories
+	},
+
+	async createPhraseCategory(payload) {
+		return ocsData(await axios.post(`${baseUrl}/phrase-categories`, payload)).category
+	},
+
+	async updatePhraseCategory(id, payload) {
+		return ocsData(await axios.put(`${baseUrl}/phrase-categories/${id}`, payload)).category
+	},
+
+	async deletePhraseCategory(id) {
+		await axios.delete(`${baseUrl}/phrase-categories/${id}`)
+	},
+
+	async getPhrases() {
+		return ocsData(await axios.get(`${baseUrl}/phrases`)).phrases
+	},
+
+	async createPhrase(payload) {
+		return ocsData(await axios.post(`${baseUrl}/phrases`, payload)).phrase
+	},
+
+	async updatePhrase(id, payload) {
+		return ocsData(await axios.put(`${baseUrl}/phrases/${id}`, payload)).phrase
+	},
+
+	/**
+	 * Templates a phrase is attached to.
+	 *
+	 * @param {number} id - Phrase
+	 * @return {Promise<Array<{id: number, name: string, original_filename: string, is_required: boolean, is_default: boolean, org_uuids: string[], matches_orgs: boolean}>>}
+	 */
+	async getPhraseTemplates(id) {
+		return ocsData(await axios.get(`${baseUrl}/phrases/${id}/templates`)).templates
+	},
+
+	async deletePhrase(id) {
+		await axios.delete(`${baseUrl}/phrases/${id}`)
+	},
+
+	async uploadPhraseFile(id, file, onProgress) {
+		const formData = new FormData()
+		formData.append('file', file)
+		return ocsData(await axios.post(
+			`${baseUrl}/phrases/${id}/file`,
+			formData,
+			{
+				headers: { 'Content-Type': 'multipart/form-data' },
+				onUploadProgress: onProgress,
+			},
+		)).phrase
+	},
+
+	async createBlankPhraseFile(id) {
+		return ocsData(await axios.post(`${baseUrl}/phrases/${id}/new-blank`)).phrase
+	},
+
+	async openPhraseForEdit(id) {
+		return ocsData(await axios.post(`${baseUrl}/phrases/${id}/open-for-edit`)).nc_file_id
+	},
+
+	async downloadPhrase(id, filename) {
+		const response = await axios.get(`${baseUrl}/phrases/${id}/download`, {
 			responseType: 'blob',
 		})
 		const url = URL.createObjectURL(response.data)
@@ -1178,9 +1390,127 @@ export default {
 		return ocsData(await axios.delete(`${baseUrl}/admin/sapa-rules/${id}`))
 	},
 
-	async getApplicableCustomFields({ casetypeId = null, orgUuid = null, classificationCode = null } = {}) {
+	// ---------------------------------------------------------------
+	// Processes (Administrer processer)
+	// ---------------------------------------------------------------
+
+	async getProcesses() {
+		return ocsData(await axios.get(`${baseUrl}/admin/processes`)).processes
+	},
+
+	async getProcessTopics() {
+		return ocsData(await axios.get(`${baseUrl}/admin/process-topics`)).topics
+	},
+
+	async getProcessStatistics(id) {
+		return ocsData(await axios.get(`${baseUrl}/admin/processes/${id}/statistics`)).statistics
+	},
+
+	async getProcessMigrationPlan(id) {
+		return ocsData(await axios.get(`${baseUrl}/admin/processes/${id}/migration-plan`)).plan
+	},
+
+	async getProcessMigrations(id) {
+		return ocsData(await axios.get(`${baseUrl}/admin/processes/${id}/migrations`)).migrations
+	},
+
+	async startProcessMigration(id, mappings) {
+		return ocsData(await axios.post(`${baseUrl}/admin/processes/${id}/migrations`, { mappings })).migration
+	},
+
+	async getProcess(id) {
+		return ocsData(await axios.get(`${baseUrl}/admin/processes/${id}`)).process
+	},
+
+	async createProcess(payload) {
+		return ocsData(await axios.post(`${baseUrl}/admin/processes`, payload)).process
+	},
+
+	async updateProcess(id, payload) {
+		return ocsData(await axios.put(`${baseUrl}/admin/processes/${id}`, payload)).process
+	},
+
+	async deleteProcess(id) {
+		return ocsData(await axios.delete(`${baseUrl}/admin/processes/${id}`))
+	},
+
+	async getProcessVersion(id, versionId) {
+		return ocsData(await axios.get(`${baseUrl}/admin/processes/${id}/versions/${versionId}`)).version
+	},
+
+	async createProcessDraft(id, fromVersionId = null) {
+		return ocsData(await axios.post(`${baseUrl}/admin/processes/${id}/versions`, { from_version_id: fromVersionId })).version
+	},
+
+	async saveProcessDraft(id, versionId, bpmnXml, baseChecksum) {
+		return ocsData(await axios.put(`${baseUrl}/admin/processes/${id}/versions/${versionId}`, {
+			bpmn_xml: bpmnXml,
+			base_checksum: baseChecksum,
+		})).version
+	},
+
+	async deleteProcessDraft(id, versionId) {
+		return ocsData(await axios.delete(`${baseUrl}/admin/processes/${id}/versions/${versionId}`))
+	},
+
+	async validateProcessDraft(id, versionId) {
+		const data = ocsData(await axios.get(`${baseUrl}/admin/processes/${id}/versions/${versionId}/validate`))
+		return { problems: data.problems, warnings: data.warnings || [] }
+	},
+
+	async publishProcessDraft(id, versionId, changeNote) {
+		return ocsData(await axios.post(`${baseUrl}/admin/processes/${id}/versions/${versionId}/publish`, { change_note: changeNote }))
+	},
+
+	// ---------------------------------------------------------------
+	// Processes on cases
+	// ---------------------------------------------------------------
+
+	async getCaseProcesses(caseId) {
+		return ocsData(await axios.get(`${baseUrl}/cases/${caseId}/processes`))
+	},
+
+	async getAvailableProcesses({ casetypeId = null, orgUuid = null, classificationCode = null, classPlanUuid = null } = {}) {
+		return ocsData(await axios.get(`${baseUrl}/processes/available`, {
+			params: { casetype_id: casetypeId, org_uuid: orgUuid, classification_code: classificationCode, class_plan_uuid: classPlanUuid },
+		})).processes
+	},
+
+	async startCaseProcess(caseId, processDefId) {
+		return ocsData(await axios.post(`${baseUrl}/cases/${caseId}/processes`, { process_def_id: processDefId }))
+	},
+
+	async getCaseProcessDiagram(caseId, processId) {
+		return ocsData(await axios.get(`${baseUrl}/cases/${caseId}/processes/${processId}/diagram`))
+	},
+
+	async cancelCaseProcess(caseId, processId, reason) {
+		return ocsData(await axios.post(`${baseUrl}/cases/${caseId}/processes/${processId}/cancel`, { reason }))
+	},
+
+	async retryCaseProcess(caseId, processId) {
+		return ocsData(await axios.post(`${baseUrl}/cases/${caseId}/processes/${processId}/retry`))
+	},
+
+	async claimProcessTask(taskId) {
+		return ocsData(await axios.post(`${baseUrl}/process-tasks/${taskId}/claim`)).task
+	},
+
+	async releaseProcessTask(taskId) {
+		return ocsData(await axios.post(`${baseUrl}/process-tasks/${taskId}/release`)).task
+	},
+
+	async completeProcessTask(taskId, outcome, comment, values = {}) {
+		return ocsData(await axios.post(`${baseUrl}/process-tasks/${taskId}/complete`, { outcome, comment, values })).task
+	},
+
+	async getMyProcessTasks() {
+		return ocsData(await axios.get(`${baseUrl}/me/process-tasks`)).tasks
+	},
+
+	async getApplicableCustomFields({ casetypeId = null, orgUuid = null, classificationCode = null, classPlanUuid = null } = {}) {
 		return ocsData(await axios.get(`${baseUrl}/custom-fields/applicable`, {
-			params: { casetype_id: casetypeId, org_uuid: orgUuid, classification_code: classificationCode },
+			params: { casetype_id: casetypeId, org_uuid: orgUuid, classification_code: classificationCode, class_plan_uuid: classPlanUuid },
 		})).fields
 	},
 

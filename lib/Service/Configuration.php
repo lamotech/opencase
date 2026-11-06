@@ -121,6 +121,9 @@ class Configuration {
 			'sagdokumentindeks_municipality_cvr' => '11111111',
 			'sagdokumentindeks_batch_size' => '50',
 			'access_control_enable' => '0',
+			'accessprofile_type' => 'fk',
+			ClassificationPlanService::CONFIG_KEY => ClassificationPlanService::PLAN_KLE,
+			AccessProfile\AccessGroupNaming::PREFIX_CONFIG_KEY => AccessProfile\AccessGroupNaming::DEFAULT_PREFIX,
 			'idp_metadata_url' => 'https://n2adgangsstyring.eksterntest-stoettesystemerne.dk/runtime/saml2/metadata.idp?samlprofile=nemlogin3',
 			'entity_id' => '/index.php/apps/opencase/saml/metadata',
 			'acs_url' => '/index.php/apps/opencase/saml/acs',
@@ -129,6 +132,7 @@ class Configuration {
 			'endpoint_classification' => 'https://klassifikation.eksterntest-stoettesystemerne.dk/klassifikationsystem/7/',
 			'digitalpost_cvr' => '19435075',
 			'digitalpost_sender_label' => 'KOMBIT',
+			'digitalpost_contactpoint_id' => '2c4005a3-825b-4b18-8132-3e1d13ffe12b',
 			'entity_id_kombipostafsend' => 'http://entityid.kombit.dk/service/kombipostafsend/1',
 			'endpoint_kombipostafsend' => 'https://exttest.serviceplatformen.dk/service/KombiPostAfsend_1/kombi',
 			'entity_id_postforespoerg' => 'http://entityid.kombit.dk/service/postforespoerg/1',
@@ -145,6 +149,10 @@ class Configuration {
 			'msoffice_addin_name' => 'OpenCase',
 			'enterprise_version' => '0',
 			'feature_redaction-service' => '0',
+			'feature_disposal' => '1',
+			'feature_process-engine' => '0',
+			'feature_digital-post' => '0',
+			'process_engine_user' => 'opencase',
 			'entity_id_opencase_api' => 'http://opencase.dk/service/api/1',
 		];
 

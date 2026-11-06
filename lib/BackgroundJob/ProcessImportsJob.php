@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace OCA\OpenCase\BackgroundJob;
 
-use OCA\OpenCase\Db\AccessProfileMapper;
+use OCA\OpenCase\Db\AccessProfile;
 use OCA\OpenCase\Db\CaseEntity;
 use OCA\OpenCase\Db\CaseMapper;
 use OCA\OpenCase\Db\ClassificationFacetRepository;
@@ -20,10 +20,13 @@ use OCA\OpenCase\Db\OrganisationMapper;
 use OCA\OpenCase\Db\SensitivityMapper;
 use OCA\OpenCase\Db\SeparationSheet;
 use OCA\OpenCase\Db\SeparationSheetMapper;
+use OCA\OpenCase\Service\AccessProfile\AccessProfileTypeResolver;
+use OCA\OpenCase\Service\AuditService;
+use OCA\OpenCase\Service\CaseClassificationService;
 use OCA\OpenCase\Service\CaseNumberService;
 use OCA\OpenCase\Service\CaseService;
+use OCA\OpenCase\Service\ClassificationPlanService;
 use OCA\OpenCase\Service\DisposalService;
-use OCA\OpenCase\Service\PrivilegeService;
 use OCP\AppFramework\Utility\ITimeFactory;
 use OCP\BackgroundJob\TimedJob;
 use OCP\IConfig;
@@ -80,7 +83,8 @@ class ProcessImportsJob extends TimedJob {
         private CaseMapper $caseMapper,
         private DocumentMapper $documentMapper,
         private FileMapper $fileMapper,
-        private AccessProfileMapper $accessProfileMapper,
+        private AccessProfileTypeResolver $accessProfileTypeResolver,
+        private CaseClassificationService $caseClassificationService,
         private ClassificationSubjectMapper $classificationSubjectMapper,
         private ClassificationFacetRepository $classificationFacetRepository,
         private SensitivityMapper $sensitivityMapper,
@@ -88,8 +92,9 @@ class ProcessImportsJob extends TimedJob {
         private CaseNumberService $caseNumberService,
         private ConfigMapper $configMapper,
         private IConfig $config,
-        private PrivilegeService $privilegeService,
         private DisposalService $disposalService,
+        private ClassificationPlanService $classificationPlanService,
+        private AuditService $auditService,
         private LoggerInterface $logger,
     ) {
         parent::__construct($time);
@@ -549,6 +554,7 @@ class ProcessImportsJob extends TimedJob {
                 $sheet->getSensitivityUuid(),
                 $sheet->getClassificationFacetUuid(),
                 $sheet->getInsightLevelId(),
+                $sheet->getClassPlanUuid(),
             ),
             default => throw new \RuntimeException("Separation sheet {$sheet->getName()} has unsupported type: {$sheet->getType()}"),
         };
@@ -567,37 +573,53 @@ class ProcessImportsJob extends TimedJob {
     }
 
     private function createNewCaseFromSheet(SeparationSheet $sheet): CaseEntity {
-        $orgUuid          = $sheet->getOrgUuid();
-        $sensitivityUuid  = $sheet->getSensitivityUuid();
-        $classSubjectUuid = $sheet->getClassSubjectUuid();
-        if ($orgUuid === null || $sensitivityUuid === null || $classSubjectUuid === null) {
-            throw new \RuntimeException("Separation sheet {$sheet->getName()} is missing organisation/KLE/sensitivity");
+        $orgUuid = $sheet->getOrgUuid();
+        if ($orgUuid === null) {
+            throw new \RuntimeException("Separation sheet {$sheet->getName()} is missing organisation");
         }
-
         $org = $this->organisationMapper->findByUuid($orgUuid);
         if ($org === null) {
             throw new \RuntimeException("Organisation not found: {$orgUuid}");
         }
-        $sensitivity = $this->sensitivityMapper->findByUuid($sensitivityUuid);
-        if ($sensitivity === null) {
-            throw new \RuntimeException("Sensitivity not found: {$sensitivityUuid}");
-        }
-        $classSubject = $this->classificationSubjectMapper->findByUuid($classSubjectUuid);
-        if ($classSubject === null) {
-            throw new \RuntimeException("Classification subject not found: {$classSubjectUuid}");
-        }
 
-        $profile = $this->accessProfileMapper->findOrCreate(
-            $org->getOrgUuid(),
-            $classSubject->getUuid(),
-            $sensitivity->getUuid()
-        );
-        $this->privilegeService->grantPrivilegedUsersToProfile(
-            $profile->getId(),
-            $org->getOrgUuid(),
-            $classSubject->getUuid(),
-            $sensitivity->getUuid()
-        );
+        // Resolving also grants the profile to the users entitled to it.
+        $accessType = $this->accessProfileTypeResolver->active();
+        if ($accessType->key() === AccessProfile::TYPE_GROUP) {
+            $groupId = $sheet->getGroupId();
+            if ($groupId === null) {
+                throw new \RuntimeException("Separation sheet {$sheet->getName()} is missing access group");
+            }
+            try {
+                $profile = $accessType->resolveProfile(['group_id' => $groupId]);
+            } catch (\InvalidArgumentException $e) {
+                throw new \RuntimeException("Separation sheet {$sheet->getName()}: {$e->getMessage()}", 0, $e);
+            }
+            // Grupper + KLE: the case keeps the sheet's KLE number and sensitivity
+            if ($this->caseClassificationService->onCase()
+                && ($sheet->getClassSubjectUuid() === null || $sheet->getSensitivityUuid() === null)) {
+                throw new \RuntimeException("Separation sheet {$sheet->getName()} is missing KLE/sensitivity");
+            }
+        } else {
+            $sensitivityUuid  = $sheet->getSensitivityUuid();
+            $classSubjectUuid = $sheet->getClassSubjectUuid();
+            if ($sensitivityUuid === null || $classSubjectUuid === null) {
+                throw new \RuntimeException("Separation sheet {$sheet->getName()} is missing KLE/sensitivity");
+            }
+            $sensitivity = $this->sensitivityMapper->findByUuid($sensitivityUuid);
+            if ($sensitivity === null) {
+                throw new \RuntimeException("Sensitivity not found: {$sensitivityUuid}");
+            }
+            $classSubject = $this->classificationSubjectMapper->findByUuid($classSubjectUuid);
+            if ($classSubject === null) {
+                throw new \RuntimeException("Classification subject not found: {$classSubjectUuid}");
+            }
+
+            $profile = $accessType->resolveProfile([
+                'org_uuid'           => $org->getOrgUuid(),
+                'class_subject_uuid' => $classSubject->getUuid(),
+                'sensitivity_uuid'   => $sensitivity->getUuid(),
+            ]);
+        }
 
         $caseNumber = $this->caseNumberService->generateCaseNumber();
         $year       = $this->extractYear($caseNumber);
@@ -615,6 +637,11 @@ class ProcessImportsJob extends TimedJob {
         $entity->setResponsibleUserId($sheet->getResponsibleUserId() ?: 'system');
         $entity->setInsightLevelId($sheet->getInsightLevelId());
         $entity->setClassificationFacetUuid($sheet->getClassificationFacetUuid());
+        $entity->setClassPlanUuid($this->classificationPlanService->isEmneplan() ? $sheet->getClassPlanUuid() : null);
+        if ($this->caseClassificationService->onCase()) {
+            $entity->setClassSubjectUuid($sheet->getClassSubjectUuid());
+            $entity->setSensitivityUuid($sheet->getSensitivityUuid());
+        }
         $entity->setUuid(CaseService::generateUuid());
         $this->disposalService->applyDisposalCode($entity);
 
@@ -642,6 +669,7 @@ class ProcessImportsJob extends TimedJob {
         ?string $sensitivityUuid,
         ?string $facetUuid,
         ?int $insightLevelId,
+        ?string $classPlanUuid = null,
     ): CaseEntity {
         if ($orgUuid !== null && $orgUuid !== '') {
             $org = $this->organisationMapper->findByUuid($orgUuid);
@@ -657,32 +685,30 @@ class ProcessImportsJob extends TimedJob {
             return $existing;
         }
 
-        $resolvedSensitivityUuid = ($sensitivityUuid !== null && $sensitivityUuid !== '')
-            ? $sensitivityUuid
-            : '31c09910-e011-46a5-86fb-254374421fe8';
-        $sensitivity = $this->sensitivityMapper->findByUuid($resolvedSensitivityUuid);
-        if ($sensitivity === null) {
-            throw new \RuntimeException('Inbox sensitivity not found: ' . $resolvedSensitivityUuid);
-        }
-
-        $classSubject = ($classSubjectUuid !== null && $classSubjectUuid !== '')
-            ? $this->classificationSubjectMapper->findByUuid($classSubjectUuid)
-            : $this->classificationSubjectMapper->findOrCreateByCode(self::DEFAULT_KLE_CODE);
-        if ($classSubject === null) {
-            throw new \RuntimeException('Inbox classification subject not found: ' . $classSubjectUuid);
-        }
-
-        $profile = $this->accessProfileMapper->findOrCreate(
+        // Resolving also grants the profile to the users entitled to it.
+        $profile = $this->accessProfileTypeResolver->resolveInboxProfile(
             $org->getOrgUuid(),
-            $classSubject->getUuid(),
-            $sensitivity->getUuid()
-        );
+            function () use ($classSubjectUuid, $sensitivityUuid): array {
+                $resolvedSensitivityUuid = ($sensitivityUuid !== null && $sensitivityUuid !== '')
+                    ? $sensitivityUuid
+                    : '31c09910-e011-46a5-86fb-254374421fe8';
+                $sensitivity = $this->sensitivityMapper->findByUuid($resolvedSensitivityUuid);
+                if ($sensitivity === null) {
+                    throw new \RuntimeException('Inbox sensitivity not found: ' . $resolvedSensitivityUuid);
+                }
 
-        $this->privilegeService->grantPrivilegedUsersToProfile(
-            $profile->getId(),
-            $org->getOrgUuid(),
-            $classSubject->getUuid(),
-            $sensitivity->getUuid()
+                $classSubject = ($classSubjectUuid !== null && $classSubjectUuid !== '')
+                    ? $this->classificationSubjectMapper->findByUuid($classSubjectUuid)
+                    : $this->classificationSubjectMapper->findOrCreateByCode(self::DEFAULT_KLE_CODE);
+                if ($classSubject === null) {
+                    throw new \RuntimeException('Inbox classification subject not found: ' . $classSubjectUuid);
+                }
+
+                return [
+                    'class_subject_uuid' => $classSubject->getUuid(),
+                    'sensitivity_uuid'   => $sensitivity->getUuid(),
+                ];
+            }
         );
 
         $resolvedFacetUuid = ($facetUuid !== null && $facetUuid !== '')
@@ -705,6 +731,8 @@ class ProcessImportsJob extends TimedJob {
         $entity->setIsInbox(true);
         $entity->setClassificationFacetUuid($resolvedFacetUuid);
         $entity->setInsightLevelId($insightLevelId);
+        $entity->setClassPlanUuid($this->classificationPlanService->inboxClassPlanUuid($classPlanUuid));
+        $this->caseClassificationService->applyToInboxCase($entity, $classSubjectUuid, $sensitivityUuid);
         $entity->setUuid(CaseService::generateUuid());
         $this->disposalService->applyDisposalCode($entity);
 
@@ -740,6 +768,12 @@ class ProcessImportsJob extends TimedJob {
 
         $case->setUpdatedAt(new \DateTime());
         $this->caseMapper->update($case);
+
+        // Counts as activity on the case and lets waiting process steps see it
+        $this->auditService->logDocumentCreated(
+            $case->getId(), 'system', $document->getId(),
+            (string) $document->getDocumentNumber(), (string) $document->getTitle(),
+        );
 
         return $document;
     }

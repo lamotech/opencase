@@ -4,12 +4,17 @@ declare(strict_types=1);
 
 namespace OCA\OpenCase\Controller;
 
+use OCA\OpenCase\Db\AccessProfile;
 use OCA\OpenCase\Db\ApiClientRepository;
 use OCA\OpenCase\Db\ImportItemRepository;
 use OCA\OpenCase\Db\ImportLocationRepository;
 use OCA\OpenCase\Db\UserInfoMapper;
 use OCA\OpenCase\Db\UserOrgMapper;
 use OCA\OpenCase\Service\AccessMaskingService;
+use OCA\OpenCase\Service\AccessProfile\AccessGroupNaming;
+use OCA\OpenCase\Service\AccessProfile\AccessProfileTypeResolver;
+use OCA\OpenCase\Service\AccessProfile\GroupAccessSyncService;
+use OCA\OpenCase\Service\Process\FlowableClient;
 use OCA\OpenCase\Service\AddinOriginService;
 use OCA\OpenCase\Service\ApiClientPresenterService;
 use OCA\OpenCase\Service\CaseExportService;
@@ -17,7 +22,10 @@ use OCA\OpenCase\Service\Certificate;
 use OCA\OpenCase\Service\CaseService;
 use OCA\OpenCase\Service\Configuration;
 use OCA\OpenCase\Service\ClassificationCsvImportService;
+use OCA\OpenCase\Service\ClassificationPlanService;
 use OCA\OpenCase\Service\ClassificationSyncService;
+use OCA\OpenCase\Service\CustomerTypeService;
+use OCA\OpenCase\Service\OrganisationCsvImportService;
 use OCA\OpenCase\Service\OrganisationSyncService;
 use OCA\OpenCase\Service\PrivilegeService;
 use OCA\OpenCase\Service\RoleService;
@@ -42,6 +50,7 @@ use OCP\IUserManager;
  *
  * Routes (plain, not OCS):
  *   POST   /settings/config                                   — save a single config key/value
+ *                                                               (customer_type also sets its defaults)
  *   POST   /settings/sync-organisations                       — trigger organisation sync
  *   POST   /settings/sync-klassifikation                      — trigger klassifikation sync
  *   POST   /settings/classification/subjects/upload           — manual CSV import of KLE classifications
@@ -65,6 +74,7 @@ use OCP\IUserManager;
  *   POST   /settings/import-locations/mailbox                 — add a mailbox import location
  *   POST   /settings/import-locations/{id}/mailbox             — edit a mailbox import location
  *   POST   /settings/import-locations/{id}/expired             — expire/re-enable an import location
+ *   POST   /settings/test-process-engine                       — check the process engine connection
  *   POST   /settings/import-locations/{id}/delete               — delete an import location
  *   GET    /settings/import-locations/{id}/log                  — import items for a location (last 30 days)
  */
@@ -74,6 +84,7 @@ class SettingsController extends Controller {
         'systemadministrator',
         'opencaseadministrator',
         'opencasetemplateadministrator',
+        'opencaseprocessadministrator',
         'opencaseuser',
         'opencasereaduser',
     ];
@@ -87,6 +98,8 @@ class SettingsController extends Controller {
         private CaseExportService $caseExportService,
         private OrganisationSyncService $orgSyncService,
         private ClassificationCsvImportService $classificationCsvImportService,
+        private OrganisationCsvImportService $organisationCsvImportService,
+        private CustomerTypeService $customerTypeService,
         private SamlMetadataService $samlMetadataService,
         private TransactionLogService $transactionLogService,
         private ApiClientRepository $apiClientRepository,
@@ -105,6 +118,8 @@ class SettingsController extends Controller {
         private IConfig $systemConfig,
         private AccessMaskingService $maskingService,
         private AddinOriginService $addinOriginService,
+        private GroupAccessSyncService $groupAccessSyncService,
+        private FlowableClient $flowableClient,
     ) {
         parent::__construct($appName, $request);
     }
@@ -219,8 +234,37 @@ class SettingsController extends Controller {
         if ($key === '') {
             return new JSONResponse(['error' => 'key is required'], Http::STATUS_BAD_REQUEST);
         }
+        if ($key === AccessProfileTypeResolver::CONFIG_KEY
+            && !in_array($value, [AccessProfile::TYPE_FK, AccessProfile::TYPE_GROUP], true)) {
+            return new JSONResponse(['error' => "Invalid access profile type: {$value}"], Http::STATUS_BAD_REQUEST);
+        }
+        if ($key === ClassificationPlanService::CONFIG_KEY && !in_array($value, ClassificationPlanService::PLANS, true)) {
+            return new JSONResponse(['error' => "Invalid classification plan: {$value}"], Http::STATUS_BAD_REQUEST);
+        }
+        $rejection = $this->customerTypeService->rejectionFor($key, $value);
+        if ($rejection !== null) {
+            return new JSONResponse(['error' => $rejection], Http::STATUS_BAD_REQUEST);
+        }
+
+        // The customer type sets the access profile type and classification
+        // plan too; the page updates them from 'config'.
+        if ($key === CustomerTypeService::CONFIG_KEY) {
+            try {
+                $values = $this->customerTypeService->setType($value);
+            } catch (\InvalidArgumentException $e) {
+                return new JSONResponse(['error' => $e->getMessage()], Http::STATUS_BAD_REQUEST);
+            }
+            $this->groupAccessSyncService->registerMatchingGroups();
+            return new JSONResponse(['saved' => true, 'config' => $values]);
+        }
 
         $this->configuration->setConfigValue($key, $value);
+
+        // Register groups matching the (new) access group prefix right away
+        // instead of waiting for the hourly GroupAccessSyncJob.
+        if ($key === AccessGroupNaming::PREFIX_CONFIG_KEY || $key === AccessProfileTypeResolver::CONFIG_KEY) {
+            $this->groupAccessSyncService->registerMatchingGroups();
+        }
 
         return new JSONResponse(['saved' => true]);
     }
@@ -239,6 +283,25 @@ class SettingsController extends Controller {
         try {
             $this->maskingService->checkService();
             return new JSONResponse(['ok' => true]);
+        } catch (\RuntimeException $e) {
+            return new JSONResponse(['ok' => false, 'error' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Check the connection to the process engine with the saved URL and
+     * credentials. Response: { ok: true, version: string } or { ok: false, error: string }
+     */
+    public function testProcessEngine(): JSONResponse {
+        if (!$this->flowableClient->isFeatureEnabled()) {
+            return new JSONResponse(['ok' => false, 'error' => 'Procesmodulet er ikke aktiveret (feature_process-engine).']);
+        }
+        if (!$this->flowableClient->isConfigured()) {
+            return new JSONResponse(['ok' => false, 'error' => 'Angiv procesmotorens URL først.']);
+        }
+        try {
+            $engine = $this->flowableClient->checkEngine();
+            return new JSONResponse(['ok' => true, 'version' => $engine['version']]);
         } catch (\RuntimeException $e) {
             return new JSONResponse(['ok' => false, 'error' => $e->getMessage()]);
         }
@@ -356,6 +419,37 @@ class SettingsController extends Controller {
         return $this->handleClassificationCsvUpload(fn (string $content) => $this->classificationCsvImportService->importFacets($content));
     }
 
+    /**
+     * Manually import the Emneplan (the customer's own classification plan,
+     * used instead of KLE when classification_plan is 'Emneplan') from an
+     * uploaded CSV file — same import as Konfiguration → Emneplan, for the
+     * Nextcloud admin settings page.
+     *
+     * Expects multipart/form-data with: file — the CSV file
+     * (';'-delimited, header row "uuid;code;title;description;active", optional
+     * 6th column deletion_deadline). Items not in the file are deactivated.
+     *
+     * Response: { fetched, created, updated, deactivated }
+     */
+    public function uploadClassificationPlan(): JSONResponse {
+        return $this->handleClassificationCsvUpload(fn (string $content) => $this->classificationCsvImportService->importPlan($content));
+    }
+
+    /**
+     * Import the organisation structure from an uploaded CSV file, for
+     * customers without the Serviceplatformen Organisation integration —
+     * same result as a Serviceplatformen sync (see OrganisationCsvImportService).
+     *
+     * Expects multipart/form-data with: file — the CSV file (';'-delimited,
+     * header row "uuid;name;parent;email;phone;location"). Organisations not
+     * in the file are deactivated.
+     *
+     * Response: { fetched, created, updated, deactivated }
+     */
+    public function uploadOrganisations(): JSONResponse {
+        return $this->handleClassificationCsvUpload(fn (string $content) => $this->organisationCsvImportService->import($content));
+    }
+
     private function handleClassificationCsvUpload(callable $import): JSONResponse {
         $file = $this->request->getUploadedFile('file');
 
@@ -377,6 +471,8 @@ class SettingsController extends Controller {
 
         try {
             return new JSONResponse($import($content));
+        } catch (\InvalidArgumentException $e) {
+            return new JSONResponse(['error' => $e->getMessage()], Http::STATUS_BAD_REQUEST);
         } catch (\Throwable $e) {
             return new JSONResponse(
                 ['error' => $e->getMessage()],

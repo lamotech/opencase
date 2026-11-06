@@ -208,6 +208,9 @@ class SearchService {
             $profileIds    = $this->permissionService->getAccessProfileIdsForUser($userId);
             $directCaseIds = $this->permissionService->getDirectAccessCaseIds($userId);
             $esResults = $this->esService->search($query, $profileIds, $filters, $offset, $limit, $directCaseIds);
+            $readableHits = $this->permissionService->filterReadableHits($userId, $esResults['hits']);
+            $esResults['total'] -= count($esResults['hits']) - count($readableHits);
+            $esResults['hits'] = $readableHits;
         } catch (\Throwable $e) {
             $this->logger->warning('OpenCase ES search unavailable, returning DB results only: ' . $e->getMessage());
         }

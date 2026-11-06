@@ -287,6 +287,21 @@ class ElasticsearchService {
     }
 
     /**
+     * Set the access profile of all of a case's files, which is what the
+     * search filters on. No need to extract their content again.
+     */
+    public function updateAccessProfile(int $caseId, int $accessProfileId): void {
+        $this->esRequest('POST', "/{$this->index}/_update_by_query?conflicts=proceed&refresh=true", [
+            'query'  => ['term' => ['case_id' => $caseId]],
+            'script' => [
+                'lang'   => 'painless',
+                'source' => 'ctx._source.access_profile_id = params.id',
+                'params' => ['id' => $accessProfileId],
+            ],
+        ]);
+    }
+
+    /**
      * Delete a document from the index.
      */
     public function deleteDocument(int $fileId): void {

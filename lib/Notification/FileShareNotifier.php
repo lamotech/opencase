@@ -314,6 +314,72 @@ class FileShareNotifier implements INotifier {
             return $notification;
         }
 
+        if ($notification->getSubject() === 'process_task_deadline_yellow'
+            || $notification->getSubject() === 'process_task_deadline_red') {
+            $params   = $notification->getSubjectParameters();
+            $taskName = $params['task_name'] ?? '';
+            $deadline = $params['deadline'] ?? '';
+            $case     = trim(($params['case_number'] ?? '') . ' – ' . ($params['case_title'] ?? ''), ' –');
+
+            if ($notification->getSubject() === 'process_task_deadline_red') {
+                $notification->setParsedSubject($l->t('Procesopgave – fristen er overskredet'));
+                $notification->setParsedMessage(!empty($params['unassigned'])
+                    ? $l->t('Fristen for opgaven "%1$s" på sag %2$s udløb %3$s. Opgaven er ikke taget af nogen.', [$taskName, $case, $deadline])
+                    : $l->t('Fristen for opgaven "%1$s" på sag %2$s udløb %3$s', [$taskName, $case, $deadline]));
+            } else {
+                $notification->setParsedSubject($l->t('Procesopgave – fristen nærmer sig'));
+                $notification->setParsedMessage(!empty($params['unassigned'])
+                    ? $l->t('Fristen for opgaven "%1$s" på sag %2$s udløber %3$s. Opgaven er ikke taget af nogen.', [$taskName, $case, $deadline])
+                    : $l->t('Fristen for opgaven "%1$s" på sag %2$s udløber %3$s', [$taskName, $case, $deadline]));
+            }
+            $notification->setLink($this->urlGenerator->linkToRouteAbsolute(
+                'opencase.page.catch_all',
+                ['path' => 'case/' . ($params['case_id'] ?? '')]
+            ) . '#tab-processes');
+
+            return $notification;
+        }
+
+        if ($notification->getSubject() === 'process_notification') {
+            $params = $notification->getSubjectParameters();
+            $notification->setParsedSubject((string)($params['title'] ?? ''));
+            $notification->setParsedMessage(trim(($params['message'] ?? '') . "\n\n" . $l->t('Sag %1$s – %2$s', [$params['case_number'] ?? '', $params['case_title'] ?? ''])));
+            $notification->setLink($this->urlGenerator->linkToRouteAbsolute(
+                'opencase.page.catch_all',
+                ['path' => 'case/' . ($params['case_id'] ?? '')]
+            ) . '#tab-processes');
+
+            return $notification;
+        }
+
+        if ($notification->getSubject() === 'process_task_assigned') {
+            $params = $notification->getSubjectParameters();
+            $notification->setParsedSubject($l->t('Ny opgave: %s', [$params['task_name'] ?? '']));
+            $notification->setParsedMessage(
+                $l->t('Sag %1$s – %2$s', [$params['case_number'] ?? '', $params['case_title'] ?? ''])
+            );
+            $notification->setLink($this->urlGenerator->linkToRouteAbsolute(
+                'opencase.page.catch_all',
+                ['path' => 'case/' . ($params['case_id'] ?? '')]
+            ) . '#tab-processes');
+
+            return $notification;
+        }
+
+        if ($notification->getSubject() === 'process_task_given_back') {
+            $params = $notification->getSubjectParameters();
+            $notification->setParsedSubject($l->t('Opgave uden modtager: %s', [$params['task_name'] ?? '']));
+            $notification->setParsedMessage(
+                $l->t('%1$s har ikke skriveadgang til sag %2$s – %3$s, så opgaven kan i stedet tages af andre med adgang.', [$params['assignee'] ?? '', $params['case_number'] ?? '', $params['case_title'] ?? ''])
+            );
+            $notification->setLink($this->urlGenerator->linkToRouteAbsolute(
+                'opencase.page.catch_all',
+                ['path' => 'case/' . ($params['case_id'] ?? '')]
+            ) . '#tab-processes');
+
+            return $notification;
+        }
+
         throw new \OCP\Notification\UnknownNotificationException('Unknown OpenCase notification subject: ' . $notification->getSubject());
     }
 }

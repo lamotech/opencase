@@ -17,6 +17,7 @@ use OCA\OpenCase\Db\CaseStatusMapper;
 use OCA\OpenCase\Db\CaseTypeMapper;
 use OCA\OpenCase\Db\CaseWorkerMapper;
 use OCA\OpenCase\Db\ClassificationFacetRepository;
+use OCA\OpenCase\Db\ClassificationPlanMapper;
 use OCA\OpenCase\Db\ClassificationSubjectMapper;
 use OCA\OpenCase\Db\ContactRoleMapper;
 use OCA\OpenCase\Db\Document;
@@ -39,6 +40,7 @@ use OCA\OpenCase\Db\JournalNoteMapper;
 use OCA\OpenCase\Db\OrganisationMapper;
 use OCA\OpenCase\Db\ParticipantRoleMapper;
 use OCA\OpenCase\Db\SensitivityMapper;
+use OCA\OpenCase\Service\AccessProfile\AccessGroupNaming;
 use OCP\IConfig;
 use OCP\IUserManager;
 use Psr\Log\LoggerInterface;
@@ -97,6 +99,7 @@ class CaseExportService {
         private AccessProfileMapper $accessProfileMapper,
         private ClassificationSubjectMapper $classificationSubjectMapper,
         private ClassificationFacetRepository $classificationFacetRepository,
+        private ClassificationPlanMapper $classificationPlanMapper,
         private SensitivityMapper $sensitivityMapper,
         private ParticipantRoleMapper $participantRoleMapper,
         private ContactRoleMapper $contactRoleMapper,
@@ -107,6 +110,7 @@ class CaseExportService {
         private Configuration $configuration,
         private IConfig $config,
         private IUserManager $userManager,
+        private AccessGroupNaming $accessGroupNaming,
         private LoggerInterface $logger,
     ) {
         // Same base-dir resolution as FileService — the physical location
@@ -253,22 +257,30 @@ class CaseExportService {
             ? ($this->insightLevelMapper->getNamesByIds([$insightLevelId], self::LOOKUP_LANGUAGE)[$insightLevelId] ?? null)
             : null;
 
-        $classificationCodeUuid = null;
-        $classificationCode     = null;
-        $sensitivityUuid        = null;
-        $sensitivityName        = null;
-        $profile = $this->accessProfileMapper->findById($case->getAccessProfileId());
-        if ($profile !== null) {
-            $classificationCodeUuid = $profile->getClassSubjectUuid();
-            $classificationCode     = $this->classificationSubjectMapper->findByUuid($classificationCodeUuid)?->getCode();
-            $sensitivityUuid        = $profile->getSensitivityUuid();
-            $sensitivityName        = $this->sensitivityMapper->findByUuid($sensitivityUuid)?->getTitle();
-        }
+        // FK Adgang profiles carry KLE + sensitivity, Grupper profiles a group
+        // (with KLE + sensitivity on the case itself).
+        $profile                = $this->accessProfileMapper->findById($case->getAccessProfileId());
+        $classificationCodeUuid = $case->effectiveClassSubjectUuid($profile);
+        $classificationCode     = $classificationCodeUuid !== null
+            ? $this->classificationSubjectMapper->findByUuid($classificationCodeUuid)?->getCode()
+            : null;
+        $sensitivityUuid        = $case->effectiveSensitivityUuid($profile);
+        $sensitivityName        = $sensitivityUuid !== null
+            ? $this->sensitivityMapper->findByUuid($sensitivityUuid)?->getTitle()
+            : null;
+        $groupId                = $profile?->getGroupId();
+        $groupName              = $groupId !== null
+            ? $this->accessGroupNaming->displayName($groupId)
+            : null;
 
         $classificationFacetUuid = $case->getClassificationFacetUuid();
         $classificationFacetCode = $classificationFacetUuid !== null
             ? ($this->classificationFacetRepository->find($classificationFacetUuid)['code'] ?? null)
             : null;
+
+        // Emneplan item (classification plan Emneplan), stored on the case.
+        $classPlanUuid = $case->getClassPlanUuid();
+        $classPlan     = $classPlanUuid !== null ? $this->classificationPlanMapper->findByUuid($classPlanUuid) : null;
 
         return [
             'Id'                          => (string)$case->getId(),
@@ -289,8 +301,13 @@ class CaseExportService {
             'ClassificationCode'          => $classificationCode,
             'ClassificationFacetUuid'     => $classificationFacetUuid,
             'ClassificationFacetCode'     => $classificationFacetCode,
+            'ClassPlanUuid'               => $classPlanUuid,
+            'ClassPlanCode'               => $classPlan?->getCode(),
+            'ClassPlanTitle'              => $classPlan?->getTitle(),
             'SensitivityUuid'             => $sensitivityUuid,
             'SensitivityName'             => $sensitivityName,
+            'GroupId'                     => $groupId,
+            'GroupName'                   => $groupName,
             'CreatedAt'                   => $this->formatDateTime($case->getCreatedAt()),
             'UpdatedAt'                   => $this->formatDateTime($case->getUpdatedAt()),
             'CreatedBy'                   => $case->getCreatedBy(),
@@ -479,12 +496,12 @@ class CaseExportService {
      */
     public function customFieldFields(CaseEntity $case): array {
         $classificationCode = null;
-        $profile = $this->accessProfileMapper->findById($case->getAccessProfileId());
-        if ($profile !== null) {
-            $classificationCode = $this->classificationSubjectMapper->findByUuid($profile->getClassSubjectUuid())?->getCode();
+        $classSubjectUuid   = $case->effectiveClassSubjectUuid($this->accessProfileMapper->findById($case->getAccessProfileId()));
+        if ($classSubjectUuid !== null) {
+            $classificationCode = $this->classificationSubjectMapper->findByUuid($classSubjectUuid)?->getCode();
         }
 
-        $defs   = $this->customFieldService->getApplicableFields($case->getCasetypeId(), $case->getOrgUuid(), $classificationCode);
+        $defs   = $this->customFieldService->getApplicableFields($case->getCasetypeId(), $case->getOrgUuid(), $classificationCode, $case->getClassPlanUuid());
         $values = $this->customFieldService->getValuesForCase($case->getId());
 
         $result = [];

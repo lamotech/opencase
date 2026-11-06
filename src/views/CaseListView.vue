@@ -51,7 +51,8 @@
 					<th>{{ t('opencase', 'Sagsnummer') }}</th>
 					<th>{{ t('opencase', 'Titel') }}</th>
 					<th>{{ t('opencase', 'Organisation') }}</th>
-					<th>{{ t('opencase', 'KLE-nummer') }}</th>
+					<th>{{ isGroupMode ? t('opencase', 'Adgangsgruppe') : t('opencase', 'KLE-nummer') }}</th>
+					<th v-if="isEmneplan">{{ t('opencase', 'Emne') }}</th>
 					<th>{{ t('opencase', 'Status') }}</th>
 					<th>{{ t('opencase', 'Opdateret') }}</th>
 				</tr>
@@ -69,7 +70,10 @@
 					</td>
 					<td>{{ c.organisation }}</td>
 					<td class="opencase-case-list__classification">
-						{{ c.classification_code }}
+						{{ c.access_profile_type === 'group' ? c.group_name : c.classification_code }}
+					</td>
+					<td v-if="isEmneplan" class="opencase-case-list__classification">
+						{{ classificationPlanLabel(c.class_plan_code, c.class_plan_title) }}
 					</td>
 					<td>
 						<CaseStatusBadge :status="c.status_class" :label="c.status_name" />
@@ -116,6 +120,7 @@ import FolderIcon from 'vue-material-design-icons/Folder.vue'
 
 import CaseStatusBadge from '../components/CaseStatusBadge.vue'
 import NewCaseDialog from '../components/NewCaseDialog.vue'
+import { classificationPlanLabel } from '../utils/classificationPlanLabel.js'
 
 export default {
 	name: 'CaseListView',
@@ -144,6 +149,12 @@ export default {
 	},
 
 	computed: {
+		isGroupMode() {
+			return this.$store.state.accessProfileType === 'group'
+		},
+		isEmneplan() {
+			return this.$store.state.classificationPlan === 'Emneplan'
+		},
 		limit() {
 			return this.$store.state.searchPageSize
 		},
@@ -200,6 +211,8 @@ export default {
 	},
 
 	methods: {
+		classificationPlanLabel,
+
 		applyFilters() {
 			this.offset = 0
 			this.$store.dispatch('setFilters', {

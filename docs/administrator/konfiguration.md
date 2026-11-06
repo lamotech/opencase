@@ -340,6 +340,6 @@ Det anbefales at:
 
 ## Se også
 
-- [Administrer skabeloner](./administrer-skabeloner.md)
+- [Administrer brevdesigner](./administrer-skabeloner.md)
 - [Installation – Basic-version](./installation-basic-version.md)
 - [Indkommende dokumenter](../dokumenter/indkommende-dokumenter.md)

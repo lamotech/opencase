@@ -6,6 +6,7 @@ namespace OCA\OpenCase\Service;
 
 use OCA\OpenCase\Db\AuditLogEntry;
 use OCA\OpenCase\Db\AuditLogMapper;
+use OCA\OpenCase\Db\CaseMapper;
 use OCA\OpenCase\Db\ContactTypeMapper;
 
 /**
@@ -19,9 +20,25 @@ use OCA\OpenCase\Db\ContactTypeMapper;
  */
 class AuditService {
 
+    /**
+     * Changes to a case's documents and files that count as activity on the
+     * case: they bump the case's updated_at, which processes waiting for
+     * inactivity look at and which makes the SAPA job re-send the case.
+     * (File contents saved through Office are handled by FileUpdatedListener.)
+     */
+    private const CASE_ACTIVITY_EVENTS = [
+        'document_created', 'document_metadata_changed', 'document_status_changed',
+        'document_deleted', 'document_restored', 'document_moved_to_case',
+        'document_relation_added', 'document_relation_deleted',
+        'document_note_created', 'document_note_updated', 'document_note_deleted',
+        'file_uploaded', 'file_renamed', 'file_deleted', 'file_restored',
+        'file_version_restored', 'file_edited_via_share',
+    ];
+
     public function __construct(
         private AuditLogMapper $mapper,
         private HistoryService $historyService,
+        private CaseMapper $caseMapper,
     ) {
     }
 
@@ -472,6 +489,70 @@ class AuditService {
     }
 
     // ---------------------------------------------------------------
+    // Process events (process module)
+    // ---------------------------------------------------------------
+
+    public function logProcessStarted(int $caseId, string $userId, int $caseProcessId, string $processName, int $versionNo): void {
+        $this->write($caseId, null, null, $userId, 'process_started', [
+            'case_process_id' => $caseProcessId,
+            'process_name'    => $processName,
+            'version_no'      => $versionNo,
+        ]);
+    }
+
+    public function logProcessTaskClaimed(int $caseId, string $userId, int $taskId, string $taskName): void {
+        $this->write($caseId, null, null, $userId, 'process_task_claimed', [
+            'task_id'   => $taskId,
+            'task_name' => $taskName,
+        ]);
+    }
+
+    /**
+     * @param array<string, string> $fields form field label => value
+     */
+    public function logProcessTaskCompleted(int $caseId, string $userId, int $taskId, string $taskName, ?string $outcome, ?string $comment, array $fields = []): void {
+        $this->write($caseId, null, null, $userId, 'process_task_completed', [
+            'task_id'   => $taskId,
+            'task_name' => $taskName,
+            'outcome'   => $outcome,
+            'comment'   => $comment,
+            'fields'    => $fields,
+        ]);
+    }
+
+    public function logProcessMigrated(int $caseId, string $userId, int $caseProcessId, string $processName, int $fromVersionNo, int $toVersionNo): void {
+        $this->write($caseId, null, null, $userId, 'process_migrated', [
+            'case_process_id' => $caseProcessId,
+            'process_name'    => $processName,
+            'from_version_no' => $fromVersionNo,
+            'to_version_no'   => $toVersionNo,
+        ]);
+    }
+
+    public function logProcessStepExecuted(int $caseId, string $actedAs, int $caseProcessId, string $stepName, string $topic): void {
+        $this->write($caseId, null, null, $actedAs, 'process_step_executed', [
+            'case_process_id' => $caseProcessId,
+            'step_name'       => $stepName,
+            'topic'           => $topic,
+        ]);
+    }
+
+    public function logProcessCompleted(int $caseId, int $caseProcessId, string $processName): void {
+        $this->write($caseId, null, null, 'system', 'process_completed', [
+            'case_process_id' => $caseProcessId,
+            'process_name'    => $processName,
+        ]);
+    }
+
+    public function logProcessCancelled(int $caseId, string $userId, int $caseProcessId, string $processName, string $reason): void {
+        $this->write($caseId, null, null, $userId, 'process_cancelled', [
+            'case_process_id' => $caseProcessId,
+            'process_name'    => $processName,
+            'reason'          => $reason,
+        ]);
+    }
+
+    // ---------------------------------------------------------------
     // Queries
     // ---------------------------------------------------------------
 
@@ -517,6 +598,21 @@ class AuditService {
     // ---------------------------------------------------------------
     // Digital Post events
     // ---------------------------------------------------------------
+
+    /**
+     * A Digital Post shipment was created and queued for sending; the
+     * dispatch job logs digital_post_sent / _failed per receiver later.
+     *
+     * @param string[] $receiverNames
+     * @param string[] $fileNames
+     */
+    public function logDigitalPostQueued(int $caseId, int $documentId, string $userId, int $shipmentId, array $receiverNames, array $fileNames): void {
+        $this->write($caseId, $documentId, null, $userId, 'digital_post_queued', [
+            'shipment_id' => $shipmentId,
+            'receivers'   => $receiverNames,
+            'files'       => $fileNames,
+        ]);
+    }
 
     public function logDigitalPostSent(
         int $caseId,
@@ -580,9 +676,67 @@ class AuditService {
         ]);
     }
 
-    public function logDocumentSendByEmailFailed(int $caseId, int $documentId, string $userId, string $error): void {
+    public function logDocumentSendByEmailFailed(int $caseId, int $documentId, string $userId, string $error, string $variant = 'files'): void {
         $this->write($caseId, $documentId, null, $userId, 'document_send_by_email_failed', [
-            'error' => $error,
+            'error'   => $error,
+            'variant' => $variant,
+        ]);
+    }
+
+    /**
+     * A link to the document in OpenCase was sent by email (no files attached).
+     *
+     * @param string[] $to
+     * @param string[] $cc
+     * @param string[] $bcc
+     */
+    public function logDocumentLinkSentByEmail(
+        int $caseId,
+        int $documentId,
+        string $userId,
+        string $fromAddress,
+        array $to,
+        array $cc,
+        array $bcc,
+        string $subject,
+        string $link,
+    ): void {
+        $this->write($caseId, $documentId, null, $userId, 'document_link_sent_by_email', [
+            'from'    => $fromAddress,
+            'to'      => $to,
+            'cc'      => $cc,
+            'bcc'     => $bcc,
+            'subject' => $subject,
+            'link'    => $link,
+        ]);
+    }
+
+    /**
+     * The document's files were sent by email, converted to PDF.
+     *
+     * @param string[] $to
+     * @param string[] $cc
+     * @param string[] $bcc
+     * @param string[] $pdfFilenames
+     */
+    public function logDocumentPdfSentByEmail(
+        int $caseId,
+        int $documentId,
+        string $userId,
+        string $fromAddress,
+        array $to,
+        array $cc,
+        array $bcc,
+        string $subject,
+        array $pdfFilenames,
+    ): void {
+        $this->write($caseId, $documentId, null, $userId, 'document_pdf_sent_by_email', [
+            'from'        => $fromAddress,
+            'to'          => $to,
+            'cc'          => $cc,
+            'bcc'         => $bcc,
+            'subject'     => $subject,
+            'attachments' => $pdfFilenames,
         ]);
     }
 
@@ -723,6 +877,9 @@ class AuditService {
             $entry->setDetails(json_encode($details));
             $entry->setCreatedAt(new \DateTime());
             $this->mapper->insert($entry);
+            if (in_array($eventType, self::CASE_ACTIVITY_EVENTS, true)) {
+                $this->caseMapper->touch($caseId);
+            }
         } catch (\Throwable) {
             // Never let audit logging fail a business operation
         }

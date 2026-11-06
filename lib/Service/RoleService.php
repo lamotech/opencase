@@ -6,6 +6,7 @@ namespace OCA\OpenCase\Service;
 
 use OCA\OpenCase\Db\RoleMapper;
 use OCA\OpenCase\Db\UserRoleMapper;
+use OCP\IGroupManager;
 
 class RoleService {
 
@@ -19,15 +20,26 @@ class RoleService {
         'opencasereaduser'               => 'User',
         'opencaseadministrator'          => 'Administrator',
         'opencasetemplateadministrator'  => 'Template Designer',
+        'opencaseprocessadministrator'   => 'Process Designer',
     ];
 
     public function __construct(
         private UserRoleMapper $userRoleMapper,
         private RoleMapper $roleMapper,
+        private IGroupManager $groupManager,
     ) {}
 
     public function userHasRole(string $userId, string $roleName): bool {
         return $this->userRoleMapper->userHasRoleByName($userId, $roleName);
+    }
+
+    /**
+     * Whether the user may use OpenCase: they have the 'User' role, or are a
+     * Nextcloud admin (see RoleMiddleware).
+     */
+    public function isOpenCaseUser(string $userId): bool {
+        return $this->groupManager->isAdmin($userId)
+            || $this->userHasRole($userId, 'User');
     }
 
     /**
@@ -52,7 +64,7 @@ class RoleService {
             }
         }
 
-        foreach (['User', 'Administrator', 'Template Designer'] as $roleName) {
+        foreach (['User', 'Administrator', 'Template Designer', 'Process Designer'] as $roleName) {
             if (!empty($desiredRoles[$roleName])) {
                 $this->assignRoleByName($userId, $roleName);
             } else {

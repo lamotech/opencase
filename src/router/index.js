@@ -27,6 +27,7 @@ import BulkUpdateCaseCreateView from '../views/BulkUpdateCaseCreateView.vue'
 import BulkUpdateDocumentCreateView from '../views/BulkUpdateDocumentCreateView.vue'
 import ConfigurationView from '../views/ConfigurationView.vue'
 import AccessRequestDetailView from '../views/AccessRequestDetailView.vue'
+import ProcessListView from '../views/ProcessListView.vue'
 
 export default createRouter({
 	history: createWebHistory(generateUrl('/apps/opencase')),
@@ -196,6 +197,18 @@ export default createRouter({
 			path: '/templates/fields',
 			name: 'template-fields',
 			component: TemplateFieldsView,
+		},
+		{
+			path: '/processes',
+			name: 'processes',
+			component: ProcessListView,
+		},
+		{
+			path: '/processes/:id',
+			name: 'process-designer',
+			// bpmn-js is large, so the designer is loaded on demand
+			component: () => import('../views/ProcessDesignerView.vue'),
+			props: true,
 		},
 		{
 			path: '/access-request/:id',

@@ -3,8 +3,11 @@ nav:
   - index.md
   - installation-basic-version.md
   - installation-enterprise-version.md
-  - administrer-skabeloner.md
+  - installation-euro-office-desktop.md
+  - konfiguration-microsoft-entra-id.md
   - konfiguration.md
+  - administrer-skabeloner.md
+  - administrer-processer.md
   - lokale-brugere.md
   - transaktionslog.md
   - import.md

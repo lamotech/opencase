@@ -132,6 +132,22 @@ class UserAccessMapper extends QBMapper {
     }
 
     /**
+     * Remove every user's access to a profile (e.g. when the profile is deleted).
+     *
+     * @return string[] The user IDs that had access
+     */
+    public function revokeAllForProfile(int $accessProfileId): array {
+        $userIds = array_map(fn(UserAccess $a) => $a->getUserId(), $this->getUsersForProfile($accessProfileId));
+
+        $qb = $this->db->getQueryBuilder();
+        $qb->delete($this->getTableName())
+            ->where($qb->expr()->eq('access_profile_id', $qb->createNamedParameter($accessProfileId, IQueryBuilder::PARAM_INT)));
+        $qb->executeStatement();
+
+        return $userIds;
+    }
+
+    /**
      * Get all users who have access to a specific profile.
      *
      * @return UserAccess[]

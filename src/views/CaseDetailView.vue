@@ -242,6 +242,15 @@
 				<AccessRequestListView :case-id="caseData.id" />
 			</div>
 
+			<!-- Processer tab -->
+			<div v-if="activeTab === 'processes'" class="opencase-case-detail__content">
+				<CaseProcessPanel :case-id="caseData.id"
+					:can-write="canWrite"
+					:is-closed="!!caseData.status_is_closed"
+					@count-changed="processesCount = $event"
+					@case-changed="refreshAfterProcessSteps" />
+			</div>
+
 			<!-- Ejendomme tab -->
 			<div v-if="activeTab === 'estates'" class="opencase-case-detail__content">
 				<CaseEstateList :case-id="caseData.id" @count-changed="estatesCount = $event" />
@@ -342,6 +351,7 @@ import JournalNoteDialog from '../components/JournalNoteDialog.vue'
 import JournalNoteViewDialog from '../components/JournalNoteViewDialog.vue'
 import OverflowTabs from '../components/OverflowTabs.vue'
 import CaseHierarchyTab from '../components/CaseHierarchyTab.vue'
+import CaseProcessPanel from '../components/CaseProcessPanel.vue'
 import NewAccessRequestDialog from '../components/NewAccessRequestDialog.vue'
 import AccessRequestListView from './AccessRequestListView.vue'
 import ReminderDialog from '../components/ReminderDialog.vue'
@@ -397,6 +407,7 @@ export default {
 		JournalNoteViewDialog,
 		OverflowTabs,
 		CaseHierarchyTab,
+		CaseProcessPanel,
 		AccountIcon,
 		OfficeBuildingIcon,
 		CprDisplay,
@@ -416,7 +427,7 @@ export default {
 
 	data() {
 		const hashTab = window.location.hash.replace('#tab-', '')
-		const validCaseTabs = ['info', 'documents', 'files', 'participants', 'journalnotes', 'caseworkers', 'log', 'access', 'hierarchy', 'access_requests', 'estates']
+		const validCaseTabs = ['info', 'documents', 'files', 'participants', 'journalnotes', 'caseworkers', 'log', 'access', 'hierarchy', 'access_requests', 'estates', 'processes']
 		return {
 			loading: true,
 			activeTab: validCaseTabs.includes(hashTab) ? hashTab : 'info',
@@ -429,6 +440,7 @@ export default {
 			accessRequestsCount: null,
 			hasHierarchy: false,
 			estatesCount: null,
+			processesCount: null,
 			showReminderDialog: false,
 			journalNotes: [],
 			journalNotesLoading: false,
@@ -473,6 +485,9 @@ export default {
 				{ id: 'participants', label: t('opencase', 'Parter'), count: this.participantsCount, icon: AccountMultipleOutlineIcon },
 				{ id: 'journalnotes', label: t('opencase', 'Journalnotater'), count: this.journalNotes.length || null, icon: NoteTextOutlineIcon },
 				{ id: 'caseworkers', label: t('opencase', 'Andre sagsbehandlere'), count: this.caseworkersCount, icon: AccountCogOutlineIcon },
+				...(this.$store.state.processEngineEnabled
+					? [{ id: 'processes', label: t('opencase', 'Processer'), count: this.processesCount, icon: SitemapOutlineIcon }]
+					: []),
 				{ id: 'log', label: t('opencase', 'Log'), icon: HistoryIcon },
 				{ id: 'access', label: t('opencase', 'Adgang'), icon: LockOutlineIcon },
 			]
@@ -655,6 +670,25 @@ export default {
 		onSubCaseCreated(newCase) {
 			this.showSubCaseDialog = false
 			this.$router.push({ name: 'case-detail', params: { id: newCase.id } })
+		},
+
+		/**
+		 * Automatic process steps can add journal notes and documents and
+		 * close the case: reload those parts without reloading the page (and
+		 * without logging another "case opened").
+		 */
+		async refreshAfterProcessSteps() {
+			try {
+				const caseEntity = await api.getCase(this.id, { audit: false })
+				this.$store.commit('SET_CURRENT_CASE', caseEntity)
+				await Promise.all([
+					this.$store.dispatch('fetchDocuments', this.id),
+					this.$store.dispatch('fetchFiles', this.id),
+					api.getJournalNotes(this.id).then(r => { this.journalNotes = r }),
+				])
+			} catch (e) {
+				// The data is still correct after a page reload
+			}
 		},
 
 		async loadJournalNotes() {

@@ -126,4 +126,41 @@ class OrganisationRepository {
 
 		return $qb->executeQuery()->fetchAll();
 	}
+
+	public function setMemberGroupId(string $uuid, ?string $groupId): void {
+		$qb = $this->db->getQueryBuilder();
+		$qb->update('opencase_org')
+			->set('member_group_id', $qb->createNamedParameter($groupId))
+			->where($qb->expr()->eq('org_uuid', $qb->createNamedParameter($uuid)))
+			->executeStatement();
+	}
+
+	/**
+	 * Active organisations whose members come from a Nextcloud group.
+	 *
+	 * @return array<int, array<string, mixed>>
+	 */
+	public function findActiveWithMemberGroup(): array {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('*')->from('opencase_org')
+			->where($qb->expr()->eq('active', $qb->createNamedParameter(true, IQueryBuilder::PARAM_BOOL)))
+			->andWhere($qb->expr()->isNotNull('member_group_id'))
+			->andWhere($qb->expr()->neq('member_group_id', $qb->createNamedParameter('')));
+
+		return $qb->executeQuery()->fetchAll();
+	}
+
+	/**
+	 * Whether the group is an organisation's member group (active or not).
+	 */
+	public function isMemberGroup(string $groupId): bool {
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('org_uuid')->from('opencase_org')
+			->where($qb->expr()->eq('member_group_id', $qb->createNamedParameter($groupId)))
+			->setMaxResults(1);
+		$result = $qb->executeQuery();
+		$found = $result->fetch() !== false;
+		$result->closeCursor();
+		return $found;
+	}
 }

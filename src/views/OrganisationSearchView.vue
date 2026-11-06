@@ -105,6 +105,54 @@
 						<span>{{ selectedOrg.location }}</span>
 					</div>
 				</div>
+
+				<!-- Logo used in templates (merge field organisation.logo) -->
+				<div class="ocs-org__logo">
+					<span class="ocs-org__card-label">{{ t('opencase', 'Logo') }}</span>
+					<div class="ocs-org__logo-body">
+						<div class="ocs-org__logo-preview">
+							<NcLoadingIcon v-if="logoLoading" :size="24" />
+							<img v-else-if="logoUrl" :src="logoUrl" :alt="t('opencase', 'Logo')">
+							<ImageOffOutlineIcon v-else :size="32" class="ocs-org__logo-none" />
+						</div>
+						<div class="ocs-org__logo-text">
+							<span v-if="logoLoading" />
+							<span v-else-if="logoInfo && logoInfo.has_own_logo">
+								{{ t('opencase', 'Organisationens eget logo bruges i skabeloner.') }}
+							</span>
+							<span v-else-if="logoInfo && logoInfo.logo_org_uuid">
+								{{ t('opencase', 'Arvet fra {org}.', { org: logoInfo.logo_org_name }) }}
+							</span>
+							<span v-else>
+								{{ t('opencase', 'Intet logo — hverken organisationen eller dens overordnede organisationer har et logo.') }}
+							</span>
+							<div v-if="canManageLogos" class="ocs-org__logo-actions">
+								<input ref="logoInput"
+									type="file"
+									accept=".png,.jpg,.jpeg,.gif,.svg,image/png,image/jpeg,image/gif,image/svg+xml"
+									class="ocs-org__logo-input"
+									@change="onLogoSelected">
+								<NcButton :disabled="logoSaving" @click="$refs.logoInput.click()">
+									<template #icon>
+										<NcLoadingIcon v-if="logoSaving" :size="20" />
+										<UploadIcon v-else :size="20" />
+									</template>
+									{{ logoInfo && logoInfo.has_own_logo ? t('opencase', 'Erstat logo') : t('opencase', 'Upload logo') }}
+								</NcButton>
+								<NcButton v-if="logoInfo && logoInfo.has_own_logo"
+									type="tertiary"
+									:disabled="logoSaving"
+									@click="removeLogo">
+									<template #icon>
+										<DeleteIcon :size="20" />
+									</template>
+									{{ t('opencase', 'Fjern logo') }}
+								</NcButton>
+								<span class="ocs-org__logo-hint">{{ t('opencase', 'PNG, JPEG, GIF eller SVG, højst 5 MB.') }}</span>
+							</div>
+						</div>
+					</div>
+				</div>
 			</div>
 
 			<!-- Tabs -->
@@ -181,7 +229,10 @@ import OfficeBuildingIcon from 'vue-material-design-icons/OfficeBuilding.vue'
 import AccountGroupIcon from 'vue-material-design-icons/AccountGroup.vue'
 import AccountMultipleOutlineIcon from 'vue-material-design-icons/AccountMultipleOutline.vue'
 import ArrowLeftIcon from 'vue-material-design-icons/ArrowLeft.vue'
-import { showError } from '@nextcloud/dialogs'
+import UploadIcon from 'vue-material-design-icons/Upload.vue'
+import DeleteIcon from 'vue-material-design-icons/Delete.vue'
+import ImageOffOutlineIcon from 'vue-material-design-icons/ImageOffOutline.vue'
+import { showError, showSuccess } from '@nextcloud/dialogs'
 
 import OrgTreeNode from '../components/OrgTreeNode.vue'
 import OverflowTabs from '../components/OverflowTabs.vue'
@@ -200,6 +251,9 @@ export default {
 		OfficeBuildingIcon,
 		AccountGroupIcon,
 		ArrowLeftIcon,
+		UploadIcon,
+		DeleteIcon,
+		ImageOffOutlineIcon,
 		OrgTreeNode,
 		OverflowTabs,
 	},
@@ -216,10 +270,18 @@ export default {
 			allOrgs: [],
 			loadingTree: false,
 			activeTab: 'orgtree',
+			logoInfo: null,
+			logoUrl: null,
+			logoLoading: false,
+			logoSaving: false,
 		}
 	},
 
 	computed: {
+		canManageLogos() {
+			return this.$store.state.isAdministrator || this.$store.state.isTemplateDesigner
+		},
+
 		orgTabs() {
 			return [
 				{ id: 'orgtree', label: t('opencase', 'Organisationsstruktur'), icon: SitemapOutlineIcon },
@@ -285,6 +347,10 @@ export default {
 		}
 	},
 
+	beforeUnmount() {
+		this.setLogoUrl(null)
+	},
+
 	watch: {
 		activeTab(val) {
 			if (!this.selectedOrg) return
@@ -320,6 +386,8 @@ export default {
 				this.$router.replace({ query: { org: org.org_uuid, tab: 'orgtree' } })
 			}
 
+			this.loadLogo()
+
 			this.loadingMembers = true
 			api.getOrgMembers(org.org_uuid)
 				.then(m => { this.members = m || [] })
@@ -335,7 +403,64 @@ export default {
 			}
 		},
 
+		async loadLogo() {
+			const uuid = this.selectedOrg?.org_uuid
+			if (!uuid) return
+			this.logoLoading = true
+			this.setLogoUrl(null)
+			try {
+				const info = await api.getOrgLogoInfo(uuid)
+				const url = info.logo_org_uuid ? await api.getOrgLogoUrl(info.logo_org_uuid) : null
+				if (this.selectedOrg?.org_uuid !== uuid) {
+					if (url) URL.revokeObjectURL(url)
+					return
+				}
+				this.logoInfo = info
+				this.setLogoUrl(url)
+			} catch (e) {
+				this.logoInfo = null
+			} finally {
+				this.logoLoading = false
+			}
+		},
+
+		setLogoUrl(url) {
+			if (this.logoUrl) URL.revokeObjectURL(this.logoUrl)
+			this.logoUrl = url
+		},
+
+		async onLogoSelected(event) {
+			const file = event.target.files[0]
+			event.target.value = ''
+			if (!file) return
+			this.logoSaving = true
+			try {
+				await api.uploadOrgLogo(this.selectedOrg.org_uuid, file)
+				showSuccess(t('opencase', 'Logoet er gemt'))
+				await this.loadLogo()
+			} catch (e) {
+				showError(e.response?.data?.ocs?.data?.error || t('opencase', 'Logoet kunne ikke gemmes'))
+			} finally {
+				this.logoSaving = false
+			}
+		},
+
+		async removeLogo() {
+			if (!window.confirm(t('opencase', 'Fjern logoet fra {org}?', { org: this.selectedOrg.org_name }))) return
+			this.logoSaving = true
+			try {
+				await api.deleteOrgLogo(this.selectedOrg.org_uuid)
+				await this.loadLogo()
+			} catch (e) {
+				showError(t('opencase', 'Logoet kunne ikke fjernes'))
+			} finally {
+				this.logoSaving = false
+			}
+		},
+
 		backToSearch() {
+			this.setLogoUrl(null)
+			this.logoInfo = null
 			this.selectedOrg = null
 			this.members     = []
 			sessionStorage.removeItem('oc_selected_org')
@@ -494,6 +619,69 @@ export default {
 	display: grid;
 	grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
 	gap: 12px 24px;
+}
+
+.ocs-org__logo {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin-top: 16px;
+	padding-top: 16px;
+	border-top: 1px solid var(--color-border);
+}
+
+.ocs-org__logo-body {
+	display: flex;
+	gap: 16px;
+	align-items: flex-start;
+	flex-wrap: wrap;
+}
+
+.ocs-org__logo-preview {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 200px;
+	height: 80px;
+	padding: 8px;
+	background: var(--color-main-background);
+	border: 1px solid var(--color-border);
+	border-radius: var(--border-radius-large);
+	flex-shrink: 0;
+}
+
+.ocs-org__logo-preview img {
+	max-width: 100%;
+	max-height: 100%;
+	object-fit: contain;
+}
+
+.ocs-org__logo-none {
+	color: var(--color-text-maxcontrast);
+}
+
+.ocs-org__logo-text {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	flex: 1;
+	min-width: 220px;
+}
+
+.ocs-org__logo-actions {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+.ocs-org__logo-input {
+	display: none;
+}
+
+.ocs-org__logo-hint {
+	color: var(--color-text-maxcontrast);
+	font-size: 0.85em;
 }
 
 .ocs-org__card-field {

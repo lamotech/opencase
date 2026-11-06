@@ -267,7 +267,12 @@ abstract class AbstractPublicDataApiController extends Controller implements Pub
                 foreach ($value as $item) {
                     $itemEl = $doc->createElementNS(CaseExportService::NS, $itemName);
                     $wrapEl->appendChild($itemEl);
-                    $this->appendFieldsRecursive($doc, $itemEl, $item);
+                    if (is_array($item)) {
+                        $this->appendFieldsRecursive($doc, $itemEl, $item);
+                    } elseif ($item !== null) {
+                        // A list of plain values, e.g. OrgUuids
+                        $itemEl->appendChild($doc->createTextNode($this->xmlScalarValue($item)));
+                    }
                 }
                 continue;
             }

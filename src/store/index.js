@@ -11,7 +11,12 @@ export default createStore({
 		enterpriseVersionEnabled: loadState('opencase', 'enterprise_version_enabled', false),
 		// Automatic masking via the redaction service (from server config: feature_redaction-service)
 		redactionServiceEnabled: loadState('opencase', 'redaction_service_enabled', false),
+		// Kassationskode/-dato on cases (from server config: feature_disposal, default 1)
+		disposalEnabled: loadState('opencase', 'disposal_enabled', true),
 		// Enterprise Digital Post feature (from server config: enterprise_version)
+		// Process module (from server config: feature_process-engine)
+		processEngineEnabled: loadState('opencase', 'process_engine_enabled', false),
+		// Digital Post (from server config: feature_digital-post)
 		digitalPostEnabled: loadState('opencase', 'digital_post_enabled', false),
 		// Enterprise Datafordeler CPR (citizen) search (from server config: enterprise_version)
 		citizenSearchEnabled: loadState('opencase', 'citizen_search_enabled', false),
@@ -21,13 +26,25 @@ export default createStore({
 		mailAppEnabled: loadState('opencase', 'mail_app_enabled', false),
 		// Whether deleted files/documents are kept and can be restored (from server config: use_softdelete)
 		softDeleteEnabled: loadState('opencase', 'soft_delete_enabled', false),
+		// How case access is given (from server config: accessprofile_type):
+		// 'fk' = FK Adgang (organisation + KLE + sensitivity), 'group' = Grupper (Nextcloud group)
+		accessProfileType: loadState('opencase', 'accessprofile_type', 'fk'),
+		// What cases are classified by (from server config: classification_plan):
+		// 'KLE' = KLE numbers, 'Emneplan' = the customer's own plan (classificationPlanItems)
+		classificationPlan: loadState('opencase', 'classification_plan', 'KLE'),
+		// Access groups a case can be given (Grupper only):
+		// [{ access_profile_id, group_id, group_name, can_write }]
+		accessGroups: [],
 		// Current user's OpenCase roles
 		isAdministrator: false,
 		isTemplateDesigner: false,
+		isProcessDesigner: false,
 		// Organisation list derived from stats
 		organisations: [],
 		// Classification subjects (KLE emneord)
 		classificationSubjects: [],
+		// Active Emneplan items: [{ uuid, code, title, description, active }]
+		classificationPlanItems: [],
 		// Sensitivity levels
 		sensitivities: [],
 		// Case statuses (localized)
@@ -100,6 +117,10 @@ export default createStore({
 			state.isTemplateDesigner = value
 		},
 
+		SET_IS_PROCESS_DESIGNER(state, value) {
+			state.isProcessDesigner = value
+		},
+
 		SET_ORGANISATIONS(state, organisations) {
 			state.organisations = organisations
 		},
@@ -108,8 +129,16 @@ export default createStore({
 			state.classificationSubjects = subjects
 		},
 
+		SET_CLASSIFICATION_PLAN_ITEMS(state, items) {
+			state.classificationPlanItems = items
+		},
+
 		SET_SENSITIVITIES(state, sensitivities) {
 			state.sensitivities = sensitivities
+		},
+
+		SET_ACCESS_GROUPS(state, groups) {
+			state.accessGroups = groups
 		},
 
 		SET_CASE_STATUSES(state, statuses) {
@@ -261,6 +290,7 @@ export default createStore({
 			const roles = await api.getMyRoles()
 			commit('SET_IS_ADMINISTRATOR', roles.includes('Administrator'))
 			commit('SET_IS_TEMPLATE_DESIGNER', roles.includes('Template Designer'))
+			commit('SET_IS_PROCESS_DESIGNER', roles.includes('Process Designer'))
 		},
 
 		async fetchOrganisations({ commit }) {
@@ -273,9 +303,19 @@ export default createStore({
 			commit('SET_CLASSIFICATION_SUBJECTS', subjects)
 		},
 
+		async fetchClassificationPlanItems({ commit }) {
+			const items = await api.getClassificationPlanItems()
+			commit('SET_CLASSIFICATION_PLAN_ITEMS', items)
+		},
+
 		async fetchSensitivities({ commit }) {
 			const sensitivities = await api.getSensitivities()
 			commit('SET_SENSITIVITIES', sensitivities)
+		},
+
+		async fetchAccessGroups({ commit }) {
+			const { groups } = await api.getAccessGroups()
+			commit('SET_ACCESS_GROUPS', groups)
 		},
 
 		async fetchCaseStatuses({ commit }) {

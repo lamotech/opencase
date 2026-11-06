@@ -12,8 +12,11 @@
 			</p>
 		</div>
 
+		<NcLoadingIcon v-if="loading" :size="44" />
+
 		<div v-for="group in groups" :key="group.key" class="template-fields__group">
 			<h3 class="template-fields__group-title">{{ group.label }}</h3>
+			<p v-if="group.note" class="template-fields__group-note">{{ group.note }}</p>
 			<table class="fields-table">
 				<thead>
 					<tr>
@@ -46,15 +49,20 @@
 
 <script>
 import NcButton from '@nextcloud/vue/components/NcButton'
+import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import { getLanguage } from '@nextcloud/l10n'
 import ContentCopyIcon from 'vue-material-design-icons/ContentCopy.vue'
 import CheckIcon from 'vue-material-design-icons/Check.vue'
+import { showError } from '@nextcloud/dialogs'
+
+import api from '../services/api.js'
 
 export default {
 	name: 'TemplateFieldsView',
 
 	components: {
 		NcButton,
+		NcLoadingIcon,
 		ContentCopyIcon,
 		CheckIcon,
 	},
@@ -65,126 +73,19 @@ export default {
 			copied: null,
 			danish,
 			exampleSyntax: danish ? '{{feltnavn}}' : '{{fieldname}}',
-			groups: [
-				{
-					key: 'case',
-					label: t('opencase', 'Sag'),
-					fields: [
-						{
-							da: 'sag.nummer',
-							en: 'case.number',
-							description: t('opencase', 'Sagsnummer'),
-						},
-						{
-							da: 'sag.titel',
-							en: 'case.title',
-							description: t('opencase', 'Sagsoverskrift'),
-						},
-						{
-							da: 'sag.organisation',
-							en: 'case.organisation',
-							description: t('opencase', 'Organisationsnavn'),
-						},
-						{
-							da: 'sag.kle',
-							en: 'case.kle',
-							description: t('opencase', 'KLE-klassifikationskode'),
-						},
-						{
-							da: 'sag.følsomhed',
-							en: 'case.sensitivity',
-							description: t('opencase', 'Følsomhedsniveau'),
-						},
-						{
-							da: 'sag.status',
-							en: 'case.status',
-							description: t('opencase', 'Sagsstatus'),
-						},
-						{
-							da: 'sag.oprettet',
-							en: 'case.created',
-							description: t('opencase', 'Oprettelsesdato (dd.mm.åååå)'),
-						},
-					],
-				},
-				{
-					key: 'document',
-					label: t('opencase', 'Dokument'),
-					fields: [
-						{
-							da: 'dokument.nummer',
-							en: 'document.number',
-							description: t('opencase', 'Dokumentnummer'),
-						},
-						{
-							da: 'dokument.type',
-							en: 'document.type',
-							description: t('opencase', 'Dokumenttype'),
-						},
-						{
-							da: 'dokument.titel',
-							en: 'document.title',
-							description: t('opencase', 'Dokumenttitel'),
-						},
-						{
-							da: 'dokument.oprettet',
-							en: 'document.created',
-							description: t('opencase', 'Oprettelsesdato (dd.mm.åååå)'),
-						},
-						{
-							da: 'dokument.status',
-							en: 'document.status',
-							description: t('opencase', 'Dokumentstatus'),
-						},
-					],
-				},
-				{
-					key: 'address',
-					label: t('opencase', 'Adresse'),
-					fields: [
-						{
-							da: 'adresse.cpr',
-							en: 'address.cpr',
-							description: t('opencase', 'CPR-nummer'),
-						},
-						{
-							da: 'adresse.navn',
-							en: 'address.name',
-							description: t('opencase', 'Navn'),
-						},
-						{
-							da: 'adresse.vejnavn',
-							en: 'address.streetname',
-							description: t('opencase', 'Vejnavn'),
-						},
-						{
-							da: 'adresse.husnummer',
-							en: 'address.housenumber',
-							description: t('opencase', 'Husnummer'),
-						},
-						{
-							da: 'adresse.etage',
-							en: 'address.floor',
-							description: t('opencase', 'Etage'),
-						},
-						{
-							da: 'adresse.dør',
-							en: 'address.door',
-							description: t('opencase', 'Dør'),
-						},
-						{
-							da: 'adresse.postnummer',
-							en: 'address.zipcode',
-							description: t('opencase', 'Postnummer'),
-						},
-						{
-							da: 'adresse.postdistrikt',
-							en: 'address.zipdistrict',
-							description: t('opencase', 'Postdistrikt'),
-						},
-					],
-				},
-			],
+			// Loaded from the server (lib/Service/TemplateFieldCatalog.php)
+			groups: [],
+			loading: true,
+		}
+	},
+
+	async mounted() {
+		try {
+			this.groups = await api.getTemplateFields()
+		} catch (e) {
+			showError(t('opencase', 'Kunne ikke hente skabelonfelter'))
+		} finally {
+			this.loading = false
 		}
 	},
 
@@ -269,6 +170,12 @@ export default {
 	font-size: 1em;
 	font-weight: 600;
 	margin: 0 0 16px;
+}
+
+.template-fields__group-note {
+	color: var(--color-text-maxcontrast);
+	margin: -8px 0 16px;
+	max-width: 760px;
 }
 
 .fields-table {

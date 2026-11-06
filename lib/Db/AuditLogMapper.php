@@ -18,6 +18,34 @@ class AuditLogMapper extends QBMapper {
     }
 
     /**
+     * Documents that arrived on the case since the given time: created
+     * (also by inbound jobs) or moved there from another case. Oldest first.
+     *
+     * @return int[] document ids
+     */
+    public function findDocumentArrivals(int $caseId, \DateTime $since): array {
+        $qb = $this->db->getQueryBuilder();
+        $qb->select('document_id')
+            ->from($this->getTableName())
+            ->where($qb->expr()->eq('case_id', $qb->createNamedParameter($caseId, IQueryBuilder::PARAM_INT)))
+            ->andWhere($qb->expr()->in('event_type', $qb->createNamedParameter(
+                ['document_created', 'document_moved_to_case'],
+                IQueryBuilder::PARAM_STR_ARRAY
+            )))
+            ->andWhere($qb->expr()->isNotNull('document_id'))
+            ->andWhere($qb->expr()->gte('created_at', $qb->createNamedParameter($since, IQueryBuilder::PARAM_DATETIME_MUTABLE)))
+            ->orderBy('created_at', 'ASC')
+            ->addOrderBy('id', 'ASC');
+        $result = $qb->executeQuery();
+        $ids = [];
+        while (($row = $result->fetch()) !== false) {
+            $ids[] = (int)$row['document_id'];
+        }
+        $result->closeCursor();
+        return array_values(array_unique($ids));
+    }
+
+    /**
      * Return case-level audit entries plus document created/deleted/restored events, newest first.
      *
      * @return AuditLogEntry[]

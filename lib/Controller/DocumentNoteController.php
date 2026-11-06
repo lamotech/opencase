@@ -6,8 +6,8 @@ namespace OCA\OpenCase\Controller;
 
 use OCA\OpenCase\Db\DocumentMapper;
 use OCA\OpenCase\Db\DocumentNote;
-use OCA\OpenCase\Db\DocumentNoteMapper;
-use OCA\OpenCase\Service\AuditService;
+use OCA\OpenCase\Service\DocumentNoteService;
+use OCA\OpenCase\Service\NotFoundException;
 use OCA\OpenCase\Service\PermissionService;
 use OCP\AppFramework\ApiController;
 use OCP\AppFramework\Http;
@@ -32,9 +32,8 @@ class DocumentNoteController extends ApiController {
     public function __construct(
         string $appName,
         IRequest $request,
-        private DocumentNoteMapper $noteMapper,
+        private DocumentNoteService $noteService,
         private DocumentMapper $documentMapper,
-        private AuditService $auditService,
         private PermissionService $permissionService,
         private ?string $userId,
     ) {
@@ -59,49 +58,30 @@ class DocumentNoteController extends ApiController {
         if ($this->documentMapper->findById($documentId) === null) {
             return new DataResponse(['error' => 'Document not found'], Http::STATUS_NOT_FOUND);
         }
-
         if ($denied = $this->denyUnlessDocumentRead($documentId)) {
             return $denied;
         }
 
-        $notes = array_map(fn($n) => $this->serialize($n), $this->noteMapper->findByDocument($documentId));
-
+        $notes = array_map(fn($n) => $this->serialize($n), $this->noteService->listForDocument($documentId));
         return new DataResponse(['document_notes' => $notes]);
     }
 
     #[NoAdminRequired]
     #[ApiRoute(verb: 'POST', url: '/api/v1/documents/{documentId}/notes')]
     public function create(int $documentId): DataResponse {
-        $document = $this->documentMapper->findById($documentId);
-        if ($document === null) {
+        if ($this->documentMapper->findById($documentId) === null) {
             return new DataResponse(['error' => 'Document not found'], Http::STATUS_NOT_FOUND);
         }
-
         if ($denied = $this->denyUnlessDocumentWrite($documentId)) {
             return $denied;
         }
 
         $params = $this->request->getParams();
-        $title  = trim($params['title'] ?? '');
-
-        if ($title === '') {
-            return new DataResponse(['error' => "Field 'title' is required"], Http::STATUS_BAD_REQUEST);
+        try {
+            $note = $this->noteService->create($documentId, (string)($params['title'] ?? ''), $params['text'] ?? null, $this->userId ?? '');
+        } catch (\InvalidArgumentException $e) {
+            return new DataResponse(['error' => $e->getMessage()], Http::STATUS_BAD_REQUEST);
         }
-
-        $note = new DocumentNote();
-        $note->setDocumentId($documentId);
-        $note->setTitle($title);
-        $note->setText($params['text'] ?? null);
-        $note->setCreatedBy($this->userId ?? '');
-        $now = new \DateTime();
-        $note->setCreatedAt($now);
-        $note->setUpdatedAt($now);
-
-        $note = $this->noteMapper->insert($note);
-
-        $this->auditService->logDocumentNoteCreated(
-            $document->getCaseId(), $documentId, $this->userId ?? '', $note->getId(), $title
-        );
 
         return new DataResponse(['document_note' => $this->serialize($note)], Http::STATUS_CREATED);
     }
@@ -109,33 +89,20 @@ class DocumentNoteController extends ApiController {
     #[NoAdminRequired]
     #[ApiRoute(verb: 'PUT', url: '/api/v1/document-notes/{id}')]
     public function update(int $id): DataResponse {
-        $note = $this->noteMapper->findById($id);
-        if ($note === null) {
+        try {
+            $note = $this->noteService->get($id);
+        } catch (NotFoundException) {
             return new DataResponse(['error' => 'Document note not found'], Http::STATUS_NOT_FOUND);
         }
-
         if ($denied = $this->denyUnlessDocumentWrite($note->getDocumentId())) {
             return $denied;
         }
 
         $params = $this->request->getParams();
-        $title  = trim($params['title'] ?? '');
-
-        if ($title === '') {
-            return new DataResponse(['error' => "Field 'title' is required"], Http::STATUS_BAD_REQUEST);
-        }
-
-        $note->setTitle($title);
-        $note->setText($params['text'] ?? null);
-        $note->setUpdatedAt(new \DateTime());
-
-        $note = $this->noteMapper->update($note);
-
-        $document = $this->documentMapper->findById($note->getDocumentId());
-        if ($document !== null) {
-            $this->auditService->logDocumentNoteUpdated(
-                $document->getCaseId(), $note->getDocumentId(), $this->userId ?? '', $id, $title
-            );
+        try {
+            $note = $this->noteService->update($note, (string)($params['title'] ?? ''), $params['text'] ?? null, $this->userId ?? '');
+        } catch (\InvalidArgumentException $e) {
+            return new DataResponse(['error' => $e->getMessage()], Http::STATUS_BAD_REQUEST);
         }
 
         return new DataResponse(['document_note' => $this->serialize($note)]);
@@ -144,24 +111,16 @@ class DocumentNoteController extends ApiController {
     #[NoAdminRequired]
     #[ApiRoute(verb: 'DELETE', url: '/api/v1/document-notes/{id}')]
     public function destroy(int $id): DataResponse {
-        $note = $this->noteMapper->findById($id);
-        if ($note === null) {
+        try {
+            $note = $this->noteService->get($id);
+        } catch (NotFoundException) {
             return new DataResponse(['error' => 'Document note not found'], Http::STATUS_NOT_FOUND);
         }
-
         if ($denied = $this->denyUnlessDocumentWrite($note->getDocumentId())) {
             return $denied;
         }
 
-        $document = $this->documentMapper->findById($note->getDocumentId());
-        if ($document !== null) {
-            $this->auditService->logDocumentNoteDeleted(
-                $document->getCaseId(), $note->getDocumentId(), $this->userId ?? '', $id, $note->getTitle()
-            );
-        }
-
-        $this->noteMapper->delete($note);
-
+        $this->noteService->delete($note, $this->userId ?? '');
         return new DataResponse([], Http::STATUS_NO_CONTENT);
     }
 }

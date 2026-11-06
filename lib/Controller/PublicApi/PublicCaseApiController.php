@@ -19,6 +19,9 @@ use OCA\OpenCase\Db\ParticipantRoleMapper;
 use OCA\OpenCase\Db\SensitivityMapper;
 use OCA\OpenCase\Service\AuditService;
 use OCA\OpenCase\Service\CaseExportService;
+use OCA\OpenCase\Service\ClassificationPlanService;
+use OCA\OpenCase\Service\AccessProfile\AccessProfileTypeResolver;
+use OCA\OpenCase\Service\CaseClassificationService;
 use OCA\OpenCase\Service\CaseService;
 use OCA\OpenCase\Service\CprCvrLookupService;
 use OCA\OpenCase\Service\CustomFieldService;
@@ -52,9 +55,15 @@ use OCP\IUserSession;
  *     XML as a flat <Case> element matching the GET response shape):
  *       Title                     (required)
  *       OrgUuid                   (required) — see GET .../organisations
- *       ClassificationCodeUuid    (required) — see GET .../kle-numbers
- *       SensitivityUuid           (required) — see GET .../sensitivities
- *       ClassificationFacetUuid   (required) — see GET .../classification-facets
+ *       ClassificationCodeUuid    (required with KLE: FK Adgang, or Grupper + KLE) — see GET .../kle-numbers
+ *       SensitivityUuid           (required with KLE: FK Adgang, or Grupper + KLE) — see GET .../sensitivities
+ *       ClassificationFacetUuid   (required with KLE: FK Adgang, or Grupper + KLE) — see GET .../classification-facets
+ *       GroupId                   (required with Grupper) — Nextcloud group id
+ *     Which access fields apply follows the accessprofile_type config; the
+ *     fields of the other type are ignored.
+ *       ClassPlanUuid             (required with classification plan Emneplan)
+ *                                 — see GET .../classification-plan; or
+ *                                 class_plan_code, matched by code
  *       ResponsibleUserId, InsightLevelId, CasetypeId, ParentCaseId (optional)
  *       Summary                   (optional) — case summary as rich-text HTML
  *       CustomFields              (optional) — list of {FieldKey, Value}; see
@@ -62,13 +71,14 @@ use OCP\IUserSession;
  *         (by casetype/organisation/KLE-nummer). Rejected as a whole (before
  *         the case is created) if any value is invalid for its field.
  *     The lowercase/snake_case equivalents (organisation, classification_code,
- *     sensitivity, classification_facet_uuid, responsible_user_id, ...) are
+ *     sensitivity, classification_facet_uuid, group_id, responsible_user_id, ...) are
  *     also accepted, where organisation/classification_code/sensitivity are
  *     matched by name/code/key instead of uuid.
  * PUT  /index.php/apps/opencase/public/v1/api/cases
  *   — update an existing case's metadata. Body: Uuid or CaseNumber
  *     (required, identifies the case) plus any subset of the Create fields
- *     above — omitted fields are left unchanged; ClassificationFacetUuid,
+ *     above — omitted fields are left unchanged (ClassPlanUuid/class_plan_code
+ *     included); ClassificationFacetUuid,
  *     InsightLevelId and Summary can be explicitly cleared by sending them
  *     empty. CustomFields, if present, replaces the value of each listed
  *     field only — fields not mentioned keep their existing value.
@@ -132,6 +142,9 @@ class PublicCaseApiController extends AbstractPublicDataApiController {
         private EstateLinkService $estateLinkService,
         private EstateRoleMapper $estateRoleMapper,
         private CustomFieldService $customFieldService,
+        private AccessProfileTypeResolver $accessProfileTypeResolver,
+        private CaseClassificationService $caseClassificationService,
+        private ClassificationPlanService $classificationPlanService,
         IUserSession $userSession,
     ) {
         parent::__construct($appName, $request, $userSession);
@@ -160,11 +173,18 @@ class PublicCaseApiController extends AbstractPublicDataApiController {
         $insightLevelIdRaw       = $this->bodyValue($params, 'InsightLevelId', 'insight_level_id');
         $casetypeIdRaw           = $this->bodyValue($params, 'CasetypeId', 'casetype_id');
         $parentCaseIdRaw         = $this->bodyValue($params, 'ParentCaseId', 'parent_case_id');
+        $groupId                 = $this->bodyValue($params, 'GroupId', 'group_id');
+        $classPlanUuid           = $this->bodyValue($params, 'ClassPlanUuid', 'class_plan_uuid');
+        $classPlanCode           = $this->bodyValue($params, 'class_plan_code');
+        $groupMode               = $this->accessProfileTypeResolver->isGroupMode();
+        // KLE number, sensitivity and facet: always with FK Adgang (part of the
+        // access profile); with Grupper only with the KLE classification plan.
+        $usesKle                 = $this->caseClassificationService->usesKle();
 
         if (empty($title)) {
             return $this->errorResponse("Field 'Title' is required", Http::STATUS_BAD_REQUEST);
         }
-        if (empty($classificationFacetUuid)) {
+        if ($usesKle && empty($classificationFacetUuid)) {
             return $this->errorResponse("Field 'ClassificationFacetUuid' is required", Http::STATUS_BAD_REQUEST);
         }
 
@@ -179,8 +199,14 @@ class PublicCaseApiController extends AbstractPublicDataApiController {
             return $this->errorResponse("Field 'OrgUuid' (or 'organisation') is required", Http::STATUS_BAD_REQUEST);
         }
 
+        if ($groupMode && empty($groupId)) {
+            return $this->errorResponse("Field 'GroupId' (or 'group_id') is required", Http::STATUS_BAD_REQUEST);
+        }
+
         // Classification: resolve ClassificationCodeUuid to its code, or take the code directly.
-        if (!empty($classificationCodeUuid)) {
+        if (!$usesKle) {
+            // Grupper with an Emneplan: classified by the Emneplan item instead.
+        } elseif (!empty($classificationCodeUuid)) {
             $classSubject = $this->classificationSubjectMapper->findByUuid($classificationCodeUuid);
             if ($classSubject === null) {
                 return $this->errorResponse("No KLE number found for ClassificationCodeUuid '{$classificationCodeUuid}'", Http::STATUS_BAD_REQUEST);
@@ -191,7 +217,9 @@ class PublicCaseApiController extends AbstractPublicDataApiController {
         }
 
         // Sensitivity: resolve SensitivityUuid to its key, or take the key directly.
-        if (!empty($sensitivityUuid)) {
+        if (!$usesKle) {
+            // Grupper with an Emneplan: no sensitivity.
+        } elseif (!empty($sensitivityUuid)) {
             $sensitivity = $this->sensitivityMapper->findByUuid($sensitivityUuid);
             if ($sensitivity === null) {
                 return $this->errorResponse("No sensitivity found for SensitivityUuid '{$sensitivityUuid}'", Http::STATUS_BAD_REQUEST);
@@ -199,6 +227,21 @@ class PublicCaseApiController extends AbstractPublicDataApiController {
             $sensitivityKey = $sensitivity->getKey();
         } elseif (empty($sensitivityKey)) {
             return $this->errorResponse("Field 'SensitivityUuid' (or 'sensitivity') is required", Http::STATUS_BAD_REQUEST);
+        }
+        $access = $groupMode ? ['group_id' => (string)$groupId] : [];
+        if ($usesKle) {
+            // FK Adgang: part of the access profile. Grupper + KLE: kept on the case.
+            $access += ['classification_code' => (string)$classificationCode, 'sensitivity' => (string)$sensitivityKey];
+        }
+
+        // Emneplan: the case's item, given by ClassPlanUuid or by code.
+        try {
+            $classPlanUuid = $this->classificationPlanService->resolveUuid($classPlanUuid, $classPlanCode);
+        } catch (\InvalidArgumentException $e) {
+            return $this->errorResponse($e->getMessage(), Http::STATUS_BAD_REQUEST);
+        }
+        if ($classPlanUuid === null && $this->classificationPlanService->isEmneplan()) {
+            return $this->errorResponse("Field 'ClassPlanUuid' (or 'class_plan_code') is required", Http::STATUS_BAD_REQUEST);
         }
 
         $userId = $this->actingUserId();
@@ -219,15 +262,15 @@ class PublicCaseApiController extends AbstractPublicDataApiController {
             $entity = $this->caseService->create(
                 $title,
                 $organisationName,
-                $classificationCode,
-                $sensitivityKey,
+                $access,
                 $userId,
                 !empty($responsibleUserId) ? $responsibleUserId : null,
                 $insightLevelIdRaw !== null ? (int)$insightLevelIdRaw : null,
-                $classificationFacetUuid,
+                !empty($classificationFacetUuid) ? $classificationFacetUuid : null,
                 $parentCaseIdRaw !== null ? (int)$parentCaseIdRaw : null,
                 !empty($casetypeIdRaw) ? (int)$casetypeIdRaw : null,
                 !empty($summary) ? $summary : null,
+                $classPlanUuid,
             );
         } catch (\InvalidArgumentException $e) {
             return $this->errorResponse($e->getMessage(), Http::STATUS_BAD_REQUEST);
@@ -307,6 +350,13 @@ class PublicCaseApiController extends AbstractPublicDataApiController {
             $sensitivityKey = $sensitivity->getKey();
         }
 
+        $groupId = $this->bodyValue($params, 'GroupId', 'group_id');
+        $access  = array_filter([
+            'classification_code' => $classificationCode,
+            'sensitivity'         => $sensitivityKey,
+            'group_id'            => $groupId,
+        ], fn($v) => $v !== null && $v !== '');
+
         $responsibleUserId = $this->bodyValue($params, 'ResponsibleUserId', 'responsible_user_id');
 
         $insightLevelProvided = $this->bodyKeyProvided($params, 'InsightLevelId', 'insight_level_id');
@@ -319,6 +369,18 @@ class PublicCaseApiController extends AbstractPublicDataApiController {
         $summaryProvided = $this->bodyKeyProvided($params, 'Summary', 'summary');
         $summaryRaw      = $this->bodyValue($params, 'Summary', 'summary');
         $summary         = ($summaryRaw !== null && $summaryRaw !== '') ? $summaryRaw : null;
+
+        // Emneplan: changed only when a (non-empty) item is given, since the
+        // item is required while the plan is in use.
+        try {
+            $classPlanUuid = $this->classificationPlanService->resolveUuid(
+                $this->bodyValue($params, 'ClassPlanUuid', 'class_plan_uuid'),
+                $this->bodyValue($params, 'class_plan_code'),
+                $caseEntity->getClassPlanUuid(),
+            );
+        } catch (\InvalidArgumentException $e) {
+            return $this->errorResponse($e->getMessage(), Http::STATUS_BAD_REQUEST);
+        }
 
         $userId = $this->actingUserId();
         if ($userId === null) {
@@ -338,8 +400,7 @@ class PublicCaseApiController extends AbstractPublicDataApiController {
                 $caseEntity->getId(),
                 $title,
                 $organisationName,
-                $classificationCode,
-                $sensitivityKey,
+                array_map('strval', $access),
                 $userId,
                 $responsibleUserId,
                 $insightLevelId,
@@ -348,6 +409,8 @@ class PublicCaseApiController extends AbstractPublicDataApiController {
                 $facetUuidProvided,
                 $summary,
                 $summaryProvided,
+                $classPlanUuid,
+                $classPlanUuid !== null,
             );
         } catch (\InvalidArgumentException $e) {
             return $this->errorResponse($e->getMessage(), Http::STATUS_BAD_REQUEST);
@@ -698,7 +761,8 @@ class PublicCaseApiController extends AbstractPublicDataApiController {
      * least one filter is recommended): search, organisation, year,
      * status_id, classification_code, sensitivity_key,
      * classification_facet_uuid, insight_level_id, responsible_user_id,
-     * casetype_id, limit (default 50, max 1000), offset.
+     * casetype_id, class_plan_code (Emneplan item, part of its code or
+     * title), limit (default 50, max 1000), offset.
      */
     #[PublicPage]
     #[NoAdminRequired]
@@ -722,6 +786,7 @@ class PublicCaseApiController extends AbstractPublicDataApiController {
         $responsibleUserId       = $this->request->getParam('responsible_user_id') ?: null;
         $casetypeIdRaw           = $this->request->getParam('casetype_id');
         $casetypeId              = ($casetypeIdRaw !== null && $casetypeIdRaw !== '') ? (int)$casetypeIdRaw : null;
+        $classPlanCode           = $this->request->getParam('class_plan_code') ?: null;
         $limit                   = max(1, min((int)$this->request->getParam('limit', '50'), 1000));
         $offset                  = max(0, (int)$this->request->getParam('offset', '0'));
 
@@ -739,6 +804,8 @@ class PublicCaseApiController extends AbstractPublicDataApiController {
             $insightLevelId,
             $responsibleUserId,
             $casetypeId,
+            [],
+            $classPlanCode,
         );
 
         $cases = array_map(

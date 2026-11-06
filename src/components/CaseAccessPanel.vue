@@ -17,7 +17,11 @@
 			<h3 class="opencase-access__section-title">{{ t('opencase', 'Adgangsprofil') }}</h3>
 			<table class="opencase-access__table">
 				<thead>
-					<tr>
+					<tr v-if="isGroupCase">
+						<th>{{ t('opencase', 'Adgangsgruppe') }}</th>
+						<th>{{ t('opencase', 'Antal brugere') }}</th>
+					</tr>
+					<tr v-else>
 						<th>{{ t('opencase', 'Organisation') }}</th>
 						<th>{{ t('opencase', 'KLE Nummer') }}</th>
 						<th>{{ t('opencase', 'Følsomhed') }}</th>
@@ -27,14 +31,17 @@
 				<tbody>
 					<tr :class="{ 'opencase-access__row--clickable': !profileUsersLoading }"
 						@click="openProfileUsersDialog">
-						<td>{{ caseData.organisation || '–' }}</td>
-						<td>
-							<template v-if="caseData.classification_code">
-								{{ caseData.classification_code }}<template v-if="caseData.classification_title"> – {{ caseData.classification_title }}</template>
-							</template>
-							<template v-else>–</template>
-						</td>
-						<td>{{ caseData.sensitivity_title || caseData.sensitivity_key || '–' }}</td>
+						<td v-if="isGroupCase">{{ caseData.group_name || caseData.group_id }}</td>
+						<template v-else>
+							<td>{{ caseData.organisation || '–' }}</td>
+							<td>
+								<template v-if="caseData.classification_code">
+									{{ caseData.classification_code }}<template v-if="caseData.classification_title"> – {{ caseData.classification_title }}</template>
+								</template>
+								<template v-else>–</template>
+							</td>
+							<td>{{ caseData.sensitivity_title || caseData.sensitivity_key || '–' }}</td>
+						</template>
 						<td>
 							<button v-if="profileUsersLoading" class="opencase-access__count-btn" disabled>
 								<NcLoadingIcon :size="16" />
@@ -201,6 +208,12 @@ export default {
 			profileUsersLoading: false,
 			showProfileUsersDialog: false,
 		}
+	},
+
+	computed: {
+		isGroupCase() {
+			return this.caseData?.access_profile_type === 'group'
+		},
 	},
 
 	mounted() {

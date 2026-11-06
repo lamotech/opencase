@@ -66,13 +66,18 @@ class UserRoleMapper extends QBMapper {
         return $this->findEntities($qb);
     }
 
-    public function assignRole(string $userId, int $roleId, ?string $assignedBy = null): UserRole {
-        // Idempotent — skip if already assigned
+    /**
+     * Assign a role from the given source. Idempotent per source: a user can
+     * hold the same role from several sources (see UserRole::SOURCE_*).
+     */
+    public function assignRole(string $userId, int $roleId, ?string $assignedBy = null, string $grantSource = UserRole::SOURCE_PRIVILEGE): UserRole {
+        // Idempotent — skip if already assigned from this source
         $qb = $this->db->getQueryBuilder();
         $qb->select('id')
             ->from($this->getTableName())
             ->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId)))
             ->andWhere($qb->expr()->eq('role_id', $qb->createNamedParameter($roleId, \OCP\DB\QueryBuilder\IQueryBuilder::PARAM_INT)))
+            ->andWhere($qb->expr()->eq('grant_source', $qb->createNamedParameter($grantSource)))
             ->setMaxResults(1);
 
         $result = $qb->executeQuery();
@@ -90,14 +95,53 @@ class UserRoleMapper extends QBMapper {
         $entity->setRoleId($roleId);
         $entity->setAssignedAt(new \DateTime());
         $entity->setAssignedBy($assignedBy);
+        $entity->setGrantSource($grantSource);
         return $this->insert($entity);
     }
 
-    public function revokeRole(string $userId, int $roleId): void {
+    /**
+     * Revoke a role from the given source only; the same role held from
+     * another source is kept.
+     */
+    public function revokeRole(string $userId, int $roleId, string $grantSource = UserRole::SOURCE_PRIVILEGE): void {
         $qb = $this->db->getQueryBuilder();
         $qb->delete($this->getTableName())
             ->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId)))
-            ->andWhere($qb->expr()->eq('role_id', $qb->createNamedParameter($roleId, \OCP\DB\QueryBuilder\IQueryBuilder::PARAM_INT)));
+            ->andWhere($qb->expr()->eq('role_id', $qb->createNamedParameter($roleId, \OCP\DB\QueryBuilder\IQueryBuilder::PARAM_INT)))
+            ->andWhere($qb->expr()->eq('grant_source', $qb->createNamedParameter($grantSource)));
+        $qb->executeStatement();
+    }
+
+    /**
+     * User IDs holding the role from the given source.
+     *
+     * @return list<string>
+     */
+    public function findUserIdsByRoleAndSource(int $roleId, string $grantSource): array {
+        $qb = $this->db->getQueryBuilder();
+        $qb->select('user_id')
+            ->from($this->getTableName())
+            ->where($qb->expr()->eq('role_id', $qb->createNamedParameter($roleId, \OCP\DB\QueryBuilder\IQueryBuilder::PARAM_INT)))
+            ->andWhere($qb->expr()->eq('grant_source', $qb->createNamedParameter($grantSource)));
+
+        $result  = $qb->executeQuery();
+        $userIds = [];
+        while ($row = $result->fetch()) {
+            $userIds[] = (string)$row['user_id'];
+        }
+        $result->closeCursor();
+
+        return $userIds;
+    }
+
+    /**
+     * Revoke every role a user holds from the given source.
+     */
+    public function revokeAllForUserBySource(string $userId, string $grantSource): void {
+        $qb = $this->db->getQueryBuilder();
+        $qb->delete($this->getTableName())
+            ->where($qb->expr()->eq('user_id', $qb->createNamedParameter($userId)))
+            ->andWhere($qb->expr()->eq('grant_source', $qb->createNamedParameter($grantSource)));
         $qb->executeStatement();
     }
 }

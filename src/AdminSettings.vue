@@ -3,6 +3,24 @@
 		<NcSettingsSection :name="t('opencase', 'OpenCase')">
 			<h4>{{ t('opencase', 'Version') }}</h4>
 			<strong>{{ editionLabel }}</strong>
+			<h4>{{ t('opencase', 'Kundetype') }}</h4>
+			<NcCheckboxRadioSwitch v-model="customerType"
+				value="municipality"
+				name="customer_type"
+				type="radio"
+				:disabled="savingCustomerType">
+				{{ t('opencase', 'Kommune') }}
+			</NcCheckboxRadioSwitch>
+			<NcCheckboxRadioSwitch v-model="customerType"
+				value="other"
+				name="customer_type"
+				type="radio"
+				:disabled="savingCustomerType">
+				{{ t('opencase', 'Anden offentlig myndighed') }}
+			</NcCheckboxRadioSwitch>
+			<p v-if="!customerType" class="enterprise-version-warning">
+				{{ t('opencase', 'Vælg kundetype. Valget sætter adgangsprofiler og klassifikationsplan til kundetypens standard.') }}
+			</p>
 		</NcSettingsSection>
 		<NcSettingsSection :name="t('opencase', 'Prerequisites')">
 			<h4>{{ t('opencase', 'Påkrævede') }}</h4>
@@ -390,6 +408,11 @@
 							<td>{{ t('opencase', 'None') }}</td>
 						</tr>
 						<tr>
+							<td>{{ t('opencase', 'Proces administrator') }}</td>
+							<td>http://{{ domain }}/roles/usersystemrole/opencaseprocessadministrator/1</td>
+							<td>{{ t('opencase', 'None') }}</td>
+						</tr>
+						<tr>
 							<td>{{ t('opencase', 'OpenCase Administrator') }}</td>
 							<td>http://{{ domain }}/roles/usersystemrole/opencaseadministrator/1</td>
 							<td>{{ t('opencase', 'None') }}</td>
@@ -405,8 +428,8 @@
 
 
 			<NcSettingsSection :name="t('opencase', 'Digital post')">
-				<p v-if="!enterpriseVersion" class="enterprise-version-warning">
-					{{ t('opencase', 'Integrationen er kun tilgængelig i Enterprise versionen') }}
+				<p v-if="!digitalPostEnabled" class="enterprise-version-warning">
+					{{ t('opencase', 'Integrationen kræver at feature er aktiveret') }}
 				</p>
 				<p>{{ t('opencase', 'Settings for Digital post integration.') }}</p>
 
@@ -419,7 +442,7 @@
 							<input id="dp-cvr"
 								v-model="digitalpostCvr"
 								type="text"
-								:disabled="!enterpriseVersion"
+								:disabled="!digitalPostEnabled"
 								:style="{ width: '200px', maxWidth: '100%', boxSizing: 'border-box' }"
 								@change="saveConfigValue('digitalpost_cvr', digitalpostCvr)">
 						</td>
@@ -432,9 +455,22 @@
 							<input id="dp-sender-label"
 								v-model="digitalpostSenderLabel"
 								type="text"
-								:disabled="!enterpriseVersion"
+								:disabled="!digitalPostEnabled"
 								:style="{ width: '300px', maxWidth: '100%', boxSizing: 'border-box' }"
 								@change="saveConfigValue('digitalpost_sender_label', digitalpostSenderLabel)">
+						</td>
+					</tr>
+					<tr>
+						<td class="opencase-cert-label">
+							<label for="dp-contactpoint-id">{{ t('opencase', 'Kontaktpunkt ID ved digital post') }}</label>
+						</td>
+						<td>
+							<input id="dp-contactpoint-id"
+								v-model="digitalpostContactpointId"
+								type="text"
+								:disabled="!digitalPostEnabled"
+								:style="{ width: '300px', maxWidth: '100%', boxSizing: 'border-box' }"
+								@change="saveConfigValue('digitalpost_contactpoint_id', digitalpostContactpointId)">
 						</td>
 					</tr>
 					<tr>
@@ -445,7 +481,7 @@
 							<input id="dp-entity-id-kombi"
 								v-model="entityIdKombipostafsend"
 								type="text"
-								:disabled="!enterpriseVersion"
+								:disabled="!digitalPostEnabled"
 								:style="{ width: '600px', maxWidth: '100%', boxSizing: 'border-box' }"
 								@change="saveConfigValue('entity_id_kombipostafsend', entityIdKombipostafsend)">
 						</td>
@@ -458,7 +494,7 @@
 							<input id="dp-endpoint-kombi"
 								v-model="endpointKombipostafsend"
 								type="text"
-								:disabled="!enterpriseVersion"
+								:disabled="!digitalPostEnabled"
 								:style="{ width: '600px', maxWidth: '100%', boxSizing: 'border-box' }"
 								@change="saveConfigValue('endpoint_kombipostafsend', endpointKombipostafsend)">
 						</td>
@@ -471,7 +507,7 @@
 							<input id="dp-entity-id-post"
 								v-model="entityIdPostforespoerg"
 								type="text"
-								:disabled="!enterpriseVersion"
+								:disabled="!digitalPostEnabled"
 								:style="{ width: '600px', maxWidth: '100%', boxSizing: 'border-box' }"
 								@change="saveConfigValue('entity_id_postforespoerg', entityIdPostforespoerg)">
 						</td>
@@ -484,7 +520,7 @@
 							<input id="dp-endpoint-post"
 								v-model="endpointPostforespoerg"
 								type="text"
-								:disabled="!enterpriseVersion"
+								:disabled="!digitalPostEnabled"
 								:style="{ width: '600px', maxWidth: '100%', boxSizing: 'border-box' }"
 								@change="saveConfigValue('endpoint_postforespoerg', endpointPostforespoerg)">
 						</td>
@@ -691,6 +727,14 @@
 					</tr>
 				</table>
 			</NcSettingsSection>
+		</div>
+
+		<div v-show="activeTab === 'access_profiles'">
+			<AccessProfileSettings :initial-type="accessProfileType"
+				:initial-prefix="accessGroupPrefix"
+				:initial-classification-plan="classificationPlan"
+				:customer-type="effectiveCustomerType"
+				:organisation-sync-enabled="organisationEnable" />
 		</div>
 
 		<div v-show="activeTab === 'datafordeler'">
@@ -1000,6 +1044,73 @@
 				</div>
 				<p v-if="redactionServiceTest" :class="redactionServiceTest.ok ? 'opencase-test-ok' : 'enterprise-version-warning'">
 					{{ redactionServiceTest.ok ? t('opencase', 'Forbindelsen virker.') : redactionServiceTest.error }}
+				</p>
+			</NcSettingsSection>
+		</div>
+
+		<div v-show="activeTab === 'processes'">
+			<NcSettingsSection :name="t('opencase', 'Procesmotor')">
+				<p v-if="!processEngineEnabled" class="enterprise-version-warning">
+					{{ t('opencase', 'Integrationen kræver at feature er aktiveret') }}
+				</p>
+				<p>{{ t('opencase', 'Procesmotoren (Flowable) afvikler de processer, der designes under OpenCase → Administrer processer. Den kører som en Docker-container ved siden af Nextcloud – se process-engine/README.md. Motoren skal kun kunne nås fra Nextcloud-serveren.') }}</p>
+
+				<table class="opencase-cert-table">
+					<tr>
+						<td class="opencase-cert-label">
+							<label for="process-engine-url">{{ t('opencase', 'URL') }}</label>
+						</td>
+						<td>
+							<input id="process-engine-url"
+								v-model="processEngineUrl"
+								type="text"
+								placeholder="http://127.0.0.1:8090"
+								autocomplete="off"
+								spellcheck="false"
+								:disabled="!processEngineEnabled"
+								:style="{ width: '400px', maxWidth: '100%', boxSizing: 'border-box' }"
+								@change="saveConfigValue('process_engine_url', processEngineUrl.trim())">
+						</td>
+					</tr>
+					<tr>
+						<td class="opencase-cert-label">
+							<label for="process-engine-user">{{ t('opencase', 'Brugernavn') }}</label>
+						</td>
+						<td>
+							<input id="process-engine-user"
+								v-model="processEngineUser"
+								type="text"
+								autocomplete="off"
+								spellcheck="false"
+								:disabled="!processEngineEnabled"
+								:style="{ width: '400px', maxWidth: '100%', boxSizing: 'border-box' }"
+								@change="saveConfigValue('process_engine_user', processEngineUser.trim())">
+						</td>
+					</tr>
+					<tr>
+						<td class="opencase-cert-label">
+							<label for="process-engine-password">{{ t('opencase', 'Adgangskode') }}</label>
+						</td>
+						<td>
+							<input id="process-engine-password"
+								v-model="processEnginePassword"
+								type="password"
+								autocomplete="new-password"
+								:disabled="!processEngineEnabled"
+								:style="{ width: '400px', maxWidth: '100%', boxSizing: 'border-box' }"
+								@change="saveConfigValue('process_engine_password', processEnginePassword.trim())">
+						</td>
+					</tr>
+				</table>
+				<p class="opencase-msoffice-hint">{{ t('opencase', 'Samme værdier som FLOWABLE_REST_USER og FLOWABLE_REST_PASSWORD i motorens container.') }}</p>
+
+				<div class="opencase-button-row">
+					<button class="primary" :disabled="!processEngineEnabled || testingProcessEngine" @click="testProcessEngine">
+						{{ t('opencase', 'Test forbindelse') }}
+					</button>
+				</div>
+				<p v-if="processEngineTest" :class="processEngineTest.ok ? 'opencase-test-ok' : 'enterprise-version-warning'">
+					{{ processEngineTest.ok ? t('opencase', 'Forbindelsen virker (Flowable {version}).', { version: processEngineTest.version }) : processEngineTest.error }}
 				</p>
 			</NcSettingsSection>
 		</div>
@@ -1966,6 +2077,7 @@
 
 <script>
 import axios from '@nextcloud/axios'
+import { showError } from '@nextcloud/dialogs'
 import { loadState } from '@nextcloud/initial-state'
 import { translate as t } from '@nextcloud/l10n'
 import { generateOcsUrl, generateUrl } from '@nextcloud/router'
@@ -1974,6 +2086,7 @@ import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcModal from '@nextcloud/vue/components/NcModal'
 import NcSettingsSection from '@nextcloud/vue/components/NcSettingsSection'
 import OverflowTabs from './components/OverflowTabs.vue'
+import AccessProfileSettings from './components/AccessProfileSettings.vue'
 import { maskCpr } from './utils/cprMask.js'
 import ContentCopyIcon from 'vue-material-design-icons/ContentCopy.vue'
 import CheckIcon from 'vue-material-design-icons/Check.vue'
@@ -1986,6 +2099,7 @@ export default {
 		NcModal,
 		NcSettingsSection,
 		OverflowTabs,
+		AccessProfileSettings,
 		ContentCopyIcon,
 		CheckIcon,
 	},
@@ -2049,12 +2163,18 @@ export default {
 		certificateDialogInfo() {
 			return this.certificateDialogClient?.certificate_info || {}
 		},
+		isMunicipality() {
+			return this.effectiveCustomerType === 'municipality'
+		},
 		tabs() {
 			return [
-				{ id: 'serviceplatformen', label: t('opencase', 'Serviceplatformen') },
+				// Only municipalities use Serviceplatformen
+				...(this.isMunicipality ? [{ id: 'serviceplatformen', label: t('opencase', 'Serviceplatformen') }] : []),
+				{ id: 'access_profiles', label: t('opencase', 'Adgangsprofiler') },
 				{ id: 'datafordeler', label: t('opencase', 'Datafordeler') },
 				{ id: 'msoffice', label: t('opencase', 'MS Office') },
 				{ id: 'masking', label: t('opencase', 'Maskering') },
+				{ id: 'processes', label: t('opencase', 'Processer') },
 				{ id: 'api', label: t('opencase', 'API') },
 				{ id: 'local_users', label: t('opencase', 'Lokale brugere') },
 				{ id: 'transaction_log', label: t('opencase', 'Transaktionslog') },
@@ -2084,6 +2204,7 @@ export default {
 				systemadministrator: t('opencase', 'Systemadministrator'),
 				opencaseadministrator: t('opencase', 'OpenCase administrator'),
 				opencasetemplateadministrator: t('opencase', 'Skabelonadministrator'),
+				opencaseprocessadministrator: t('opencase', 'Procesadministrator'),
 				opencaseuser: t('opencase', 'Bruger'),
 				opencasereaduser: t('opencase', 'Læsebruger'),
 			}
@@ -2118,11 +2239,24 @@ export default {
 		const exportLog = loadState('opencase', 'exportLog', [])
 		const appVersion = loadState('opencase', 'appVersion', '')
 		const importLocations = loadState('opencase', 'importLocations', [])
+		// type is derived from the other settings until one has been chosen
+		const customerTypeState = loadState('opencase', 'customerType', { type: 'municipality', chosen: false })
+		const customerType = customerTypeState.chosen ? customerTypeState.type : ''
 		return {
-			activeTab: 'serviceplatformen',
+			activeTab: customerTypeState.type === 'municipality' ? 'serviceplatformen' : 'access_profiles',
+			// The chosen radio button; '' until one has been chosen
+			customerType,
+			savedCustomerType: customerType,
+			effectiveCustomerType: customerTypeState.type,
+			savingCustomerType: false,
 			appVersion,
 			enterpriseVersion: config.enterprise_version === '1',
+			accessProfileType: config.accessprofile_type || 'fk',
+			accessGroupPrefix: config.access_group_prefix ?? 'OpenCase - ',
+			classificationPlan: config.classification_plan || 'KLE',
 			redactionServiceEnabled: config['feature_redaction-service'] === '1',
+			processEngineEnabled: config['feature_process-engine'] === '1',
+			digitalPostEnabled: config['feature_digital-post'] === '1',
 			groupfoldersEnabled: prerequisites.groupfolders || false,
 			fulltextsearchEnabled: prerequisites.fulltextsearch || false,
 			filesFulltextsearchEnabled: prerequisites.files_fulltextsearch || false,
@@ -2173,6 +2307,7 @@ export default {
 			uploadingKleFacets: false,
 			digitalpostCvr: config.digitalpost_cvr || '',
 			digitalpostSenderLabel: config.digitalpost_sender_label || '',
+			digitalpostContactpointId: config.digitalpost_contactpoint_id || '',
 			entityIdKombipostafsend: config.entity_id_kombipostafsend || '',
 			endpointKombipostafsend: config.endpoint_kombipostafsend || '',
 			entityIdPostforespoerg: config.entity_id_postforespoerg || '',
@@ -2192,6 +2327,11 @@ export default {
 			redactionServiceApiKey: config.redaction_service_api_key || '',
 			testingRedactionService: false,
 			redactionServiceTest: null,
+			processEngineUrl: config.process_engine_url || '',
+			processEngineUser: config.process_engine_user || 'opencase',
+			processEnginePassword: config.process_engine_password || '',
+			testingProcessEngine: false,
+			processEngineTest: null,
 			sftpHost: config.sftp_host || '',
 			sftpUserName: config.sftp_user_name || '',
 			sftpSshPrivateKeyFullFileName: config.sftp_ssh_private_key_full_fileName || '',
@@ -2264,6 +2404,26 @@ export default {
 		}
 	},
 	watch: {
+		async customerType(value) {
+			if (value === this.savedCustomerType) return
+			this.savingCustomerType = true
+			try {
+				// Also sets the access profile type and classification plan
+				const { data } = await axios.post(generateUrl('/apps/opencase/settings/config'), { key: 'customer_type', value })
+				this.savedCustomerType = value
+				this.effectiveCustomerType = value
+				this.accessProfileType = data.config.accessprofile_type
+				this.classificationPlan = data.config.classification_plan
+				if (value !== 'municipality' && this.activeTab === 'serviceplatformen') {
+					this.activeTab = 'access_profiles'
+				}
+			} catch (e) {
+				showError(t('opencase', 'Kunne ikke gemme kundetypen'))
+				this.customerType = this.savedCustomerType
+			} finally {
+				this.savingCustomerType = false
+			}
+		},
 		accessControlEnable(value) {
 			this.saveConfigValue('access_control_enable', value ? '1' : '0')
 		},
@@ -2324,6 +2484,22 @@ export default {
 				this.redactionServiceTest = { ok: false, error: t('opencase', 'Testen fejlede') }
 			} finally {
 				this.testingRedactionService = false
+			}
+		},
+		async testProcessEngine() {
+			this.testingProcessEngine = true
+			this.processEngineTest = null
+			try {
+				// Make sure what is in the fields is what gets tested
+				await this.saveConfigValue('process_engine_url', this.processEngineUrl.trim())
+				await this.saveConfigValue('process_engine_user', this.processEngineUser.trim())
+				await this.saveConfigValue('process_engine_password', this.processEnginePassword.trim())
+				const { data } = await axios.post(generateUrl('/apps/opencase/settings/test-process-engine'))
+				this.processEngineTest = data
+			} catch (e) {
+				this.processEngineTest = { ok: false, error: t('opencase', 'Testen fejlede') }
+			} finally {
+				this.testingProcessEngine = false
 			}
 		},
 		async saveConfigValue(key, value) {

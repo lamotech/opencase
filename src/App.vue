@@ -169,9 +169,18 @@
 				<NcAppNavigationItem v-if="canManageTemplates"
 					class="opencase-manage-templates"
 					:to="{ name: 'templates' }"
-					:name="t('opencase', 'Administrer skabeloner')">
+					:name="t('opencase', 'Administrer brevdesigner')">
 					<template #icon>
 						<FileDocumentEditOutlineIcon :size="20" />
+					</template>
+				</NcAppNavigationItem>
+
+				<NcAppNavigationItem v-if="canManageProcesses"
+					class="opencase-manage-templates"
+					:to="{ name: 'processes' }"
+					:name="t('opencase', 'Administrer processer')">
+					<template #icon>
+						<SitemapOutlineIcon :size="20" />
 					</template>
 				</NcAppNavigationItem>
 
@@ -265,6 +274,7 @@ import StarIcon from 'vue-material-design-icons/Star.vue'
 import CogIcon from 'vue-material-design-icons/Cog.vue'
 import ShareVariantIcon from 'vue-material-design-icons/ShareVariant.vue'
 import FileDocumentEditOutlineIcon from 'vue-material-design-icons/FileDocumentEditOutline.vue'
+import SitemapOutlineIcon from 'vue-material-design-icons/SitemapOutline.vue'
 import FileDocumentOutlineIcon from 'vue-material-design-icons/FileDocumentOutline.vue'
 import InboxArrowDownIcon from 'vue-material-design-icons/InboxArrowDown.vue'
 import AutoFixIcon from 'vue-material-design-icons/AutoFix.vue'
@@ -307,6 +317,7 @@ export default {
 		CogIcon,
 		ShareVariantIcon,
 		FileDocumentEditOutlineIcon,
+		SitemapOutlineIcon,
 		FileDocumentOutlineIcon,
 		InboxArrowDownIcon,
 		AutoFixIcon,
@@ -350,6 +361,10 @@ export default {
 		},
 		canManageTemplates() {
 			return this.isAdministrator || this.isTemplateDesigner
+		},
+		canManageProcesses() {
+			return this.$store.state.processEngineEnabled
+				&& this.$store.state.isProcessDesigner
 		},
 		caseTypes() {
 			return this.$store.state.caseTypes
@@ -460,7 +475,10 @@ export default {
 #app-content-vue .opencase-my-documents,
 #app-content-vue .opencase-configuration,
 #app-content-vue .template-fields,
-#app-content-vue .template-manager {
+#app-content-vue .template-manager,
+#app-content-vue .process-list,
+#app-content-vue .process-designer
+#app-content-vue .brevdesigner {
 	padding-inline-start: calc(var(--default-clickable-area) + var(--app-navigation-padding, 8px));
 }
 </style>

@@ -67,6 +67,11 @@ import EraserVariantIcon from 'vue-material-design-icons/EraserVariant.vue'
 import BellIcon from 'vue-material-design-icons/Bell.vue'
 import ReceiptSendOutlineIcon from 'vue-material-design-icons/ReceiptSendOutline.vue'
 import AlertCircleOutlineIcon from 'vue-material-design-icons/AlertCircleOutline.vue'
+import PlayIcon from 'vue-material-design-icons/Play.vue'
+import CheckIcon from 'vue-material-design-icons/Check.vue'
+import FlagCheckeredIcon from 'vue-material-design-icons/FlagCheckered.vue'
+import CogIcon from 'vue-material-design-icons/Cog.vue'
+import CloseCircleOutlineIcon from 'vue-material-design-icons/CloseCircleOutline.vue'
 
 import api from '../services/api.js'
 import { maskedPartyNumber } from '../utils/cprMask.js'
@@ -200,6 +205,13 @@ export default {
 			case 'reminder_updated':         return BellIcon
 			case 'reminder_deleted':         return DeleteIcon
 			case 'cpr_event_received':       return SwapHorizontalIcon
+			case 'process_started':          return PlayIcon
+			case 'process_task_claimed':     return AccountCheckIcon
+			case 'process_task_completed':   return CheckIcon
+			case 'process_completed':        return FlagCheckeredIcon
+			case 'process_step_executed':    return CogIcon
+			case 'process_migrated':         return SwapHorizontalIcon
+			case 'process_cancelled':        return CloseCircleOutlineIcon
 			default:                         return HistoryIcon
 			}
 		},
@@ -223,6 +235,9 @@ export default {
 				}
 				if (d.sensitivity) {
 					parts.push(t('opencase', 'Følsomhed ændret fra "{from}" til "{to}"', d.sensitivity))
+				}
+				if (d.group) {
+					parts.push(t('opencase', 'Adgangsgruppe ændret fra "{from}" til "{to}"', d.group))
 				}
 				if (d.summary) {
 					parts.push(t('opencase', 'Sagsresume ændret'))
@@ -337,6 +352,32 @@ export default {
 					description: d.description || '',
 					name: d.name || '',
 				})
+			case 'process_started':
+				return t('opencase', 'Proces startet: {name} (v{version})', { name: d.process_name || '', version: d.version_no ?? '' })
+			case 'process_task_claimed':
+				return t('opencase', 'Procesopgave taget: {task}', { task: d.task_name || '' })
+			case 'process_task_completed': {
+				let text = t('opencase', 'Procesopgave udført: {task}', { task: d.task_name || '' })
+				if (d.outcome) {
+					text += ' – ' + d.outcome
+				}
+				const fields = Object.entries(d.fields || {}).map(([label, value]) => label + ': ' + value)
+				if (fields.length) {
+					text += ' [' + fields.join(', ') + ']'
+				}
+				if (d.comment) {
+					text += ' („' + d.comment + '")'
+				}
+				return text
+			}
+			case 'process_migrated':
+				return t('opencase', 'Proces flyttet til ny version: {name} (v{from} → v{to})', { name: d.process_name || '', from: d.from_version_no ?? '', to: d.to_version_no ?? '' })
+			case 'process_step_executed':
+				return t('opencase', 'Automatisk procestrin udført: {step}', { step: d.step_name || '' })
+			case 'process_completed':
+				return t('opencase', 'Proces afsluttet: {name}', { name: d.process_name || '' })
+			case 'process_cancelled':
+				return t('opencase', 'Proces annulleret: {name} – {reason}', { name: d.process_name || '', reason: d.reason || '' })
 			default:
 				return entry.event_type
 			}

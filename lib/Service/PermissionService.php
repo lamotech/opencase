@@ -614,6 +614,20 @@ class PermissionService {
     }
 
     /**
+     * Of the Elasticsearch hits, those on cases the user can read now. The
+     * index carries the access profile from when it was last updated, so it
+     * must not have the last word on access.
+     *
+     * @param array<int, array{case_id?: int}> $hits
+     * @return array<int, array{case_id?: int}>
+     */
+    public function filterReadableHits(string $userId, array $hits): array {
+        $caseIds  = array_values(array_unique(array_map(fn(array $hit) => (int)($hit['case_id'] ?? 0), $hits)));
+        $readable = array_flip($this->filterReadableCases($userId, $caseIds));
+        return array_values(array_filter($hits, fn(array $hit) => isset($readable[(int)($hit['case_id'] ?? 0)])));
+    }
+
+    /**
      * Return case IDs the user can access via responsible-user or direct-grant paths.
      * Used to supplement the ES access_profile_id filter with paths 1 and 2.
      *

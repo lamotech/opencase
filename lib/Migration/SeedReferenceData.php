@@ -349,7 +349,7 @@ class SeedReferenceData implements IRepairStep {
     private function seedRoles(IOutput $output): void {
         $inserted = 0;
         $qb = $this->db->getQueryBuilder();
-        foreach (['User', 'Administrator', 'Template Designer'] as $roleName) {
+        foreach (['User', 'Administrator', 'Template Designer', 'Process Designer'] as $roleName) {
             $qb->select('id')->from('opencase_roles')
                 ->where($qb->expr()->eq('name', $qb->createNamedParameter($roleName)));
             $result = $qb->executeQuery();
@@ -396,7 +396,7 @@ class SeedReferenceData implements IRepairStep {
         $result->closeCursor();
 
         if (!$hasPrivGroups) {
-            foreach (['opencaseadministrator', 'opencasetemplateadministrator'] as $privilegeType) {
+            foreach (['opencaseadministrator', 'opencasetemplateadministrator', 'opencaseprocessadministrator'] as $privilegeType) {
                 $qb = $this->db->getQueryBuilder();
                 $qb->insert('opencase_user_priv_groups')
                     ->values([
@@ -419,8 +419,9 @@ class SeedReferenceData implements IRepairStep {
 
         if (!$hasRoles) {
             // opencase_roles is seeded just above in this same run, in the
-            // fixed order User, Administrator, Template Designer → ids 1, 2, 3.
-            foreach ([1, 2, 3] as $roleId) {
+            // fixed order User, Administrator, Template Designer, Process
+            // Designer → ids 1, 2, 3, 4.
+            foreach ([1, 2, 3, 4] as $roleId) {
                 $qb = $this->db->getQueryBuilder();
                 $qb->insert('opencase_user_roles')
                     ->values([
@@ -455,6 +456,10 @@ class SeedReferenceData implements IRepairStep {
 
     private function seedParticipantRoles(IOutput $output): void {
         $rows = [
+            // 0 = primary party: the "Ny sag" dialog adds the case's party
+            // with it, and the case page and Digital Post look it up by id 0
+            [0, 'da', 'Primær part'],
+            [0, 'en', 'Primary party'],
             [1, 'da', 'Sagspart'],
             [2, 'da', 'Ansøger'],
             [3, 'da', 'Klager'],
@@ -879,6 +884,14 @@ class SeedReferenceData implements IRepairStep {
         );
 
         $this->seedConfigEntry(
+            'desktop_token_lifetime_hours',
+            '720',
+            'Levetid for login i desktop-klienter og add-ins (timer)',
+            'Antal timer fra login, før brugeren skal logge ind igen i Euro-Office og MS Office add-ins. Rettigheder og grupper opdateres kun ved login, så værdien er den længste tid en ændring kan være om at slå igennem i klienterne. Gælder for nye login. Tom eller 0 = 720 timer (30 dage).',
+            $output,
+        );
+
+        $this->seedConfigEntry(
             'enterprise_version',
             '0',
             'Enterprise version enabled',
@@ -891,6 +904,14 @@ class SeedReferenceData implements IRepairStep {
             '0',
             'Maskeringstjeneste aktiveret',
             'Sæt til 1 for at aktivere automatisk maskering af filer under aktindsigt via maskeringstjenesten (redaction-service). Sættes af installationsscriptet til Enterprise versionen.',
+            $output,
+        );
+
+        $this->seedConfigEntry(
+            'feature_disposal',
+            '1',
+            'Kassation aktiveret',
+            'Sæt til 0 for at skjule kassationskode og kassationsdato på sager, f.eks. for kunder der ikke bruger kassationsregler.',
             $output,
         );
 

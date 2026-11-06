@@ -11,9 +11,10 @@ use OCP\IDBConnection;
 /**
  * Mapper for the opencase_access_profiles table.
  *
- * Access profiles are the unique combinations of
- * (org_uuid, class_subject_uuid, sensitivity) that define
- * who can see what.  Both UUIDs are FKs into their respective lookup tables.
+ * Access profiles define who can see what. An 'fk' profile is a unique
+ * combination of (org_uuid, class_subject_uuid, sensitivity); the UUIDs are
+ * FKs into their respective lookup tables. A 'group' profile references a
+ * Nextcloud group via group_id. See AccessProfile.
  *
  * Methods used during write operations (findOrCreate, findByTuple) accept
  * UUIDs directly — callers should resolve human-readable values first via
@@ -79,6 +80,7 @@ class AccessProfileMapper extends QBMapper {
             return $existing;
         }
 
+        // profile_type is left to the column default ('fk').
         $profile = new AccessProfile();
         $profile->setOrgUuid($orgUuid);
         $profile->setClassSubjectUuid($classSubjectUuid);
@@ -86,6 +88,74 @@ class AccessProfileMapper extends QBMapper {
         $profile->setCreatedAt(new \DateTime());
 
         return $this->insert($profile);
+    }
+
+    /**
+     * Find the 'group' access profile referencing a Nextcloud group.
+     *
+     * @param string $groupId oc_groups.gid
+     */
+    public function findByGroupId(string $groupId): ?AccessProfile {
+        $qb = $this->db->getQueryBuilder();
+        $qb->select('*')
+            ->from($this->getTableName())
+            ->where($qb->expr()->eq('group_id', $qb->createNamedParameter($groupId)));
+
+        try {
+            return $this->findEntity($qb);
+        } catch (\OCP\AppFramework\Db\DoesNotExistException $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Find or create the 'group' access profile for a Nextcloud group.
+     *
+     * @param string $groupId oc_groups.gid
+     */
+    public function findOrCreateByGroup(string $groupId): AccessProfile {
+        $existing = $this->findByGroupId($groupId);
+        if ($existing !== null) {
+            return $existing;
+        }
+
+        $profile = new AccessProfile();
+        $profile->setProfileType(AccessProfile::TYPE_GROUP);
+        $profile->setGroupId($groupId);
+        $profile->setCreatedAt(new \DateTime());
+
+        return $this->insert($profile);
+    }
+
+    /**
+     * Whether any case uses the access profile.
+     */
+    public function isUsedByCases(int $id): bool {
+        $qb = $this->db->getQueryBuilder();
+        $qb->select('id')
+            ->from('opencase_cases')
+            ->where($qb->expr()->eq('access_profile_id', $qb->createNamedParameter($id, IQueryBuilder::PARAM_INT)))
+            ->setMaxResults(1);
+
+        $result = $qb->executeQuery();
+        $used   = $result->fetch() !== false;
+        $result->closeCursor();
+        return $used;
+    }
+
+    /**
+     * All 'group' access profiles.
+     *
+     * @return AccessProfile[]
+     */
+    public function findGroupProfiles(): array {
+        $qb = $this->db->getQueryBuilder();
+        $qb->select('*')
+            ->from($this->getTableName())
+            ->where($qb->expr()->eq('profile_type', $qb->createNamedParameter(AccessProfile::TYPE_GROUP)))
+            ->orderBy('id', 'ASC');
+
+        return $this->findEntities($qb);
     }
 
     /**
@@ -205,6 +275,37 @@ class AccessProfileMapper extends QBMapper {
         $map    = [];
         while ($row = $result->fetch()) {
             $map[(int)$row['id']] = $row['class_subject_uuid'];
+        }
+        $result->closeCursor();
+
+        return $map;
+    }
+
+    /**
+     * Return a profile-ID → group_id map for the 'group' profiles among the
+     * given profile IDs. 'fk' profiles are left out.
+     *
+     * @param int[] $profileIds
+     * @return array<int, string>  profileId => groupId
+     */
+    public function getGroupIdsByProfileIds(array $profileIds): array {
+        if (empty($profileIds)) {
+            return [];
+        }
+
+        $qb = $this->db->getQueryBuilder();
+        $qb->select('id', 'group_id')
+            ->from($this->getTableName())
+            ->where($qb->expr()->in(
+                'id',
+                $qb->createNamedParameter($profileIds, IQueryBuilder::PARAM_INT_ARRAY)
+            ))
+            ->andWhere($qb->expr()->isNotNull('group_id'));
+
+        $result = $qb->executeQuery();
+        $map    = [];
+        while ($row = $result->fetch()) {
+            $map[(int)$row['id']] = (string)$row['group_id'];
         }
         $result->closeCursor();
 

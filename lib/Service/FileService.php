@@ -873,6 +873,40 @@ class FileService {
     }
 
     /**
+     * Reverse of getNextcloudFileId(): find the OpenCase file behind a
+     * Nextcloud file ID from the virtual mount
+     * ({year}/{month}/{day}/{caseNumber}/{virtualFilename}).
+     *
+     * @throws NotFoundException if the ID is not an OpenCase file, the file is
+     *                           deleted, or the user has no access
+     */
+    public function findByNextcloudFileId(int $ncFileId, string $userId): FileEntity {
+        $qb     = $this->db->getQueryBuilder();
+        $result = $qb->select('fc.path')
+            ->from('filecache', 'fc')
+            ->innerJoin('fc', 'storages', 's', $qb->expr()->eq('fc.storage', 's.numeric_id'))
+            ->where($qb->expr()->eq('s.id', $qb->createNamedParameter('opencase')))
+            ->andWhere($qb->expr()->eq('fc.fileid', $qb->createNamedParameter($ncFileId, \OCP\DB\QueryBuilder\IQueryBuilder::PARAM_INT)))
+            ->executeQuery();
+        $path = $result->fetchOne();
+        $result->closeCursor();
+
+        $parts = is_string($path) ? explode('/', $path) : [];
+        if (count($parts) !== 5) {
+            throw new NotFoundException("Nextcloud file {$ncFileId} is not an OpenCase file");
+        }
+
+        [, , , $caseNumber, $virtualFilename] = $parts;
+        $case = $this->caseMapper->findByCaseNumber($caseNumber);
+        $file = $case === null ? null : $this->fileMapper->findByVirtualNameNoAuth($case->getId(), $virtualFilename);
+        if ($file === null) {
+            throw new NotFoundException("Nextcloud file {$ncFileId} not found in OpenCase");
+        }
+
+        return $this->get($file->getId(), $userId); // permission check
+    }
+
+    /**
      * List all stored versions of a file, newest first.
      *
      * @return FileVersionEntity[]
@@ -1306,8 +1340,9 @@ class FileService {
      * $writable=false  → permissions=1 (read-only ceiling; Collabora opens view-only)
      * $writable=true   → permissions=3 (read+update ceiling; Collabora opens for editing)
      *
-     * The OpenCaseCacheWrapper may further restrict per-user rights at runtime,
-     * but it can never grant more than what the filecache ceiling allows.
+     * The OpenCaseCacheWrapper decides the per-user rights at runtime: a user with
+     * case write access gets UPDATE on non-Final files whatever the ceiling says,
+     * as the ceiling doesn't know about the responsible user and direct grants.
      */
     public function updateFilecachePermissionsForDocument(int $documentId, bool $writable): void {
         $files = $this->fileMapper->findByDocument($documentId);
@@ -1518,8 +1553,10 @@ class FileService {
      *
      * Updates are batched in chunks of 500 path_hashes to keep individual
      * UPDATE statements small and avoid long lock holds on oc_filecache.
+     *
+     * @param int|null $caseId only this case of the profile, e.g. one that just moved to it
      */
-    public function updateCeilingPermissionsForProfile(int $profileId): void {
+    public function updateCeilingPermissionsForProfile(int $profileId, ?int $caseId = null): void {
         try {
             $storageId = $this->getStorageId();
             if ($storageId === 0) {
@@ -1533,15 +1570,17 @@ class FileService {
             // ── Case directory rows ────────────────────────────────────────
             $offset = 0;
             do {
-                $qb   = $this->db->getQueryBuilder();
-                $rows = $qb->select('case_number', 'created_at')
+                $qb = $this->db->getQueryBuilder();
+                $qb->select('case_number', 'created_at')
                     ->from('opencase_cases')
                     ->where($qb->expr()->eq('access_profile_id', $qb->createNamedParameter($profileId, \OCP\DB\QueryBuilder\IQueryBuilder::PARAM_INT)))
                     ->andWhere($qb->expr()->isNotNull('created_at'))
                     ->setMaxResults(500)
-                    ->setFirstResult($offset)
-                    ->executeQuery()
-                    ->fetchAllAssociative();
+                    ->setFirstResult($offset);
+                if ($caseId !== null) {
+                    $qb->andWhere($qb->expr()->eq('id', $qb->createNamedParameter($caseId, \OCP\DB\QueryBuilder\IQueryBuilder::PARAM_INT)));
+                }
+                $rows = $qb->executeQuery()->fetchAllAssociative();
 
                 $hashes = [];
                 foreach ($rows as $row) {
@@ -1565,8 +1604,8 @@ class FileService {
             // ── File rows (respect Final-document override) ────────────────
             $offset = 0;
             do {
-                $qb   = $this->db->getQueryBuilder();
-                $rows = $qb->select('f.virtual_filename', 'c.case_number', 'c.created_at', 'ds.is_final')
+                $qb = $this->db->getQueryBuilder();
+                $qb->select('f.virtual_filename', 'c.case_number', 'c.created_at', 'ds.is_final')
                     ->from('opencase_files', 'f')
                     ->innerJoin('f', 'opencase_cases', 'c', $qb->expr()->eq('c.id', 'f.case_id'))
                     ->innerJoin('f', 'opencase_documents', 'd', $qb->expr()->eq('d.id', 'f.document_id'))
@@ -1579,9 +1618,11 @@ class FileService {
                     ->where($qb->expr()->eq('c.access_profile_id', $qb->createNamedParameter($profileId, \OCP\DB\QueryBuilder\IQueryBuilder::PARAM_INT)))
                     ->andWhere($qb->expr()->isNotNull('c.created_at'))
                     ->setMaxResults(500)
-                    ->setFirstResult($offset)
-                    ->executeQuery()
-                    ->fetchAllAssociative();
+                    ->setFirstResult($offset);
+                if ($caseId !== null) {
+                    $qb->andWhere($qb->expr()->eq('c.id', $qb->createNamedParameter($caseId, \OCP\DB\QueryBuilder\IQueryBuilder::PARAM_INT)));
+                }
+                $rows = $qb->executeQuery()->fetchAllAssociative();
 
                 // Split rows by effective permissions (Final files always stay at 1)
                 $writeHashes    = [];

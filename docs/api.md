@@ -169,7 +169,8 @@ GET /cases/search?organisation=Børn+og+Unge&year=2024&search=vandløb&limit=50&
 Query parameters (all optional): `search`, `organisation`, `year`,
 `status_id`, `classification_code`, `sensitivity_key`,
 `classification_facet_uuid`, `insight_level_id`, `responsible_user_id`,
-`casetype_id`, `limit` (default 50, max 1000), `offset`. Response:
+`casetype_id`, `class_plan_code` (Emneplan item — matches part of its code or
+title), `limit` (default 50, max 1000), `offset`. Response:
 `{ "CaseSearchResult": { "Total", "Limit", "Offset", "Cases": [CaseType, ...] } }`.
 
 #### Create a case
@@ -202,6 +203,14 @@ optional. `CustomFields` is a list of `{FieldKey, Value}` — an unknown
 required, not one of a dropdown's options) rejects the whole request with a
 400 **before** the case is created. Lowercase/snake_case field names are
 also accepted throughout. Response (201): `{ "Case": CaseType }`.
+
+With the classification plan Emneplan (`classification_plan` = `Emneplan`)
+the case is also classified by an item of the customer's own Emneplan:
+`ClassPlanUuid` (see `GET /classification-plan`) or `class_plan_code`
+(matched by code — which is the topic name for plans without codes) is then
+required. The KLE fields still apply with FK Adgang, where the KLE number is
+part of the access profile. `CaseType` carries `ClassPlanUuid`,
+`ClassPlanCode` and `ClassPlanTitle`.
 
 #### Update a case
 ```json
@@ -409,6 +418,13 @@ required. Merges the template with case/document metadata
 (e.g. `{{case.number}}`, `{{sag.titel}}`) and attaches the result as a new
 file. Response (201): `{ "File": FileType }`.
 
+The template's pre-selected and required phrases that are usable for the
+case (active, scopes matching the case) are merged into `{{fraser.indhold}}`,
+and the case organisation's logo (or its nearest parent's) into
+`{{organisation.logo}}`. A template limited to organisations (see
+`OrgUuids` in `GET /templates`) can only be used for cases in those
+organisations or below them — otherwise 400.
+
 ### Files — `PublicFileApiController`
 
 | Method & path | Purpose |
@@ -468,10 +484,11 @@ only active/non-expired entries.
 | `GET /participantroles` | `{ "ParticipantRoles": [{Id, Name, Expired}, ...] }` |
 | `GET /organisations` | `{ "Organisations": [{Uuid, Name}, ...] }` — scoped to the acting user's access, like `GET /cases/search` |
 | `GET /kle-numbers` | `{ "KleNumbers": [{Uuid, Code, Title}, ...] }` — KLE classification subjects ("emneord") |
+| `GET /classification-plan` | `{ "ClassificationPlanItems": [{Uuid, Code, Title, Description}, ...] }` — the Emneplan items for `ClassPlanUuid` on `POST /cases`; Code equals Title when the plan has no codes |
 | `GET /classification-facets` | `{ "ClassificationFacets": [{Uuid, Code, Title}, ...] }` — "handlingsfacetter" |
 | `GET /sensitivities` | `{ "Sensitivities": [{Uuid, Key, Title}, ...] }` — `Key` is what `POST /cases` expects as `sensitivity` |
 | `GET /users` | `{ "Users": [{Id, DisplayName}, ...] }` — Nextcloud users with an OpenCase role, sorted by display name |
-| `GET /templates` | `{ "Templates": [{Id, Name, OriginalFilename, MimeType, Size, UploadedBy, CreatedAt}, ...] }` |
+| `GET /templates` | `{ "Templates": [{Id, Name, OriginalFilename, MimeType, Size, UploadedBy, CreatedAt, OrgUuids}, ...] }` — `OrgUuids`: the organisations a template is limited to (`[]` = all cases) |
 
 Note the fields in this section are plain JSON types (numbers/booleans),
 **not** the string-encoded scheme used by the Case/Document/File resources

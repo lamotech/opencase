@@ -147,6 +147,18 @@ class OrganisationMapper extends QBMapper {
      *
      * @return array<string, string>
      */
+    /**
+     * Set (or clear) the logo file of an organisation. QBMapper::update()
+     * cannot be used — the table's key is org_uuid, not id.
+     */
+    public function updateLogoFile(string $uuid, ?string $logoFile): void {
+        $qb = $this->db->getQueryBuilder();
+        $qb->update($this->getTableName())
+            ->set('logo_file', $qb->createNamedParameter($logoFile))
+            ->where($qb->expr()->eq('org_uuid', $qb->createNamedParameter($uuid)));
+        $qb->executeStatement();
+    }
+
     public function getParentMap(): array {
         $qb = $this->db->getQueryBuilder();
         $qb->select('org_uuid', 'org_parent_uuid')->from($this->getTableName());

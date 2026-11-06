@@ -18,10 +18,10 @@ use Psr\Log\LoggerInterface;
  * Helper page for 3rd-party clients (e.g. the Outlook task pane add-in)
  * that need to obtain Nextcloud Login Flow v2 credentials.
  *
- * This page is served from the Nextcloud origin so it can call the
- * core /login/v2 and /login/v2/poll endpoints same-origin (these do
- * not support CORS). It opens the Nextcloud login/grant flow in a
- * popup, polls for the resulting app password, and reports the
+ * This page is served from the Nextcloud origin and starts the login
+ * through DesktopAuthController, so add-ins get the same app password
+ * expiry as the desktop clients. It opens the Nextcloud login/grant flow
+ * in a popup, polls for the resulting app password, and reports the
  * credentials back to the opener/parent window.
  */
 class AuthController extends Controller {
@@ -70,7 +70,7 @@ class AuthController extends Controller {
         }
 
         return new TemplateResponse('opencase', 'login-helper', [
-            'loginV2InitUrl' => $this->urlGenerator->linkToRouteAbsolute('core.clientflowloginv2.init'),
+            'loginV2InitUrl' => $this->urlGenerator->linkToRouteAbsolute('opencase.desktop_auth.login'),
             'relayUrl'       => $relayUrl,
             'relayRejected'  => $relayRejected,
             'ownOrigin'      => $this->ownOrigin(),

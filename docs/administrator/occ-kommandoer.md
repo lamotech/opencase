@@ -50,9 +50,23 @@ php occ opencase:<kommando> [parametre]
 | `opencase:fetch-orgs` | Henter organisationer fra organisationstjenesten. |
 | `opencase:get-org` | Henter oplysninger om en organisationsenhed. |
 | `opencase:sync-org` | Synkroniserer organisationer. |
+| `opencase:import-organisations` | Indlæser organisationsstrukturen fra en CSV-fil (se nedenfor). |
 | `opencase:get-user` | Henter oplysninger om en bruger. |
 | `opencase:update-user` | Opdaterer brugeroplysninger fra Serviceplatformen. |
 | `opencase:privileges:recalculate` | Genberegner alle brugeres adgangsrettigheder. |
+
+## Indlæs organisationsstruktur
+
+`opencase:import-organisations` indlæser organisationsstrukturen fra en CSV-fil – det samme som knappen **Upload organisationsstruktur** under **Adgangsprofiler** (filformatet er beskrevet i [Konfiguration - Microsoft Entra ID](konfiguration-microsoft-entra-id.md#organisationsstruktur)). Organisationer, der ikke er med i filen, deaktiveres.
+
+Kør først med `--dry-run`, som kontrollerer filen og viser, hvad der ville blive oprettet, opdateret og deaktiveret, uden at ændre noget (`-v` viser alle navne):
+
+```bash
+sudo -u www-data php occ opencase:import-organisations /sti/til/organisationer.csv --dry-run
+sudo -u www-data php occ opencase:import-organisations /sti/til/organisationer.csv
+```
+
+Filen skal kunne læses af brugeren `www-data`.
 
 ---
 

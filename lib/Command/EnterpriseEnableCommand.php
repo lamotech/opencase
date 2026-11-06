@@ -106,7 +106,7 @@ class EnterpriseEnableCommand extends Command {
 			return Command::FAILURE;
 		}
 
-		$output->writeln('<info>enterprise_version set to 1. Distribution, Message, Digital Post, Datafordeler CPR, Datafordeler CVR, AI, and Classification sync components are now active.</info>');
+		$output->writeln('<info>enterprise_version set to 1. Distribution, Message, Datafordeler CPR, Datafordeler CVR, AI, and Classification sync components are now active. Digital Post is enabled separately with feature_digital-post=1.</info>');
 		return Command::SUCCESS;
 	}
 }

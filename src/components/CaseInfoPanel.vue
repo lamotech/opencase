@@ -23,9 +23,20 @@
 				<label>{{ t('opencase', 'Indsigtsgrad') }}</label>
 				<span>{{ caseData.insight_level_name || '–' }}</span>
 			</div>
-			<div class="opencase-case-info__field">
+			<div v-if="caseData.access_profile_type === 'group'" class="opencase-case-info__field">
+				<label>{{ t('opencase', 'Adgangsgruppe') }}</label>
+				<span>{{ caseData.group_name || caseData.group_id }}</span>
+			</div>
+			<!-- Group cases have a KLE number of their own with the KLE classification plan -->
+			<div v-if="caseData.access_profile_type !== 'group' || caseData.classification_code" class="opencase-case-info__field">
 				<label>{{ t('opencase', 'KLE-nummer') }}</label>
 				<span>{{ caseData.classification_code }}<template v-if="caseData.classification_title"> – {{ caseData.classification_title }}</template></span>
+			</div>
+			<div v-if="isEmneplan || caseData.class_plan_uuid" class="opencase-case-info__field">
+				<label>{{ t('opencase', 'Emne') }}</label>
+				<span>
+					{{ classificationPlanLabel(caseData.class_plan_code, caseData.class_plan_title) || '–' }}
+				</span>
 			</div>
 
 			<div class="opencase-case-info__field">
@@ -44,7 +55,7 @@
 				<label>{{ t('opencase', 'Oprettet af') }}</label>
 				<span>{{ caseData.created_by_display_name || caseData.created_by }}</span>
 			</div>
-			<div class="opencase-case-info__field">
+			<div v-if="caseData.access_profile_type !== 'group' || caseData.sensitivity_key" class="opencase-case-info__field">
 				<label>{{ t('opencase', 'Følsomhed') }}</label>
 				<span>{{ caseData.sensitivity_title || caseData.sensitivity_key }}</span>
 			</div>
@@ -66,7 +77,7 @@
 				<label>{{ t('opencase', 'Overført til SAPA') }}</label>
 				<span>{{ formatDate(caseData.updated_in_sapa) }}</span>
 			</div>
-			<div class="opencase-case-info__field">
+			<div v-if="disposalEnabled" class="opencase-case-info__field">
 				<label>{{ t('opencase', 'Kassationskode') }}</label>
 				<span>{{ caseData.disposalcode_name || '–' }}</span>
 			</div>
@@ -76,7 +87,7 @@
 					<label>{{ t('opencase', 'Lukket') }}</label>
 					<span>{{ formatDate(caseData.closed_date) || '–' }}</span>
 				</div>
-				<div class="opencase-case-info__field">
+				<div v-if="disposalEnabled" class="opencase-case-info__field">
 					<label>{{ t('opencase', 'Kassationsdato') }}</label>
 					<span>{{ formatDay(caseData.disposal_date) || '–' }}</span>
 				</div>
@@ -96,6 +107,7 @@
 </template>
 
 <script>
+import { classificationPlanLabel } from '../utils/classificationPlanLabel.js'
 import CaseStatusBadge from './CaseStatusBadge.vue'
 
 export default {
@@ -104,7 +116,19 @@ export default {
 	props: {
 		caseData: { type: Object, required: true },
 	},
+	computed: {
+		isEmneplan() {
+			return this.$store.state.classificationPlan === 'Emneplan'
+		},
+		// Kassation can be switched off with feature_disposal=0
+		disposalEnabled() {
+			return this.$store.state.disposalEnabled
+		},
+	},
+
 	methods: {
+		classificationPlanLabel,
+
 		formatDate(dateStr) {
 			if (!dateStr) return ''
 			return new Date(dateStr).toLocaleDateString('da-DK', {

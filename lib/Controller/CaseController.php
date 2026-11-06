@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace OCA\OpenCase\Controller;
 
+use OCA\OpenCase\Db\AccessProfile;
 use OCA\OpenCase\Db\AccessProfileMapper;
+use OCA\OpenCase\Db\CaseEntity;
 use OCA\OpenCase\Db\CaseStatusMapper;
 use OCA\OpenCase\Db\CaseTypeMapper;
 use OCA\OpenCase\Db\CaseWorkerMapper;
@@ -14,10 +16,15 @@ use OCA\OpenCase\Db\UserInfoMapper;
 use OCA\OpenCase\Db\ClassificationFacetRepository;
 use OCA\OpenCase\Db\ClassificationSubject;
 use OCA\OpenCase\Db\InsightLevelMapper;
+use OCA\OpenCase\Db\ClassificationPlan;
+use OCA\OpenCase\Db\ClassificationPlanMapper;
 use OCA\OpenCase\Db\ClassificationSubjectMapper;
 use OCA\OpenCase\Db\OrganisationMapper;
 use OCA\OpenCase\Db\Sensitivity;
 use OCA\OpenCase\Db\SensitivityMapper;
+use OCA\OpenCase\Service\AccessProfile\AccessProfileTypeResolver;
+use OCA\OpenCase\Service\AccessProfile\GroupAccessProfileType;
+use OCA\OpenCase\Service\CaseClassificationService;
 use OCA\OpenCase\Service\CaseService;
 use OCA\OpenCase\Service\NotFoundException;
 use OCA\OpenCase\Service\TransactionLogService;
@@ -69,6 +76,10 @@ class CaseController extends ApiController {
         private UserAccessMapper $userAccessMapper,
         private UserInfoMapper $userInfoMapper,
         private TransactionLogService $transactionLogService,
+        private AccessProfileTypeResolver $accessProfileTypeResolver,
+        private CaseClassificationService $caseClassificationService,
+        private GroupAccessProfileType $groupAccessProfileType,
+        private ClassificationPlanMapper $classificationPlanMapper,
         private ?string $userId,
     ) {
         parent::__construct($appName, $request, corsAllowedHeaders: 'Authorization, Content-Type, Accept, OCS-APIREQUEST');
@@ -97,6 +108,7 @@ class CaseController extends ApiController {
         $classificationCode       = $this->request->getParam('classification_code') ?: null;
         $sensitivityKey           = $this->request->getParam('sensitivity_key') ?: null;
         $classificationFacetUuid  = $this->request->getParam('classification_facet_uuid') ?: null;
+        $classPlanCode            = $this->request->getParam('class_plan_code') ?: null;
         $insightLevelIdRaw        = $this->request->getParam('insight_level_id');
         $insightLevelId           = ($insightLevelIdRaw !== null && $insightLevelIdRaw !== '') ? (int)$insightLevelIdRaw : null;
         $responsibleUserId        = $this->request->getParam('responsible_user_id') ?: null;
@@ -121,6 +133,7 @@ class CaseController extends ApiController {
             $responsibleUserId,
             $casetypeId,
             $customFields,
+            $classPlanCode,
         );
 
         if ($this->userId !== null) {
@@ -132,6 +145,7 @@ class CaseController extends ApiController {
                 'classification_code'      => $classificationCode,
                 'sensitivity_key'          => $sensitivityKey,
                 'classification_facet_uuid'=> $classificationFacetUuid,
+                'class_plan_code'          => $classPlanCode,
                 'insight_level_id'         => $insightLevelId,
                 'responsible_user_id'      => $responsibleUserId,
                 'casetype_id'              => $casetypeId,
@@ -146,15 +160,22 @@ class CaseController extends ApiController {
         $orgUuids = array_unique(array_map(fn($c) => $c->getOrgUuid(), $result['cases']));
         $orgNames = $this->organisationMapper->getNamesByUuids($orgUuids);
 
-        // Batch-resolve access profile IDs → class subject and sensitivity UUIDs → objects
+        // Batch-resolve class subject and sensitivity UUIDs → objects: the
+        // case's own (Grupper + KLE), else its access profile's (FK Adgang)
         $profileIds        = array_unique(array_map(fn($c) => $c->getAccessProfileId(), $result['cases']));
         $profileClassUuids = $this->accessProfileMapper->getClassSubjectUuidsByProfileIds($profileIds);
         $profileSensUuids  = $this->accessProfileMapper->getSensitivityUuidsByProfileIds($profileIds);
+        $caseClassUuid     = fn($c) => $c->getClassSubjectUuid() ?? ($profileClassUuids[$c->getAccessProfileId()] ?? null);
+        $caseSensUuid      = fn($c) => $c->getSensitivityUuid() ?? ($profileSensUuids[$c->getAccessProfileId()] ?? null);
         $classSubjects     = $this->classificationSubjectMapper->getByUuids(
-            array_unique(array_values($profileClassUuids))
+            array_values(array_unique(array_filter(array_map($caseClassUuid, $result['cases']))))
         );
         $sensitivities     = $this->sensitivityMapper->getByUuids(
-            array_unique(array_values($profileSensUuids))
+            array_values(array_unique(array_filter(array_map($caseSensUuid, $result['cases']))))
+        );
+        $profileGroups     = $this->groupAccessProfileType->describeGroups($profileIds);
+        $classPlanItems    = $this->classificationPlanMapper->getByUuids(
+            array_unique(array_map(fn($c) => (string)$c->getClassPlanUuid(), $result['cases']))
         );
 
         // Batch-resolve status IDs → localized names
@@ -170,10 +191,10 @@ class CaseController extends ApiController {
         $casetypeNames = $this->caseTypeMapper->getNamesByIds($casetypeIds, $this->userLanguage());
 
         return new DataResponse([
-            'cases'  => array_map(function ($c) use ($orgNames, $profileClassUuids, $classSubjects, $profileSensUuids, $sensitivities, $statusNames, $insightNames, $casetypeNames) {
-                $csUuid   = $profileClassUuids[$c->getAccessProfileId()] ?? null;
+            'cases'  => array_map(function ($c) use ($orgNames, $caseClassUuid, $classSubjects, $caseSensUuid, $sensitivities, $profileGroups, $classPlanItems, $statusNames, $insightNames, $casetypeNames) {
+                $csUuid   = $caseClassUuid($c);
                 $cs       = $csUuid ? ($classSubjects[$csUuid] ?? null) : null;
-                $sensUuid = $profileSensUuids[$c->getAccessProfileId()] ?? null;
+                $sensUuid = $caseSensUuid($c);
                 $sens     = $sensUuid ? ($sensitivities[$sensUuid] ?? null) : null;
                 $sid        = $c->getStatusId();
                 $sEntry     = $statusNames[$sid] ?? [];
@@ -187,7 +208,8 @@ class CaseController extends ApiController {
                 $ctId   = $c->getCasetypeId();
                 $ctName = $ctId ? ($casetypeNames[$ctId] ?? '') : '';
                 $facet  = $this->resolveFacet($c->getClassificationFacetUuid());
-                return $this->serializeCase($c, $orgNames[$c->getOrgUuid()] ?? '', $cs, $sens, $statusInfo, false, $ilName, $facet, $ctName);
+                $plan   = $classPlanItems[(string)$c->getClassPlanUuid()] ?? null;
+                return $this->serializeCase($c, $orgNames[$c->getOrgUuid()] ?? '', $cs, $sens, $statusInfo, false, $ilName, $facet, $ctName, $profileGroups[$c->getAccessProfileId()] ?? null, $plan);
             }, $result['cases']),
             'total'  => $result['total'],
             'limit'  => $limit,
@@ -204,8 +226,11 @@ class CaseController extends ApiController {
      * Request body (JSON):
      *   title                — Required. Case title
      *   organisation         — Required. Organisation name
-     *   classification_code  — Required. KLE classification code
-     *   sensitivity          — Required. Sensitivity level
+     *   classification_code  — Required with FK Adgang and Grupper + KLE. KLE classification code
+     *   sensitivity          — Required with FK Adgang and Grupper + KLE. Sensitivity level
+     *   classification_facet_uuid — Required with FK Adgang and Grupper + KLE. KLE facet
+     *   group_id             — Required with Grupper. Nextcloud group id
+     *   class_plan_uuid      — Optional. Emneplan item (classification plan Emneplan)
      *   responsible_user_id  — Optional. Defaults to the current user
      *   summary              — Optional. Case summary as rich-text HTML
      */
@@ -214,7 +239,9 @@ class CaseController extends ApiController {
     public function create(): DataResponse {
         $params = $this->getJsonBody();
 
-        $required = ['title', 'organisation', 'classification_code', 'sensitivity', 'classification_facet_uuid'];
+        // The access fields depend on the access profile type; KLE number,
+        // sensitivity and facet apply with FK Adgang and with Grupper + KLE.
+        $required = ['title', 'organisation', ...$this->caseClassificationService->requiredCreateFields()];
         foreach ($required as $field) {
             if (empty($params[$field])) {
                 return new DataResponse(
@@ -237,26 +264,29 @@ class CaseController extends ApiController {
             $entity = $this->caseService->create(
                 $params['title'],
                 $params['organisation'],
-                $params['classification_code'],
-                $params['sensitivity'],
+                array_map('strval', array_filter(
+                    array_intersect_key($params, array_flip(['classification_code', 'sensitivity', 'group_id'])),
+                    fn($v) => $v !== null && $v !== ''
+                )),
                 $this->userId,
                 $responsibleUserId,
                 $insightLevelId,
-                $params['classification_facet_uuid'],
+                !empty($params['classification_facet_uuid']) ? $params['classification_facet_uuid'] : null,
                 $parentCaseId,
                 $casetypeId,
                 $summary,
+                !empty($params['class_plan_uuid']) ? (string)$params['class_plan_uuid'] : null,
             );
 
             $orgName     = $this->organisationMapper->findByUuid($entity->getOrgUuid())?->getOrgName() ?? '';
-            $profileInfo = $this->resolveProfileInfo($entity->getAccessProfileId());
+            $profileInfo = $this->resolveProfileInfo($entity);
             $statusInfo  = $this->resolveStatusInfo($entity->getStatusId());
             $ilName      = $this->resolveInsightLevelName($entity->getInsightLevelId());
             $ctName      = $this->resolveCasetypeName($entity->getCasetypeId());
             $facet       = $this->resolveFacet($entity->getClassificationFacetUuid());
 
             return new DataResponse(
-                ['case' => $this->serializeCase($entity, $orgName, $profileInfo['class_subject'], $profileInfo['sensitivity'], $statusInfo, false, $ilName, $facet, $ctName)],
+                ['case' => $this->serializeCase($entity, $orgName, $profileInfo['class_subject'], $profileInfo['sensitivity'], $statusInfo, false, $ilName, $facet, $ctName, $profileInfo['group'], $this->resolveClassPlan($entity->getClassPlanUuid()))],
                 Http::STATUS_CREATED
             );
         } catch (\InvalidArgumentException $e) {
@@ -283,13 +313,13 @@ class CaseController extends ApiController {
             $audit       = $this->request->getParam('audit', 'true') !== 'false';
             $entity      = $this->caseService->get($id, $this->userId, $audit);
             $orgName     = $this->organisationMapper->findByUuid($entity->getOrgUuid())?->getOrgName() ?? '';
-            $profileInfo = $this->resolveProfileInfo($entity->getAccessProfileId());
+            $profileInfo = $this->resolveProfileInfo($entity);
             $statusInfo  = $this->resolveStatusInfo($entity->getStatusId());
             $canWrite    = $this->caseService->canWriteCase($id, $this->userId);
             $ilName      = $this->resolveInsightLevelName($entity->getInsightLevelId());
             $ctName      = $this->resolveCasetypeName($entity->getCasetypeId());
             $facet       = $this->resolveFacet($entity->getClassificationFacetUuid());
-            return new DataResponse(['case' => $this->serializeCase($entity, $orgName, $profileInfo['class_subject'], $profileInfo['sensitivity'], $statusInfo, $canWrite, $ilName, $facet, $ctName)]);
+            return new DataResponse(['case' => $this->serializeCase($entity, $orgName, $profileInfo['class_subject'], $profileInfo['sensitivity'], $statusInfo, $canWrite, $ilName, $facet, $ctName, $profileInfo['group'], $this->resolveClassPlan($entity->getClassPlanUuid()))]);
         } catch (NotFoundException $e) {
             return new DataResponse(
                 ['error' => 'Case not found'],
@@ -302,7 +332,7 @@ class CaseController extends ApiController {
      * Update case metadata.
      *
      * Request body (JSON): any of title, organisation,
-     * classification_code, sensitivity, summary.
+     * classification_code, sensitivity (FK Adgang), group_id (Grupper), summary.
      */
     #[NoAdminRequired]
     #[ApiRoute(verb: 'PUT', url: '/api/v1/cases/{id}')]
@@ -318,13 +348,18 @@ class CaseController extends ApiController {
         $summaryProvided = array_key_exists('summary', $params);
         $summary         = $summaryProvided ? ($params['summary'] ?: null) : null;
 
+        $classPlanProvided = array_key_exists('class_plan_uuid', $params);
+        $classPlanUuid     = $classPlanProvided ? ((string)$params['class_plan_uuid'] ?: null) : null;
+
         try {
             $entity  = $this->caseService->update(
                 $id,
                 $params['title'] ?? null,
                 $params['organisation'] ?? null,
-                $params['classification_code'] ?? null,
-                $params['sensitivity'] ?? null,
+                array_map('strval', array_filter(
+                    array_intersect_key($params, array_flip(['classification_code', 'sensitivity', 'group_id'])),
+                    fn($v) => $v !== null && $v !== ''
+                )),
                 $this->userId,
                 !empty($params['responsible_user_id']) ? $params['responsible_user_id'] : null,
                 $insightLevelId,
@@ -333,16 +368,18 @@ class CaseController extends ApiController {
                 $facetUuidProvided,
                 $summary,
                 $summaryProvided,
+                $classPlanUuid,
+                $classPlanProvided,
             );
 
             $orgName     = $this->organisationMapper->findByUuid($entity->getOrgUuid())?->getOrgName() ?? '';
-            $profileInfo = $this->resolveProfileInfo($entity->getAccessProfileId());
+            $profileInfo = $this->resolveProfileInfo($entity);
             $statusInfo  = $this->resolveStatusInfo($entity->getStatusId());
             $canWrite    = $this->caseService->canWriteCase($id, $this->userId);
             $ilName      = $this->resolveInsightLevelName($entity->getInsightLevelId());
             $ctName      = $this->resolveCasetypeName($entity->getCasetypeId());
             $facet       = $this->resolveFacet($entity->getClassificationFacetUuid());
-            return new DataResponse(['case' => $this->serializeCase($entity, $orgName, $profileInfo['class_subject'], $profileInfo['sensitivity'], $statusInfo, $canWrite, $ilName, $facet, $ctName)]);
+            return new DataResponse(['case' => $this->serializeCase($entity, $orgName, $profileInfo['class_subject'], $profileInfo['sensitivity'], $statusInfo, $canWrite, $ilName, $facet, $ctName, $profileInfo['group'], $this->resolveClassPlan($entity->getClassPlanUuid()))]);
         } catch (\InvalidArgumentException $e) {
             return new DataResponse(
                 ['error' => $e->getMessage()],
@@ -377,13 +414,13 @@ class CaseController extends ApiController {
         try {
             $entity      = $this->caseService->changeStatus($id, (int)$params['status_id'], $this->userId);
             $orgName     = $this->organisationMapper->findByUuid($entity->getOrgUuid())?->getOrgName() ?? '';
-            $profileInfo = $this->resolveProfileInfo($entity->getAccessProfileId());
+            $profileInfo = $this->resolveProfileInfo($entity);
             $statusInfo  = $this->resolveStatusInfo($entity->getStatusId());
             $canWrite    = $this->caseService->canWriteCase($id, $this->userId);
             $ilName      = $this->resolveInsightLevelName($entity->getInsightLevelId());
             $ctName      = $this->resolveCasetypeName($entity->getCasetypeId());
             $facet       = $this->resolveFacet($entity->getClassificationFacetUuid());
-            return new DataResponse(['case' => $this->serializeCase($entity, $orgName, $profileInfo['class_subject'], $profileInfo['sensitivity'], $statusInfo, $canWrite, $ilName, $facet, $ctName)]);
+            return new DataResponse(['case' => $this->serializeCase($entity, $orgName, $profileInfo['class_subject'], $profileInfo['sensitivity'], $statusInfo, $canWrite, $ilName, $facet, $ctName, $profileInfo['group'], $this->resolveClassPlan($entity->getClassPlanUuid()))]);
         } catch (\InvalidArgumentException $e) {
             return new DataResponse(
                 ['error' => $e->getMessage()],
@@ -572,6 +609,24 @@ class CaseController extends ApiController {
     }
 
     /**
+     * The access profile type and, with Grupper, the groups a case can be
+     * given (all registered access groups; can_write marks the ones the
+     * current user can write to).
+     */
+    #[NoAdminRequired]
+    public function accessGroups(): DataResponse {
+        $type = $this->accessProfileTypeResolver->activeKey();
+        if ($type !== AccessProfile::TYPE_GROUP) {
+            return new DataResponse(['accessprofile_type' => $type, 'groups' => []]);
+        }
+        $writeProfileIds = $this->userAccessMapper->getWriteProfileIdsForUser((string)$this->userId);
+        return new DataResponse([
+            'accessprofile_type' => $type,
+            'groups'             => $this->groupAccessProfileType->listGroupProfiles($writeProfileIds),
+        ]);
+    }
+
+    /**
      * Search all active organisations by name.
      *
      * Used by the organisation search-dropdown on the case create/edit form.
@@ -723,19 +778,28 @@ class CaseController extends ApiController {
     }
 
     /**
-     * Fetch the access profile and resolve its classification subject + sensitivity in one shot.
+     * Resolve a case's classification subject and sensitivity (its own with
+     * Grupper + KLE, else its access profile's) and group (Grupper) in one shot.
      *
-     * @return array{class_subject: ?ClassificationSubject, sensitivity: ?Sensitivity}
+     * @return array{class_subject: ?ClassificationSubject, sensitivity: ?Sensitivity, group: ?array{group_id: string, group_name: string}}
      */
-    private function resolveProfileInfo(int $profileId): array {
-        $profile = $this->accessProfileMapper->findById($profileId);
-        if ($profile === null) {
-            return ['class_subject' => null, 'sensitivity' => null];
-        }
+    private function resolveProfileInfo(CaseEntity $case): array {
+        $profileId = $case->getAccessProfileId();
+        $profile   = $this->accessProfileMapper->findById($profileId);
+        $classSubjectUuid = $case->effectiveClassSubjectUuid($profile);
+        $sensitivityUuid  = $case->effectiveSensitivityUuid($profile);
         return [
-            'class_subject' => $this->classificationSubjectMapper->findByUuid($profile->getClassSubjectUuid()),
-            'sensitivity'   => $this->sensitivityMapper->findByUuid($profile->getSensitivityUuid()),
+            'class_subject' => $classSubjectUuid !== null ? $this->classificationSubjectMapper->findByUuid($classSubjectUuid) : null,
+            'sensitivity'   => $sensitivityUuid !== null ? $this->sensitivityMapper->findByUuid($sensitivityUuid) : null,
+            'group'         => $profile !== null ? ($this->groupAccessProfileType->describeGroups([$profileId])[$profileId] ?? null) : null,
         ];
+    }
+
+    /**
+     * Resolve an Emneplan item UUID to the item (or null).
+     */
+    private function resolveClassPlan(?string $uuid): ?ClassificationPlan {
+        return $uuid ? $this->classificationPlanMapper->findByUuid($uuid) : null;
     }
 
     /**
@@ -844,6 +908,8 @@ class CaseController extends ApiController {
         string $insightLevelName = '',
         ?array $facet = null,
         string $casetypeName = '',
+        ?array $group = null,
+        ?ClassificationPlan $classPlan = null,
     ): array {
         $responsibleUid  = $entity->getResponsibleUserId();
         $responsibleUser = $responsibleUid ? $this->userManager->get($responsibleUid) : null;
@@ -858,6 +924,9 @@ class CaseController extends ApiController {
             'case_number'                       => $entity->getCaseNumber(),
             'title'                             => $entity->getTitle(),
             'access_profile_id'                 => $entity->getAccessProfileId(),
+            'access_profile_type'               => $group !== null ? AccessProfile::TYPE_GROUP : AccessProfile::TYPE_FK,
+            'group_id'                          => $group['group_id'] ?? null,
+            'group_name'                        => $group['group_name'] ?? '',
             'organisation'                      => $orgName,
             'classification_code'               => $classSubject?->getCode() ?? '',
             'classification_title'              => $classSubject?->getTitle() ?? '',
@@ -884,6 +953,9 @@ class CaseController extends ApiController {
             'classification_facet_uuid'         => $entity->getClassificationFacetUuid(),
             'classification_facet_code'         => $facet['code'] ?? '',
             'classification_facet_title'        => $facet['title'] ?? '',
+            'class_plan_uuid'                   => $entity->getClassPlanUuid(),
+            'class_plan_code'                   => $classPlan?->getCode() ?? '',
+            'class_plan_title'                  => $classPlan?->getTitle() ?? '',
             'parent_case_id'                    => $entity->getParentCaseId(),
             'is_inbox'                          => $entity->getIsInbox(),
             'casetype_id'                       => $entity->getCasetypeId(),

@@ -115,7 +115,7 @@ class OpenCaseFilesSearchProvider implements IProvider {
 
         $results = $this->esService->search($term, $profileIds, [], $offset, $limit, $directCaseIds);
 
-        $hits = $results['hits'] ?? [];
+        $hits = $this->permissionService->filterReadableHits($userId, $results['hits'] ?? []);
         if (empty($hits)) {
             return [];
         }

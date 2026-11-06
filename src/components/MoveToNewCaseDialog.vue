@@ -23,7 +23,19 @@
 				<span v-if="errors.organisation" class="opencase-move-new-case__error">{{ errors.organisation }}</span>
 			</div>
 
-			<div class="opencase-move-new-case__row">
+			<div v-if="isGroupMode" class="opencase-move-new-case__field">
+				<label>{{ t('opencase', 'Adgangsgruppe') }} *</label>
+				<AccessGroupSelect v-model="form.group_id" />
+				<span v-if="errors.group_id" class="opencase-move-new-case__error">{{ errors.group_id }}</span>
+			</div>
+
+			<div v-if="isEmneplan" class="opencase-move-new-case__field">
+				<label>{{ t('opencase', 'Emne') }} *</label>
+				<ClassificationPlanSelect v-model="form.class_plan_uuid" />
+				<span v-if="errors.class_plan_uuid" class="opencase-move-new-case__error">{{ errors.class_plan_uuid }}</span>
+			</div>
+
+			<div v-if="usesKle" class="opencase-move-new-case__row">
 				<div class="opencase-move-new-case__field">
 					<label>{{ t('opencase', 'KLE-nummer') }} *</label>
 					<NcSelect v-model="selectedClassification"
@@ -43,7 +55,7 @@
 				</div>
 			</div>
 
-			<div class="opencase-move-new-case__field">
+			<div v-if="usesKle" class="opencase-move-new-case__field">
 				<label>{{ t('opencase', 'Handlingsfacet') }} *</label>
 				<NcSelect v-model="selectedClassificationFacet"
 					:options="classificationFacetOptions"
@@ -99,11 +111,13 @@ import { getCurrentUser } from '@nextcloud/auth'
 import { showError } from '@nextcloud/dialogs'
 
 import api from '../services/api.js'
+import AccessGroupSelect from './AccessGroupSelect.vue'
+import ClassificationPlanSelect from './ClassificationPlanSelect.vue'
 
 export default {
 	name: 'MoveToNewCaseDialog',
 
-	components: { NcDialog, NcButton, NcTextField, NcSelect, NcLoadingIcon },
+	components: { NcDialog, NcButton, NcTextField, NcSelect, NcLoadingIcon, AccessGroupSelect, ClassificationPlanSelect },
 
 	props: {
 		documentId: { type: [String, Number], required: true },
@@ -125,6 +139,8 @@ export default {
 				sensitivity: '',
 				insight_level_id: null,
 				classification_facet_uuid: '',
+				group_id: '',
+				class_plan_uuid: '',
 				responsible_user_id: currentUser?.uid || '',
 			},
 			selectedOrg: null,
@@ -145,6 +161,17 @@ export default {
 	},
 
 	computed: {
+		isGroupMode() {
+			return this.$store.state.accessProfileType === 'group'
+		},
+		// KLE number, sensitivity and Handlingsfacet: always with FK Adgang,
+		// with Grupper only with the KLE classification plan
+		usesKle() {
+			return !this.isGroupMode || this.$store.state.classificationPlan !== 'Emneplan'
+		},
+		isEmneplan() {
+			return this.$store.state.classificationPlan === 'Emneplan'
+		},
 		classificationOptions() {
 			return this.$store.state.classificationSubjects
 				.filter(s => /^\d{2}\.\d{2}\.\d{2}$/.test(s.code))
@@ -221,9 +248,13 @@ export default {
 			this.errors = {}
 			if (!this.form.title.trim()) this.errors.title = t('opencase', 'Påkrævet')
 			if (!this.form.organisation) this.errors.organisation = t('opencase', 'Påkrævet')
-			if (!this.form.classification_code) this.errors.classification_code = t('opencase', 'Påkrævet')
-			if (!this.form.sensitivity) this.errors.sensitivity = t('opencase', 'Påkrævet')
-			if (!this.form.classification_facet_uuid) this.errors.classification_facet_uuid = t('opencase', 'Påkrævet')
+			if (this.isGroupMode && !this.form.group_id) this.errors.group_id = t('opencase', 'Påkrævet')
+			if (this.usesKle) {
+				if (!this.form.classification_code) this.errors.classification_code = t('opencase', 'Påkrævet')
+				if (!this.form.sensitivity) this.errors.sensitivity = t('opencase', 'Påkrævet')
+				if (!this.form.classification_facet_uuid) this.errors.classification_facet_uuid = t('opencase', 'Påkrævet')
+			}
+			if (this.isEmneplan && !this.form.class_plan_uuid) this.errors.class_plan_uuid = t('opencase', 'Påkrævet')
 			if (!this.form.responsible_user_id) this.errors.responsible_user_id = t('opencase', 'Påkrævet')
 			return Object.keys(this.errors).length === 0
 		},

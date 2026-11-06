@@ -18,7 +18,7 @@ Features:
 - Per-user document access overrides
 - Comprehensive REST API
     ]]></description>
-	<version>1.2.0</version>
+	<version>1.2.10</version>
 	<licence>agpl</licence>
 	<author mail="dev@lamotech.dk" homepage="https://lamotech.dk">Lamotech Solutions ApS</author>
 	<namespace>OpenCase</namespace>
@@ -61,6 +61,7 @@ Features:
 
 	<commands>
 		<command>OCA\OpenCase\Command\SyncFilecache</command>
+		<command>OCA\OpenCase\Command\SyncGroupAccessCommand</command>
 		<command>OCA\OpenCase\Command\RegisterCertificateCommand</command>
 		<command>OCA\OpenCase\Command\RegisterApiClientCommand</command>
 		<command>OCA\OpenCase\Command\IssueTokenCommand</command>
@@ -99,6 +100,7 @@ Features:
 		<command>OCA\OpenCase\Command\ConfigSetCommand</command>
 		<command>OCA\OpenCase\Command\ExportClosedCasesCommand</command>
 		<command>OCA\OpenCase\Command\ImportTemplatesCommand</command>
+		<command>OCA\OpenCase\Command\ImportOrganisationsCommand</command>
 	</commands>
 	<settings>
 		<admin>OCA\OpenCase\Settings\AdminSettings</admin>
@@ -107,5 +109,6 @@ Features:
 
 	<versions>
 		<backend for="OCA\OpenCase\Storage\OpenCaseStorage">OCA\OpenCase\Versions\OpenCaseVersionsBackend</backend>
+		<backend for="OCA\OpenCase\Storage\BrevdesignerStorage">OCA\OpenCase\Versions\BrevdesignerVersionsBackend</backend>
 	</versions>
 </info>

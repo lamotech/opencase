@@ -23,6 +23,7 @@ class SeparationSheetService {
     public function __construct(
         private SeparationSheetMapper $mapper,
         private CaseMapper $caseMapper,
+        private ClassificationPlanService $classificationPlanService,
     ) {}
 
     /**
@@ -104,7 +105,9 @@ class SeparationSheetService {
                 $sheet->setOrgUuid($this->nullableString($params['org_uuid'] ?? null));
                 $sheet->setClassSubjectUuid($this->nullableString($params['class_subject_uuid'] ?? null));
                 $sheet->setSensitivityUuid($this->nullableString($params['sensitivity_uuid'] ?? null));
+                $sheet->setGroupId($this->nullableString($params['group_id'] ?? null));
                 $sheet->setClassificationFacetUuid($this->nullableString($params['classification_facet_uuid'] ?? null));
+                $sheet->setClassPlanUuid($this->classificationPlanService->validateUnlessCurrent($this->nullableString($params['class_plan_uuid'] ?? null), $sheet->getClassPlanUuid()));
                 $sheet->setInsightLevelId($this->nullableInt($params['insight_level_id'] ?? null));
                 $sheet->setResponsibleUserId($this->nullableString($params['responsible_user_id'] ?? null));
                 break;
@@ -114,6 +117,7 @@ class SeparationSheetService {
                 $sheet->setClassSubjectUuid($this->nullableString($params['class_subject_uuid'] ?? null));
                 $sheet->setSensitivityUuid($this->nullableString($params['sensitivity_uuid'] ?? null));
                 $sheet->setClassificationFacetUuid($this->nullableString($params['classification_facet_uuid'] ?? null));
+                $sheet->setClassPlanUuid($this->classificationPlanService->validateUnlessCurrent($this->nullableString($params['class_plan_uuid'] ?? null), $sheet->getClassPlanUuid()));
                 $sheet->setInsightLevelId($this->nullableInt($params['insight_level_id'] ?? null));
                 break;
 

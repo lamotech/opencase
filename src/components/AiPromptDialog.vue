@@ -233,6 +233,7 @@ import FavoriteButton from './FavoriteButton.vue'
 import SelectTemplateDialog from './SelectTemplateDialog.vue'
 
 import api from '../services/api.js'
+import { classificationPlanLabel } from '../utils/classificationPlanLabel.js'
 
 const SCOPE_OPTIONS = [
 	{ id: 'all',             label: t('opencase', 'Alle') },
@@ -257,6 +258,7 @@ const FILTER_OPTIONS = [
 const PLACEHOLDER_TYPES = {
 	org:         { aliases: ['organisation', 'org'],                    search: true },
 	kle:         { aliases: ['kle', 'klenummer', 'kle-nummer'] },
+	emne:        { aliases: ['emne', 'emneplan'] },
 	sensitivity: { aliases: ['følsomhed', 'foelsomhed', 'sensitivity'] },
 	facet:       { aliases: ['handlingsfacet', 'facet'] },
 	insight:     { aliases: ['indsigtsgrad', 'insight'] },
@@ -276,6 +278,7 @@ const INSERTABLE_PARAMETERS = [
 	{ label: t('opencase', 'Min organisation'), token: '#MinAfdeling' },
 	{ label: t('opencase', 'Organisation'),     token: '[Organisation:organisation]' },
 	{ label: t('opencase', 'KLE Nummer'),       token: '[KLE Nummer:kle]' },
+	{ label: t('opencase', 'Emne'),             token: '[Emne:emne]', emneplanOnly: true },
 	{ label: t('opencase', 'Følsomhed'),        token: '[Følsomhed:følsomhed]' },
 	{ label: t('opencase', 'Handlingsfacet'),   token: '[Handlingsfacet:handlingsfacet]' },
 	{ label: t('opencase', 'Indsigtsgrad'),     token: '[Indsigtsgrad:indsigtsgrad]' },
@@ -390,7 +393,8 @@ export default {
 		},
 
 		insertableParameters() {
-			return INSERTABLE_PARAMETERS
+			const emneplan = this.$store.state.classificationPlan === 'Emneplan'
+			return INSERTABLE_PARAMETERS.filter(p => !p.emneplanOnly || emneplan)
 		},
 
 		placeholderTypeHint() {
@@ -492,6 +496,7 @@ export default {
 			const map = {
 				org:         t('opencase', 'Søg efter organisation'),
 				kle:         t('opencase', 'Vælg KLE-emneord'),
+				emne:        t('opencase', 'Vælg emne'),
 				sensitivity: t('opencase', 'Vælg følsomhed'),
 				facet:       t('opencase', 'Vælg handlingsfacet'),
 				insight:     t('opencase', 'Vælg indsigtsgrad'),
@@ -531,6 +536,11 @@ export default {
 					options = this.$store.state.classificationSubjects
 						.filter(s => /^\d{2}\.\d{2}\.\d{2}$/.test(s.code))
 						.map(s => ({ id: s.code, label: `${s.code} – ${s.title}`, value: s.code }))
+					break
+				case 'emne':
+					await this.$store.dispatch('fetchClassificationPlanItems')
+					options = this.$store.state.classificationPlanItems
+						.map(i => ({ id: i.uuid, label: classificationPlanLabel(i.code, i.title), value: i.code }))
 					break
 				case 'sensitivity':
 					await this.$store.dispatch('fetchSensitivities')

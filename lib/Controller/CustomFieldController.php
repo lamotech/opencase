@@ -197,6 +197,7 @@ class CustomFieldController extends ApiController {
      *   casetype_id         — Optional. Case type id
      *   org_uuid            — Optional. Organisation uuid
      *   classification_code — Optional. KLE code
+     *   class_plan_uuid     — Optional. Emneplan item uuid
      */
     #[NoAdminRequired]
     #[ApiRoute(verb: 'GET', url: '/api/v1/custom-fields/applicable')]
@@ -205,8 +206,9 @@ class CustomFieldController extends ApiController {
         $casetypeId = ($casetypeIdRaw !== null && $casetypeIdRaw !== '') ? (int)$casetypeIdRaw : null;
         $orgUuid = $this->request->getParam('org_uuid') ?: null;
         $classificationCode = $this->request->getParam('classification_code') ?: null;
+        $classPlanUuid = $this->request->getParam('class_plan_uuid') ?: null;
 
-        $defs = $this->customFieldService->getApplicableFields($casetypeId, $orgUuid, $classificationCode);
+        $defs = $this->customFieldService->getApplicableFields($casetypeId, $orgUuid, $classificationCode, $classPlanUuid);
         $fields = array_map(fn(CustomFieldDef $def) => [
             'id' => $def->getId(),
             'field_key' => $def->getFieldKey(),
@@ -233,6 +235,7 @@ class CustomFieldController extends ApiController {
             $case->getCasetypeId(),
             $case->getOrgUuid(),
             $kleCode,
+            $case->getClassPlanUuid(),
         );
         $values = $this->customFieldService->getValuesForCase($caseId);
 

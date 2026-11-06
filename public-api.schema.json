@@ -253,8 +253,13 @@
         "ClassificationCode": { "type": ["string", "null"] },
         "ClassificationFacetUuid": { "type": ["string", "null"] },
         "ClassificationFacetCode": { "type": ["string", "null"] },
+        "ClassPlanUuid": { "type": ["string", "null"], "description": "Emneplan item (classification plan Emneplan); see GET /classification-plan. Null with KLE." },
+        "ClassPlanCode": { "type": ["string", "null"] },
+        "ClassPlanTitle": { "type": ["string", "null"] },
         "SensitivityUuid": { "type": ["string", "null"] },
         "SensitivityName": { "type": ["string", "null"] },
+        "GroupId": { "type": ["string", "null"], "description": "Nextcloud group of a Grupper access profile; null with FK Adgang." },
+        "GroupName": { "type": ["string", "null"] },
         "CreatedAt": { "$ref": "#IsoDateTime" },
         "UpdatedAt": { "$ref": "#IsoDateTime" },
         "CreatedBy": { "type": "string" },
@@ -373,7 +378,7 @@
     "CaseCreateRequest": {
       "$anchor": "CaseCreateRequest",
       "title": "POST /cases request body",
-      "description": "Lowercase/snake_case field names (organisation, classification_code, sensitivity, classification_facet_uuid, responsible_user_id, insight_level_id, casetype_id, parent_case_id) are also accepted in place of the PascalCase names shown.",
+      "description": "Lowercase/snake_case field names (organisation, classification_code, sensitivity, classification_facet_uuid, group_id, responsible_user_id, insight_level_id, casetype_id, parent_case_id) are also accepted in place of the PascalCase names shown.",
       "type": "object",
       "properties": {
         "Title": { "type": "string" },
@@ -382,15 +387,17 @@
         "organisation": { "type": "string" },
         "ClassificationCodeUuid": { "type": "string", "description": "See GET /kle-numbers. One of ClassificationCodeUuid/classification_code is required." },
         "classification_code": { "type": "string" },
-        "SensitivityUuid": { "type": "string", "description": "See GET /sensitivities. One of SensitivityUuid/sensitivity is required." },
+        "SensitivityUuid": { "type": "string", "description": "See GET /sensitivities. One of SensitivityUuid/sensitivity is required with the KLE classification plan (FK Adgang, or Grupper + KLE)." },
         "sensitivity": { "type": "string" },
-        "ClassificationFacetUuid": { "type": "string", "description": "See GET /classification-facets. Required." },
+        "ClassificationFacetUuid": { "type": "string", "description": "See GET /classification-facets. Required with the KLE classification plan (FK Adgang, or Grupper + KLE)." },
+        "ClassPlanUuid": { "type": "string", "description": "See GET /classification-plan. One of ClassPlanUuid/class_plan_code is required when the classification plan is Emneplan (classification_plan=Emneplan)." },
+        "GroupId": { "type": "string", "description": "Nextcloud group id. Required with Grupper (accessprofile_type=group). ClassificationCodeUuid/SensitivityUuid/ClassificationFacetUuid are then required too with the KLE classification plan, and not with an Emneplan." },
         "ResponsibleUserId": { "type": "string" },
         "InsightLevelId": { "type": ["string", "integer"] },
         "CasetypeId": { "type": ["string", "integer"] },
         "ParentCaseId": { "type": ["string", "integer"] }
       },
-      "required": ["Title", "ClassificationFacetUuid"]
+      "required": ["Title"]
     },
     "CaseUpdateRequest": {
       "$anchor": "CaseUpdateRequest",
@@ -671,10 +678,12 @@
     "GET /participantroles": { "response": "#/$defs/ReferenceCodeItem[]", "wrapper": "{ \"ParticipantRoles\": [...] }" },
     "GET /organisations": { "response": "{Uuid:string, Name:string}[]", "wrapper": "{ \"Organisations\": [...] }" },
     "GET /kle-numbers": { "response": "{Uuid:string, Code:string, Title:string}[]", "wrapper": "{ \"KleNumbers\": [...] }" },
+    "GET /classification-plan": { "response": "{Uuid:string, Code:string, Title:string, Description:string}[]", "wrapper": "{ \"ClassificationPlanItems\": [...] }" },
     "GET /classification-facets": { "response": "{Uuid:string, Code:string, Title:string}[]", "wrapper": "{ \"ClassificationFacets\": [...] }" },
     "GET /sensitivities": { "response": "{Uuid:string, Key:string, Title:string}[]", "wrapper": "{ \"Sensitivities\": [...] }" },
+    "GET /groups": { "response": "{GroupId:string, Name:string}[]", "wrapper": "{ \"Groups\": [...] }" },
     "GET /users": { "response": "{Id:string, DisplayName:string}[]", "wrapper": "{ \"Users\": [...] }" },
-    "GET /templates": { "response": "{Id:int, Name:string, OriginalFilename:string, MimeType:string, Size:int, UploadedBy:string, CreatedAt:string}[]", "wrapper": "{ \"Templates\": [...] }" },
+    "GET /templates": { "response": "{Id:int, Name:string, OriginalFilename:string, MimeType:string, Size:int, UploadedBy:string, CreatedAt:string, OrgUuids:string[]}[]", "wrapper": "{ \"Templates\": [...] }" },
 
     "GET /search": {
       "response": {

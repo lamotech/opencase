@@ -290,6 +290,7 @@ Brugersystemrollerne oprettes med følgende URI'er, hvor `<domæne>` er OpenCase
 | Bruger | `http://<domæne>/roles/usersystemrole/opencaseuser/1` | Organisation, KLE, Følsomhed |
 | Læsebruger | `http://<domæne>/roles/usersystemrole/opencasereaduser/1` | Organisation, KLE, Følsomhed |
 | Skabelon administrator | `http://<domæne>/roles/usersystemrole/opencasetemplateadministrator/1` | Ingen |
+| Proces administrator | `http://<domæne>/roles/usersystemrole/opencaseprocessadministrator/1` | Ingen |
 | OpenCase administrator | `http://<domæne>/roles/usersystemrole/opencaseadministrator/1` | Ingen |
 | Systemadministrator | `http://<domæne>/roles/usersystemrole/systemadministrator/1` | Ingen |
 
@@ -309,7 +310,11 @@ Som *Bruger*, men med kun læseadgang til sager og dokumenter inden for de tilde
 
 #### opencasetemplateadministrator – Skabelon administrator
 
-Giver adgang til menupunktet **Administrer skabeloner**, hvor dokumentskabeloner kan oprettes, redigeres og slettes. Se [Administrer skabeloner](administrer-skabeloner.md).
+Giver adgang til menupunktet **Administrer brevdesigner**, hvor skabeloner, fraser og frasekategorier kan oprettes, redigeres og slettes, og til at uploade organisationslogoer. Se [Administrer brevdesigner](administrer-skabeloner.md).
+
+#### opencaseprocessadministrator – Proces administrator
+
+Giver adgang til menupunktet **Administrer processer**, hvor processer for sagsbehandlingen designes og udgives. Menupunktet vises kun, når procesmodulet er aktiveret. Se [Administrer processer](administrer-processer.md).
 
 #### opencaseadministrator – OpenCase administrator
 

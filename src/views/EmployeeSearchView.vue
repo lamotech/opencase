@@ -249,7 +249,41 @@
 				</ul>
 			</div>
 
-			<!-- Tab: Rettigheder -->
+			<!-- Tab: Rettigheder — access groups when access is controlled by groups -->
+			<div v-else-if="activeTab === 'access' && isGroupAccess" class="ocs-emp__tab-panel">
+				<NcLoadingIcon v-if="loadingAccessGroups" :size="32" />
+				<NcEmptyContent v-else-if="userAccessGroups.length === 0"
+					:title="t('opencase', 'Ingen adgangsgrupper')">
+					<template #icon>
+						<ShieldKeyOutlineIcon :size="32" />
+					</template>
+				</NcEmptyContent>
+				<table v-else class="ocs-emp__table">
+					<thead>
+						<tr>
+							<th>{{ t('opencase', 'Adgangsgruppe') }}</th>
+							<th>{{ t('opencase', 'Adgang') }}</th>
+							<th>{{ t('opencase', 'Kilde') }}</th>
+							<th>{{ t('opencase', 'Tildelt den') }}</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr v-for="group in userAccessGroups" :key="group.access_profile_id" class="ocs-emp__row--static">
+							<td>{{ group.group_name || group.group_id }}</td>
+							<td>
+								<span :class="group.access_level === 'write' ? 'ocs-emp__badge--write' : 'ocs-emp__badge--read'"
+									class="ocs-emp__access-badge">
+									{{ group.access_level === 'write' ? t('opencase', 'Skriv') : t('opencase', 'Læs') }}
+								</span>
+							</td>
+							<td>{{ grantSourceMap[group.grant_source] || group.grant_source }}</td>
+							<td class="ocs-emp__mono">{{ formatDate(group.granted_at) }}</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+
+			<!-- Tab: Rettigheder — SAML privileges -->
 			<div v-else-if="activeTab === 'access'" class="ocs-emp__tab-panel">
 				<NcLoadingIcon v-if="loadingPrivileges" :size="32" />
 				<NcEmptyContent v-else-if="userPrivileges.length === 0"
@@ -400,6 +434,8 @@ export default {
 			loadingGrants: false,
 			userPrivileges: [],
 			loadingPrivileges: false,
+			userAccessGroups: [],
+			loadingAccessGroups: false,
 			cases: [],
 			loadingCases: false,
 			tasks: [],
@@ -420,7 +456,7 @@ export default {
 				{ id: 'tasks', label: t('opencase', 'Opgaver'), count: this.tasks.length || null, icon: ClipboardCheckOutlineIcon },
 				{ id: 'cases', label: t('opencase', 'Sager'), count: this.cases.length || null, icon: FolderOutlineIcon },
 				{ id: 'orgtree', label: t('opencase', 'Organisationsstruktur'), icon: SitemapOutlineIcon },
-				{ id: 'access', label: t('opencase', 'Rettigheder'), count: this.userPrivileges.length || null, icon: ShieldKeyOutlineIcon },
+				{ id: 'access', label: t('opencase', 'Rettigheder'), count: (this.isGroupAccess ? this.userAccessGroups : this.userPrivileges).length || null, icon: ShieldKeyOutlineIcon },
 				{ id: 'grants', label: t('opencase', 'Manuelt tildelte sager'), count: this.manualGrants.length || null, icon: LockOutlineIcon },
 			]
 		},
@@ -429,11 +465,24 @@ export default {
 			return this.$store.state.caseTypes.find(t => t.id === 4) || null
 		},
 
-		privilegeTypeMap() {
+		isGroupAccess() {
+			return this.$store.state.accessProfileType === 'group'
+		},
+
+		grantSourceMap() {
+			return {
+				group: t('opencase', 'Gruppemedlemskab'),
+				manual: t('opencase', 'Manuel'),
+				privilege: t('opencase', 'Rettigheder'),
+			}
+		},
+
+				privilegeTypeMap() {
 			return {
 				systemadministrator: t('opencase', 'Systemadministrator'),
 				opencaseadministrator: t('opencase', 'OpenCase administrator'),
 				opencasetemplateadministrator: t('opencase', 'Skabelonadministrator'),
+				opencaseprocessadministrator: t('opencase', 'Procesadministrator'),
 				opencaseuser: t('opencase', 'Bruger'),
 				opencasereaduser: t('opencase', 'Læsebruger'),
 			}
@@ -576,6 +625,7 @@ export default {
 			this.activeTab = 'orgtree'
 			this.manualGrants = []
 			this.userPrivileges = []
+			this.userAccessGroups = []
 			this.cases = []
 			this.tasks = []
 
@@ -606,7 +656,16 @@ export default {
 				}
 			}
 
-			if (emp.uuid) {
+			if (emp.uuid && this.isGroupAccess) {
+				this.loadingAccessGroups = true
+				try {
+					this.userAccessGroups = await api.getEmployeeAccessGroups(emp.uuid) || []
+				} catch (e) {
+					showError(t('opencase', 'Kunne ikke hente adgangsgrupper'))
+				} finally {
+					this.loadingAccessGroups = false
+				}
+			} else if (emp.uuid) {
 				this.loadingPrivileges = true
 				try {
 					this.userPrivileges = await api.getEmployeePrivileges(emp.uuid) || []
@@ -666,6 +725,8 @@ export default {
 		openTask(task) {
 			if (task.type === 'workflow') {
 				this.$router.push({ path: '/document/' + task.document_id, hash: '#tab-workflow' })
+			} else if (task.type === 'process') {
+				this.$router.push({ path: '/case/' + task.case_id, hash: '#tab-processes' })
 			} else if (task.document_id) {
 				this.$router.push({ path: '/document/' + task.document_id, hash: '#tab-info' })
 			} else if (task.case_id) {
@@ -675,13 +736,14 @@ export default {
 
 		taskTypeLabel(task) {
 			if (task.type === 'reminder') return t('opencase', 'Påmindelse')
+			if (task.type === 'process') return t('opencase', 'Procesopgave')
 			return task.workflow_type === 'review'
 				? t('opencase', 'Gennemse')
 				: t('opencase', 'Godkendelse')
 		},
 
 		taskTitle(task) {
-			if (task.type === 'reminder') return task.title || '–'
+			if (task.type === 'reminder' || task.type === 'process') return task.title || '–'
 			return task.workflow_type === 'review'
 				? t('opencase', 'Gennemse dokument')
 				: t('opencase', 'Godkend eller afvis dokument')

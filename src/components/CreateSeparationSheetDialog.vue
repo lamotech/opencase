@@ -62,7 +62,19 @@
 						@search="onOrgSearch" />
 				</div>
 
-				<div class="opencase-create-sepsheet__row">
+				<!-- Grupper: a new case gets an access group; the inbox case's group is configured centrally -->
+				<div v-if="isGroupMode && selectedType.id === 'new case'" class="opencase-create-sepsheet__field">
+					<label>{{ t('opencase', 'Adgangsgruppe') }}</label>
+					<AccessGroupSelect v-model="selectedGroupId" :current-label="sheet?.group_name || ''" />
+				</div>
+
+				<div v-if="isEmneplan" class="opencase-create-sepsheet__field">
+					<label>{{ t('opencase', 'Emne') }}<template v-if="selectedType.id === 'new case'"> *</template></label>
+					<ClassificationPlanSelect v-model="selectedClassPlanUuid" :current-label="classPlanLabel" />
+					<span v-if="errors.class_plan_uuid" class="opencase-create-sepsheet__error">{{ errors.class_plan_uuid }}</span>
+				</div>
+
+				<div v-if="usesKle" class="opencase-create-sepsheet__row">
 					<div class="opencase-create-sepsheet__field">
 						<label>{{ t('opencase', 'KLE-nummer') }}</label>
 						<NcSelect v-model="selectedKle"
@@ -80,7 +92,7 @@
 					</div>
 				</div>
 
-				<div class="opencase-create-sepsheet__field">
+				<div v-if="usesKle" class="opencase-create-sepsheet__field">
 					<label>{{ t('opencase', 'Handlingsfacet') }}</label>
 					<NcSelect v-model="selectedFacet"
 						:options="facetOptions"
@@ -126,11 +138,14 @@ import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 
 import api from '../services/api.js'
+import AccessGroupSelect from './AccessGroupSelect.vue'
+import ClassificationPlanSelect from './ClassificationPlanSelect.vue'
+import { classificationPlanLabel } from '../utils/classificationPlanLabel.js'
 
 export default {
 	name: 'CreateSeparationSheetDialog',
 
-	components: { NcDialog, NcButton, NcTextField, NcSelect, NcLoadingIcon },
+	components: { NcDialog, NcButton, NcTextField, NcSelect, NcLoadingIcon, AccessGroupSelect, ClassificationPlanSelect },
 
 	props: {
 		/** Existing sheet to edit; null creates a new one. */
@@ -188,6 +203,8 @@ export default {
 			selectedSensitivity: null,
 			selectedFacet: null,
 			selectedInsightLevel: null,
+			selectedGroupId: sheet?.group_id || '',
+			selectedClassPlanUuid: sheet?.class_plan_uuid || '',
 
 			errors: {},
 			errorMessage: null,
@@ -198,6 +215,20 @@ export default {
 	computed: {
 		isEdit() {
 			return !!this.sheet
+		},
+		isGroupMode() {
+			return this.$store.state.accessProfileType === 'group'
+		},
+		// KLE number, sensitivity and Handlingsfacet: always with FK Adgang,
+		// with Grupper only with the KLE classification plan
+		usesKle() {
+			return !this.isGroupMode || this.$store.state.classificationPlan !== 'Emneplan'
+		},
+		isEmneplan() {
+			return this.$store.state.classificationPlan === 'Emneplan'
+		},
+		classPlanLabel() {
+			return classificationPlanLabel(this.sheet?.class_plan_code, this.sheet?.class_plan_title)
 		},
 		dialogName() {
 			return this.isEdit
@@ -340,6 +371,9 @@ export default {
 			if (type === 'new case' && !this.form.title.trim()) {
 				this.errors.title = t('opencase', 'Påkrævet')
 			}
+			if (type === 'new case' && this.isEmneplan && !this.selectedClassPlanUuid) {
+				this.errors.class_plan_uuid = t('opencase', 'Påkrævet')
+			}
 			return Object.keys(this.errors).length === 0
 		},
 
@@ -356,12 +390,15 @@ export default {
 				payload.class_subject_uuid = this.selectedKle?.id || ''
 				payload.sensitivity_uuid = this.selectedSensitivity?.id || ''
 				payload.classification_facet_uuid = this.selectedFacet?.id || ''
+				payload.group_id = this.selectedGroupId
+				payload.class_plan_uuid = this.selectedClassPlanUuid
 				payload.insight_level_id = this.selectedInsightLevel?.id ?? ''
 			} else if (type === 'inbox case') {
 				payload.org_uuid = this.selectedOrg?.id || ''
 				payload.class_subject_uuid = this.selectedKle?.id || ''
 				payload.sensitivity_uuid = this.selectedSensitivity?.id || ''
 				payload.classification_facet_uuid = this.selectedFacet?.id || ''
+				payload.class_plan_uuid = this.selectedClassPlanUuid
 				payload.insight_level_id = this.selectedInsightLevel?.id ?? ''
 			}
 

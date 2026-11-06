@@ -39,6 +39,12 @@ use OCP\AppFramework\Db\Entity;
  * @method void setInsightLevelId(?int $insightLevelId)
  * @method string|null getClassificationFacetUuid()
  * @method void setClassificationFacetUuid(?string $classificationFacetUuid)
+ * @method string|null getClassPlanUuid()
+ * @method void setClassPlanUuid(?string $classPlanUuid)
+ * @method string|null getClassSubjectUuid()
+ * @method void setClassSubjectUuid(?string $classSubjectUuid)
+ * @method string|null getSensitivityUuid()
+ * @method void setSensitivityUuid(?string $sensitivityUuid)
  * @method string|null getUuid()
  * @method void setUuid(?string $uuid)
  * @method bool getIsInbox()
@@ -80,6 +86,11 @@ class CaseEntity extends Entity {
     protected ?string $responsibleUserId = null;
     protected ?int $insightLevelId = null;
     protected ?string $classificationFacetUuid = null;
+    protected ?string $classPlanUuid = null;
+    /** KLE subject on the case (Grupper + KLE); NULL with FK Adgang, where it is on the access profile. */
+    protected ?string $classSubjectUuid = null;
+    /** Sensitivity on the case (Grupper + KLE); NULL with FK Adgang, where it is on the access profile. */
+    protected ?string $sensitivityUuid = null;
     protected ?string $uuid = null;
     protected bool $isInbox = false;
     protected ?int $parentCaseId = null;
@@ -109,6 +120,9 @@ class CaseEntity extends Entity {
         $this->addType('responsibleUserId', 'string');
         $this->addType('insightLevelId', 'integer');
         $this->addType('classificationFacetUuid', 'string');
+        $this->addType('classPlanUuid', 'string');
+        $this->addType('classSubjectUuid', 'string');
+        $this->addType('sensitivityUuid', 'string');
         $this->addType('uuid', 'string');
         $this->addType('isInbox', 'boolean');
         $this->addType('parentCaseId', 'integer');
@@ -153,5 +167,21 @@ class CaseEntity extends Entity {
      */
     public function getCreatedDay(): string {
         return $this->createdAt?->format('d') ?? '';
+    }
+
+    /**
+     * The case's KLE subject: its own (Grupper + KLE), else the access
+     * profile's (FK Adgang).
+     */
+    public function effectiveClassSubjectUuid(?AccessProfile $profile): ?string {
+        return $this->classSubjectUuid ?? $profile?->getClassSubjectUuid();
+    }
+
+    /**
+     * The case's sensitivity: its own (Grupper + KLE), else the access
+     * profile's (FK Adgang).
+     */
+    public function effectiveSensitivityUuid(?AccessProfile $profile): ?string {
+        return $this->sensitivityUuid ?? $profile?->getSensitivityUuid();
     }
 }

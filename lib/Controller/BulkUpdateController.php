@@ -191,6 +191,7 @@ class BulkUpdateController extends ApiController {
                 $criterias['responsible_user_id'] ?? null,
                 isset($criterias['casetype_id']) ? (int)$criterias['casetype_id'] : null,
                 [],
+                $criterias['class_plan_code'] ?? null,
             );
             foreach ($result['cases'] as $case) {
                 $ids[] = $case->getId();

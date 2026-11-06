@@ -131,17 +131,29 @@
 					:filterable="false"
 					:placeholder="t('opencase', 'Søg efter organisation')"
 					@search="onOrgSearch"
-					@update:model-value="v => { form.organisation = v?.id || ''; selectedOrgUuid = v?.uuid || ''; fetchApplicableCustomFields() }" />
+					@update:model-value="v => { form.organisation = v?.id || ''; selectedOrgUuid = v?.uuid || ''; onCaseMetadataChanged() }" />
 				<span v-if="errors.organisation" class="ncd-field__error">{{ errors.organisation }}</span>
 			</div>
 
-			<div class="ncd-row">
+			<div v-if="isGroupMode" class="ncd-field">
+				<label>{{ t('opencase', 'Adgangsgruppe') }} *</label>
+				<AccessGroupSelect v-model="form.group_id" />
+				<span v-if="errors.group_id" class="ncd-field__error">{{ errors.group_id }}</span>
+			</div>
+
+			<div v-if="isEmneplan" class="ncd-field">
+				<label>{{ t('opencase', 'Emne') }} *</label>
+				<ClassificationPlanSelect v-model="form.class_plan_uuid" />
+				<span v-if="errors.class_plan_uuid" class="ncd-field__error">{{ errors.class_plan_uuid }}</span>
+			</div>
+
+			<div v-if="usesKle" class="ncd-row">
 				<div class="ncd-field">
 					<label>{{ t('opencase', 'KLE-nummer') }} *</label>
 					<NcSelect v-model="selectedClassification"
 						:options="classificationOptions"
 						:placeholder="t('opencase', 'Vælg KLE-emneord')"
-						@update:model-value="v => { form.classification_code = v?.id || ''; fetchApplicableCustomFields() }" />
+						@update:model-value="v => { form.classification_code = v?.id || ''; onCaseMetadataChanged() }" />
 					<span v-if="errors.classification_code" class="ncd-field__error">{{ errors.classification_code }}</span>
 				</div>
 
@@ -155,7 +167,7 @@
 				</div>
 			</div>
 
-			<div class="ncd-field">
+			<div v-if="usesKle" class="ncd-field">
 				<label>{{ t('opencase', 'Handlingsfacet') }} *</label>
 				<NcSelect v-model="selectedClassificationFacet"
 					:options="classificationFacetOptions"
@@ -183,6 +195,15 @@
 					@search="onUserSearch"
 					@update:model-value="v => form.responsible_user_id = v?.id || ''" />
 				<span v-if="errors.responsible_user_id" class="ncd-field__error">{{ errors.responsible_user_id }}</span>
+			</div>
+
+			<div v-if="processOptions.length" class="ncd-field">
+				<label>{{ t('opencase', 'Proces') }}</label>
+				<NcSelect v-model="selectedProcess"
+					:options="processOptions"
+					:clearable="true"
+					:placeholder="t('opencase', 'Ingen proces')" />
+				<span class="ncd-field__hint">{{ t('opencase', 'Processen startes, når sagen er oprettet. Valgmulighederne afhænger af sagstype, organisation og KLE-nummer.') }}</span>
 			</div>
 
 			<div class="ncd-field">
@@ -362,12 +383,14 @@ import SelectEstateDialog from './SelectEstateDialog.vue'
 import OverflowTabs from './OverflowTabs.vue'
 import CaseParticipantList from './CaseParticipantList.vue'
 import CaseCaseworkerList from './CaseCaseworkerList.vue'
+import AccessGroupSelect from './AccessGroupSelect.vue'
+import ClassificationPlanSelect from './ClassificationPlanSelect.vue'
 
 export default {
 	name: 'NewCaseDialog',
 
 	components: {
-		NcDialog, NcButton, NcTextField, NcSelect, NcCheckboxRadioSwitch, NcLoadingIcon, AccountIcon, OfficeBuildingIcon, CprDisplay,
+		NcDialog, NcButton, NcTextField, NcSelect, NcCheckboxRadioSwitch, NcLoadingIcon, AccountIcon, OfficeBuildingIcon, CprDisplay, AccessGroupSelect, ClassificationPlanSelect,
 		HomeCityIcon, HomeGroupIcon, HomeVariantIcon,
 		SelectCitizenDialog, ManualCitizenDialog, SelectCompanyDialog, ManualCompanyDialog, SelectEmployeeDialog, SelectEstateDialog,
 		OverflowTabs, CaseParticipantList, CaseCaseworkerList,
@@ -399,6 +422,8 @@ export default {
 				sensitivity: '',
 				insight_level_id: null,
 				classification_facet_uuid: '',
+				group_id: '',
+				class_plan_uuid: '',
 				responsible_user_id: currentUser?.uid || '',
 				casetype_id: this.caseType?.id || null,
 				summary: '',
@@ -432,6 +457,9 @@ export default {
 			caseworkersCount: null,
 			selectedOrgUuid: '',
 			customFields: [],
+			// Processes that can be started on a case with the chosen metadata
+			processOptions: [],
+			selectedProcess: null,
 			customFieldValues: {},
 		}
 	},
@@ -490,6 +518,17 @@ export default {
 				? t('opencase', 'Opret ny {name}', { name: this.caseType.name })
 				: t('opencase', 'Opret ny sag')
 		},
+		isGroupMode() {
+			return this.$store.state.accessProfileType === 'group'
+		},
+		// KLE number, sensitivity and Handlingsfacet: always with FK Adgang,
+		// with Grupper only with the KLE classification plan
+		usesKle() {
+			return !this.isGroupMode || this.$store.state.classificationPlan !== 'Emneplan'
+		},
+		isEmneplan() {
+			return this.$store.state.classificationPlan === 'Emneplan'
+		},
 		classificationOptions() {
 			return this.$store.state.classificationSubjects
 				.filter(s => /^\d{2}\.\d{2}\.\d{2}$/.test(s.code))
@@ -517,6 +556,13 @@ export default {
 					id: f.uuid,
 					label: `${f.code} – ${f.title}`,
 				}))
+		},
+	},
+
+	watch: {
+		// Custom fields and processes can be scoped to an Emneplan item
+		'form.class_plan_uuid'() {
+			this.onCaseMetadataChanged()
 		},
 	},
 
@@ -550,7 +596,7 @@ export default {
 		} catch (e) {
 			// silently ignore
 		}
-		this.fetchApplicableCustomFields()
+		this.onCaseMetadataChanged()
 	},
 
 	beforeUnmount() {
@@ -610,8 +656,38 @@ export default {
 		},
 
 		/**
-		 * Re-fetches the custom fields applicable to the case type/org/KLE
-		 * combination selected so far, and prunes stale values for fields
+		 * Case type, organisation or KLE number changed: what can be added
+		 * to the case depends on them.
+		 */
+		onCaseMetadataChanged() {
+			this.fetchApplicableCustomFields()
+			this.fetchAvailableProcesses()
+		},
+
+		async fetchAvailableProcesses() {
+			if (!this.$store.state.processEngineEnabled) {
+				return
+			}
+			try {
+				const processes = await api.getAvailableProcesses({
+					casetypeId: this.form.casetype_id,
+					orgUuid: this.selectedOrgUuid || null,
+					classificationCode: this.form.classification_code || null,
+					classPlanUuid: this.form.class_plan_uuid || null,
+				})
+				this.processOptions = processes.map(p => ({ id: p.id, label: p.name }))
+			} catch (e) {
+				this.processOptions = []
+			}
+			// Drop a choice that no longer fits the case
+			if (this.selectedProcess && !this.processOptions.some(o => o.id === this.selectedProcess.id)) {
+				this.selectedProcess = null
+			}
+		},
+
+		/**
+		 * Re-fetches the custom fields applicable to the case type/org/KLE/
+		 * Emneplan combination selected so far, and prunes stale values for fields
 		 * that no longer apply while keeping values for fields still shown.
 		 */
 		async fetchApplicableCustomFields() {
@@ -620,6 +696,7 @@ export default {
 					casetypeId: this.form.casetype_id,
 					orgUuid: this.selectedOrgUuid || null,
 					classificationCode: this.form.classification_code || null,
+					classPlanUuid: this.form.class_plan_uuid || null,
 				})
 			} catch (e) {
 				this.customFields = []
@@ -648,9 +725,13 @@ export default {
 			this.errors = {}
 			if (!this.form.title.trim()) this.errors.title = t('opencase', 'Påkrævet')
 			if (!this.form.organisation) this.errors.organisation = t('opencase', 'Påkrævet')
-			if (!this.form.classification_code) this.errors.classification_code = t('opencase', 'Påkrævet')
-			if (!this.form.sensitivity) this.errors.sensitivity = t('opencase', 'Påkrævet')
-			if (!this.form.classification_facet_uuid) this.errors.classification_facet_uuid = t('opencase', 'Påkrævet')
+			if (this.isGroupMode && !this.form.group_id) this.errors.group_id = t('opencase', 'Påkrævet')
+			if (this.usesKle) {
+				if (!this.form.classification_code) this.errors.classification_code = t('opencase', 'Påkrævet')
+				if (!this.form.sensitivity) this.errors.sensitivity = t('opencase', 'Påkrævet')
+				if (!this.form.classification_facet_uuid) this.errors.classification_facet_uuid = t('opencase', 'Påkrævet')
+			}
+			if (this.isEmneplan && !this.form.class_plan_uuid) this.errors.class_plan_uuid = t('opencase', 'Påkrævet')
 			if (!this.form.responsible_user_id) this.errors.responsible_user_id = t('opencase', 'Påkrævet')
 			if (this.requiresCitizen) this.errors.participant = t('opencase', 'Vælg en borger')
 			if (this.requiresCompany) this.errors.participant = t('opencase', 'Vælg en virksomhed')
@@ -747,9 +828,23 @@ export default {
 					}
 				}
 
+				// Last, so the process starts with the parties, caseworkers and
+				// custom fields already on the case
+				let openTab = null
+				if (this.selectedProcess) {
+					try {
+						await api.startCaseProcess(created.id, this.selectedProcess.id)
+						openTab = 'processes'
+					} catch (e) {
+						showError(e.response?.data?.ocs?.data?.error
+							? t('opencase', 'Sag oprettet, men processen kunne ikke startes: {error}', { error: e.response.data.ocs.data.error })
+							: t('opencase', 'Sag oprettet, men processen kunne ikke startes'))
+					}
+				}
+
 				showSuccess(t('opencase', 'Sag oprettet'))
 				this.$emit('close')
-				this.$router.push({ name: 'case-detail', params: { id: created.id } })
+				this.$router.push({ name: 'case-detail', params: { id: created.id }, hash: openTab ? '#tab-' + openTab : '' })
 			} catch (e) {
 				const msg = e.response?.data?.ocs?.data?.error || t('opencase', 'Kunne ikke oprette sag')
 				showError(msg)
@@ -830,6 +925,11 @@ export default {
 
 .ncd-field__error {
 	color: var(--color-error-text);
+	font-size: 0.85em;
+}
+
+.ncd-field__hint {
+	color: var(--color-text-maxcontrast);
 	font-size: 0.85em;
 }
 

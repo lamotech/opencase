@@ -4,19 +4,10 @@ declare(strict_types=1);
 
 namespace OCA\OpenCase\Controller;
 
-use OCA\OpenCase\Db\CaseMapper;
-use OCA\OpenCase\Db\DocumentMapper;
-use OCA\OpenCase\Db\DpFile;
-use OCA\OpenCase\Db\DpFileMapper;
-use OCA\OpenCase\Db\DpReceiver;
-use OCA\OpenCase\Db\DpReceiverMapper;
-use OCA\OpenCase\Db\DpShipment;
-use OCA\OpenCase\Db\DpShipmentMapper;
-use OCA\OpenCase\Db\FileMapper;
-use OCA\OpenCase\Service\CaseService;
-use OCA\OpenCase\Service\Configuration;
-use OCA\OpenCase\Service\DocumentRelationService;
-use OCA\OpenCase\Service\Serviceplatformen\PostForespoergClient;
+use OCA\OpenCase\Service\DigitalPostAlreadySentException;
+use OCA\OpenCase\Service\DigitalPostService;
+use OCA\OpenCase\Service\NotFoundException;
+use OCA\OpenCase\Service\PermissionService;
 use OCP\AppFramework\ApiController;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\DataDownloadResponse;
@@ -39,14 +30,8 @@ class DigitalPostController extends ApiController {
     public function __construct(
         string $appName,
         IRequest $request,
-        private Configuration $configuration,
-        private DocumentMapper $documentMapper,
-        private CaseMapper $caseMapper,
-        private FileMapper $fileMapper,
-        private DpShipmentMapper $dpShipmentMapper,
-        private DpFileMapper $dpFileMapper,
-        private DpReceiverMapper $dpReceiverMapper,
-        private DocumentRelationService $documentRelationService,
+        private DigitalPostService $digitalPostService,
+        private PermissionService $permissionService,
         private ?string $userId,
     ) {
         parent::__construct($appName, $request);
@@ -64,22 +49,15 @@ class DigitalPostController extends ApiController {
             return new DataResponse(['error' => 'cpr_cvr is required'], Http::STATUS_BAD_REQUEST);
         }
 
-        // PostForespoergClient is an Enterprise-only component (not present
-        // in the public App Store package) — guard against the class simply
-        // not being present on disk, rather than injecting it directly in
-        // the constructor (which would break every route on this controller
-        // if the class doesn't exist).
-        if ($this->configuration->getConfigValue('enterprise_version', '0') !== '1' || !class_exists(PostForespoergClient::class)) {
+        if (!$this->digitalPostService->canCheckSubscriptions()) {
             return new DataResponse(
-                ['error' => 'Digital Post-abonnementstjek er en Enterprise-funktion og er ikke aktiveret på denne instans.'],
+                ['error' => 'Digital Post er ikke aktiveret på denne instans.'],
                 Http::STATUS_NOT_IMPLEMENTED,
             );
         }
 
         try {
-            $postForespoergClient = \OC::$server->get(PostForespoergClient::class);
-            $hasSubscription = $postForespoergClient->hasDigitalPostSubsciption($cprCvr);
-            return new DataResponse(['has_subscription' => $hasSubscription]);
+            return new DataResponse(['has_subscription' => $this->digitalPostService->hasSubscription($cprCvr)]);
         } catch (\Throwable $e) {
             return new DataResponse(['error' => $e->getMessage()], Http::STATUS_INTERNAL_SERVER_ERROR);
         }
@@ -91,90 +69,31 @@ class DigitalPostController extends ApiController {
 
     #[NoAdminRequired]
     public function createShipment(int $documentId): DataResponse {
+        if (!$this->digitalPostService->isEnabled()) {
+            return new DataResponse(
+                ['error' => 'Digital Post er ikke aktiveret på denne instans.'],
+                Http::STATUS_NOT_IMPLEMENTED,
+            );
+        }
+
         $params = $this->request->getParams();
 
-        $document = $this->documentMapper->findById($documentId);
-        if ($document === null) {
-            return new DataResponse(['error' => 'Document not found'], Http::STATUS_NOT_FOUND);
+        try {
+            $shipment = $this->digitalPostService->createShipment(
+                $documentId,
+                $this->userId ?? '',
+                (bool)($params['can_be_replied'] ?? true),
+                (bool)($params['include_attachments'] ?? false),
+                isset($params['main_file_id']) ? (int)$params['main_file_id'] : null,
+                is_array($params['receivers'] ?? null) ? $params['receivers'] : [],
+            );
+        } catch (NotFoundException $e) {
+            return new DataResponse(['error' => $e->getMessage()], Http::STATUS_NOT_FOUND);
+        } catch (DigitalPostAlreadySentException $e) {
+            return new DataResponse(['error' => $e->getMessage()], Http::STATUS_CONFLICT);
         }
 
-        $case = $this->caseMapper->findById($document->getCaseId());
-        if ($case === null) {
-            return new DataResponse(['error' => 'Case not found'], Http::STATUS_NOT_FOUND);
-        }
-
-        // Ensure both case and document have UUIDs (lazy generation for old rows)
-        if ($case->getUuid() === null) {
-            $case->setUuid(CaseService::generateUuid());
-            $this->caseMapper->update($case);
-        }
-        if ($document->getUuid() === null) {
-            $document->setUuid(CaseService::generateUuid());
-            $this->documentMapper->update($document);
-        }
-
-        $canBeReplied       = (bool)($params['can_be_replied'] ?? true);
-        $includeAttachments = (bool)($params['include_attachments'] ?? false);
-        $mainFileId   = isset($params['main_file_id']) ? (int)$params['main_file_id'] : null;
-        $receiversIn  = is_array($params['receivers'] ?? null) ? $params['receivers'] : [];
-
-        // --- Create shipment record ---
-        $shipment = new DpShipment();
-        $shipment->setDocumentId($documentId);
-        $shipment->setCanBeReplied($canBeReplied);
-        $shipment->setIncludeAttachments($includeAttachments);
-        $shipment->setCaseUuid($case->getUuid());
-        $shipment->setDocumentUuid($document->getUuid());
-        $shipment->setCreatedAt(new \DateTime());
-        $shipment->setUpdatedAt(new \DateTime());
-        $shipment->setCreatedBy($this->userId ?? '');
-        $shipment->setStatus('Pending');
-
-        $shipment = $this->dpShipmentMapper->insert($shipment);
-        $shipmentId = $shipment->getId();
-
-        // --- Create dp_files records (all files for the document, plus the
-        // files of its attachments when include_attachments is set) ---
-        $files = $this->fileMapper->findByDocument($documentId);
-        if ($includeAttachments && $this->userId !== null) {
-            foreach ($this->documentRelationService->readableAttachmentIds($documentId, $this->userId) as $attachmentId) {
-                array_push($files, ...$this->fileMapper->findByDocument($attachmentId));
-            }
-        }
-
-        // The dispatch job writes every additional file as <name>.pdf into
-        // one folder, so display names must be unique per shipment.
-        $usedNames = [];
-        foreach ($files as $file) {
-            $dpFile = new DpFile();
-            $dpFile->setDpShipmentId($shipmentId);
-            $dpFile->setFileId($file->getId());
-            $dpFile->setFileName($this->uniqueFileName($file->getVirtualFilename() ?: $file->getOriginalFilename(), $usedNames));
-            $dpFile->setStorageFilename(null);
-            $dpFile->setIsMain($mainFileId !== null && $file->getId() === $mainFileId && $file->getDocumentId() === $documentId);
-            $this->dpFileMapper->insert($dpFile);
-        }
-
-        // --- Create dp_receivers records ---
-        $documentTitle = $document->getTitle();
-        foreach ($receiversIn as $r) {
-            $dpReceiver = new DpReceiver();
-            $dpReceiver->setDpShipmentId($shipmentId);
-            $dpReceiver->setTitle($documentTitle);
-            $dpReceiver->setCprCvr($r['cpr_cvr'] ?? null);
-            $dpReceiver->setReceiverName($r['receiver_name'] ?? null);
-            $dpReceiver->setDpSubscription((bool)($r['dp_subscription'] ?? false));
-            $dpReceiver->setDocumentContactId(isset($r['document_contact_id']) ? (int)$r['document_contact_id'] : null);
-            $dpReceiver->setStorageFilename(null);
-            $dpReceiver->setMessageId(null);
-            $dpReceiver->setMessageCreatedAt(null);
-            $dpReceiver->setStatus('Pending');
-            $dpReceiver->setMessageAdvisId(null);
-            $dpReceiver->setMessageAdvisTekst(null);
-            $this->dpReceiverMapper->insert($dpReceiver);
-        }
-
-        return new DataResponse(['shipment_id' => $shipmentId], Http::STATUS_CREATED);
+        return new DataResponse(['shipment_id' => $shipment->getId()], Http::STATUS_CREATED);
     }
 
     // ---------------------------------------------------------------
@@ -183,20 +102,19 @@ class DigitalPostController extends ApiController {
 
     #[NoAdminRequired]
     public function latestShipment(int $documentId): DataResponse {
-        $shipments = $this->dpShipmentMapper->findByDocument($documentId);
-        if (empty($shipments)) {
-            return new DataResponse(['shipment' => null]);
+        if (!$this->permissionService->userHasReadAccessToDocument($this->userId ?? '', $documentId)) {
+            return new DataResponse(['error' => 'Document not found'], Http::STATUS_NOT_FOUND);
         }
 
-        $shipment   = $shipments[0]; // already ordered DESC by id
-        $shipmentId = $shipment->getId();
-
-        $files     = $this->dpFileMapper->findByShipment($shipmentId);
-        $receivers = $this->dpReceiverMapper->findByShipment($shipmentId);
+        $latest = $this->digitalPostService->latest($documentId);
+        if ($latest === null) {
+            return new DataResponse(['shipment' => null]);
+        }
+        $shipment = $latest['shipment'];
 
         return new DataResponse([
             'shipment' => [
-                'id'                  => $shipmentId,
+                'id'                  => $shipment->getId(),
                 'status'              => $shipment->getStatus(),
                 'can_be_replied'      => $shipment->getCanBeReplied(),
                 'include_attachments' => $shipment->getIncludeAttachments(),
@@ -208,7 +126,7 @@ class DigitalPostController extends ApiController {
                 'file_name'        => $f->getFileName(),
                 'is_main'          => $f->getIsMain(),
                 'has_pdf'          => $f->getStorageFilename() !== null,
-            ], $files),
+            ], $latest['files']),
             'receivers' => array_map(fn($r) => [
                 'id'            => $r->getId(),
                 'receiver_name' => $r->getReceiverName(),
@@ -216,7 +134,7 @@ class DigitalPostController extends ApiController {
                 'status'        => $r->getStatus(),
                 'has_pdf'       => $r->getStorageFilename() !== null,
                 'message_id'    => $r->getMessageId(),
-            ], $receivers),
+            ], $latest['receivers']),
         ]);
     }
 
@@ -226,52 +144,21 @@ class DigitalPostController extends ApiController {
 
     #[NoAdminRequired]
     public function downloadShipmentFile(int $id): DataDownloadResponse|DataResponse {
-        $dpFile = $this->dpFileMapper->findById($id);
-        if ($dpFile === null || $dpFile->getStorageFilename() === null) {
-            return new DataResponse(['error' => 'File not found'], Http::STATUS_NOT_FOUND);
+        try {
+            $path = $this->digitalPostService->shipmentFilePdf($id, $this->userId ?? '');
+        } catch (NotFoundException $e) {
+            return new DataResponse(['error' => $e->getMessage()], Http::STATUS_NOT_FOUND);
         }
-        $path = $dpFile->getStorageFilename();
-        if (!file_exists($path)) {
-            return new DataResponse(['error' => 'PDF not found on disk'], Http::STATUS_NOT_FOUND);
-        }
-        return new DataDownloadResponse(
-            file_get_contents($path),
-            basename($path),
-            'application/pdf'
-        );
+        return new DataDownloadResponse(file_get_contents($path), basename($path), 'application/pdf');
     }
 
     #[NoAdminRequired]
     public function downloadReceiverFile(int $id): DataDownloadResponse|DataResponse {
-        $dpReceiver = $this->dpReceiverMapper->findById($id);
-        if ($dpReceiver === null || $dpReceiver->getStorageFilename() === null) {
-            return new DataResponse(['error' => 'File not found'], Http::STATUS_NOT_FOUND);
+        try {
+            $path = $this->digitalPostService->receiverPdf($id, $this->userId ?? '');
+        } catch (NotFoundException $e) {
+            return new DataResponse(['error' => $e->getMessage()], Http::STATUS_NOT_FOUND);
         }
-        $path = $dpReceiver->getStorageFilename();
-        if (!file_exists($path)) {
-            return new DataResponse(['error' => 'PDF not found on disk'], Http::STATUS_NOT_FOUND);
-        }
-        return new DataDownloadResponse(
-            file_get_contents($path),
-            basename($path),
-            'application/pdf'
-        );
-    }
-
-    /**
-     * Return $name, or "<base> (2).<ext>", "<base> (3).<ext>", … if the base
-     * name (case-insensitive, extension ignored) is already in $used.
-     *
-     * @param array<string, true> $used
-     */
-    private function uniqueFileName(string $name, array &$used): string {
-        $base = pathinfo($name, PATHINFO_FILENAME);
-        $ext  = pathinfo($name, PATHINFO_EXTENSION);
-        $candidate = $name;
-        for ($i = 2; isset($used[mb_strtolower(pathinfo($candidate, PATHINFO_FILENAME))]); $i++) {
-            $candidate = "{$base} ({$i})" . ($ext !== '' ? ".{$ext}" : '');
-        }
-        $used[mb_strtolower(pathinfo($candidate, PATHINFO_FILENAME))] = true;
-        return $candidate;
+        return new DataDownloadResponse(file_get_contents($path), basename($path), 'application/pdf');
     }
 }

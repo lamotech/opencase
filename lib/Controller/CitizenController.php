@@ -10,10 +10,8 @@ use OCA\OpenCase\Db\ContactRoleMapper;
 use OCA\OpenCase\Db\DocumentContactMapper;
 use OCA\OpenCase\Db\OrganisationMapper;
 use OCA\OpenCase\Db\ParticipantRoleMapper;
-use OCA\OpenCase\Service\Configuration;
-use OCA\OpenCase\Service\Datafordeler\CitizenClient;
-use OCA\OpenCase\Service\Datafordeler\CitizenData;
-use OCA\OpenCase\Service\TransactionLogService;
+use OCA\OpenCase\Service\CitizenSearchService;
+use OCA\OpenCase\Service\PermissionService;
 use OCP\AppFramework\ApiController;
 use OCP\AppFramework\Http\Attribute\ApiRoute;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
@@ -44,10 +42,10 @@ class CitizenController extends ApiController {
         private OrganisationMapper $organisationMapper,
         private ParticipantRoleMapper $participantRoleMapper,
         private ContactRoleMapper $contactRoleMapper,
-        private TransactionLogService $transactionLogService,
+        private CitizenSearchService $searchService,
+        private PermissionService $permissionService,
         private IUserManager $userManager,
         private IFactory $l10nFactory,
-        private Configuration $configuration,
         private ?string $userId,
     ) {
         parent::__construct($appName, $request);
@@ -61,6 +59,20 @@ class CitizenController extends ApiController {
         return $user ? $this->l10nFactory->getUserLanguage($user) : 'en';
     }
 
+    /**
+     * The rows on cases the user can read.
+     *
+     * @param array<int, array{id: int|string}> $rows
+     * @return array<int, array{id: int|string}>
+     */
+    private function readableCaseRows(array $rows): array {
+        $readable = array_flip($this->permissionService->filterReadableCases(
+            (string)$this->userId,
+            array_values(array_unique(array_map(fn(array $row) => (int)$row['id'], $rows))),
+        ));
+        return array_values(array_filter($rows, fn(array $row) => isset($readable[(int)$row['id']])));
+    }
+
     private function statusCssClass(int $statusId): string {
         return match ($statusId) {
             1 => 'open',
@@ -70,127 +82,25 @@ class CitizenController extends ApiController {
         };
     }
 
-    private function serialize(CitizenData $c): array {
-        return [
-            'cpr_cvr'                => $c->cpr,
-            'name'                   => $c->name,
-            'streetname'             => $c->streetname,
-            'housenumber'            => $c->housenumber,
-            'floor'                  => $c->floor,
-            'door'                   => $c->door,
-            'zipcode'                => $c->zipcode,
-            'zipdistrict'            => $c->zipdistrict,
-            'phone'                  => '',
-            'email'                  => '',
-            'has_address_protection' => $c->hasAddressProtection,
-        ];
-    }
 
-    private function serializeLocalRow(array $row): array {
-        return [
-            'cpr_cvr'                => $row['cpr_cvr'],
-            'name'                   => $row['name'],
-            'streetname'             => $row['streetname'],
-            'housenumber'            => $row['housenumber'],
-            'floor'                  => $row['floor'],
-            'door'                   => $row['door'],
-            'zipcode'                => $row['zipcode'],
-            'zipdistrict'            => $row['zipdistrict'],
-            'phone'                  => $row['phone'] ?? '',
-            'email'                  => $row['email'] ?? '',
-            'has_address_protection' => (bool)$row['has_address_protection'],
-        ];
-    }
 
-    /**
-     * Fallback citizen search used when enterprise_version=0 (no Datafordeler
-     * access): searches existing case participants and document contacts
-     * instead, deduplicated by CPR. Only rows whose cpr_cvr is CPR-length
-     * (10 digits) are considered — this excludes company (CVR, 8 digit) rows
-     * that live in the same tables.
-     *
-     * @return array<int, array>
-     */
-    private function searchLocal(
-        string $cpr,
-        string $firstname,
-        string $lastname,
-        string $streetname,
-        string $housenumber,
-        string $zipcode,
-        string $zipdistrict,
-    ): array {
-        $rows = array_merge(
-            $this->participantMapper->searchByFields($cpr, $firstname, $lastname, $streetname, $housenumber, $zipcode, $zipdistrict),
-            $this->contactMapper->searchByFields($cpr, $firstname, $lastname, $streetname, $housenumber, $zipcode, $zipdistrict),
-        );
-
-        $byCpr = [];
-        foreach ($rows as $row) {
-            $digits = preg_replace('/\D/', '', (string)$row['cpr_cvr']);
-            if (strlen($digits) !== 10) {
-                continue;
-            }
-            if (!isset($byCpr[$digits])) {
-                $byCpr[$digits] = $this->serializeLocalRow($row);
-            }
-        }
-
-        return array_values($byCpr);
-    }
 
     #[NoAdminRequired]
     #[ApiRoute(verb: 'GET', url: '/api/v1/citizen/search')]
     public function search(): DataResponse {
-        $cpr         = trim((string)$this->request->getParam('cpr', ''));
-        $firstname   = trim((string)$this->request->getParam('firstname', ''));
-        $lastname    = trim((string)$this->request->getParam('lastname', ''));
-        $streetname  = trim((string)$this->request->getParam('streetname', ''));
-        $housenumber = trim((string)$this->request->getParam('housenumber', ''));
-        $zipcode     = trim((string)$this->request->getParam('zipcode', ''));
-        $zipdistrict = trim((string)$this->request->getParam('zipdistrict', ''));
+        $result = $this->searchService->search([
+            'cpr' => (string)$this->request->getParam('cpr', ''),
+            'firstname' => (string)$this->request->getParam('firstname', ''),
+            'lastname' => (string)$this->request->getParam('lastname', ''),
+            'streetname' => (string)$this->request->getParam('streetname', ''),
+            'housenumber' => (string)$this->request->getParam('housenumber', ''),
+            'zipcode' => (string)$this->request->getParam('zipcode', ''),
+            'zipdistrict' => (string)$this->request->getParam('zipdistrict', ''),
+        ], $this->userId);
 
-        // CitizenClient is an Enterprise-only component (not present in the
-        // public App Store package) — guard against the class simply not
-        // being present on disk, and fall back to a local search below if
-        // it isn't (also covers a misconfigured instance where the flag is
-        // on but the Enterprise package was never installed).
-        $enterpriseEnabled = $this->configuration->getConfigValue('enterprise_version', '0') === '1';
-        $citizenClientAvailable = $enterpriseEnabled && class_exists(CitizenClient::class);
-
-        if ($citizenClientAvailable) {
-            try {
-                $citizenClient = \OC::$server->get(CitizenClient::class);
-                if ($cpr !== '') {
-                    $citizen  = $citizenClient->fetchByCPR($cpr);
-                    $citizens = $citizen !== null ? [$this->serialize($citizen)] : [];
-                } else {
-                    $results  = $citizenClient->search($firstname, $lastname, $streetname, $housenumber, $zipcode, $zipdistrict);
-                    $citizens = array_map(fn($c) => $this->serialize($c), $results);
-                }
-            } catch (\Throwable $e) {
-                return new DataResponse(['citizens' => [], 'error' => $e->getMessage()]);
-            }
-        } else {
-            // No Datafordeler access on this instance — fall back to searching
-            // existing case participants / document contacts locally.
-            $citizens = $this->searchLocal($cpr, $firstname, $lastname, $streetname, $housenumber, $zipcode, $zipdistrict);
-        }
-
-        if ($this->userId !== null) {
-            $criteria = array_filter([
-                'cpr'         => $cpr,
-                'firstname'   => $firstname,
-                'lastname'    => $lastname,
-                'streetname'  => $streetname,
-                'housenumber' => $housenumber,
-                'zipcode'     => $zipcode,
-                'zipdistrict' => $zipdistrict,
-            ], fn($v) => $v !== '');
-            $this->transactionLogService->log($this->userId, $citizenClientAvailable ? 'search_citizen' : 'search_citizen_local', $criteria);
-        }
-
-        return new DataResponse(['citizens' => $citizens]);
+        return new DataResponse($result['error'] === null
+            ? ['citizens' => $result['results']]
+            : ['citizens' => [], 'error' => $result['error']]);
     }
 
     #[NoAdminRequired]
@@ -201,7 +111,7 @@ class CitizenController extends ApiController {
             return new DataResponse(['cases' => []]);
         }
 
-        $rows = $this->participantMapper->findRawCasesByCpr($cpr);
+        $rows = $this->readableCaseRows($this->participantMapper->findRawCasesByCpr($cpr));
 
         $lang        = $this->getUserLanguage();
         $statusIds   = array_unique(array_column($rows, 'status_id'));
@@ -244,7 +154,10 @@ class CitizenController extends ApiController {
             return new DataResponse(['documents' => []]);
         }
 
-        $rows = $this->contactMapper->findRawDocumentsByCpr($cpr);
+        $rows = array_values(array_filter(
+            $this->contactMapper->findRawDocumentsByCpr($cpr),
+            fn(array $row) => $this->permissionService->userHasReadAccessToDocument((string)$this->userId, (int)$row['id']),
+        ));
 
         $lang      = $this->getUserLanguage();
         $roleNames = $this->contactRoleMapper->getNameMap($lang);

@@ -321,8 +321,9 @@ class SamlController extends Controller {
 		$isOpenCaseUser = $privilege['isOpenCaseUser'];
 		$isOpenCaseAdministrator = $privilege['isOpenCaseAdministrator'];
 		$isTemplateAdministrator = $privilege['isTemplateAdministrator'];
+		$isProcessAdministrator = $privilege['isProcessAdministrator'];
 
-		$this->syncOpenCaseRoles($userId, $isOpenCaseUser, $isOpenCaseAdministrator, $isTemplateAdministrator);
+		$this->syncOpenCaseRoles($userId, $isOpenCaseUser, $isOpenCaseAdministrator, $isTemplateAdministrator, $isProcessAdministrator);
 
 		// Sync privilege constraints and rebuild access-profile grants
 		$this->privilegeService->syncPrivileges($userId, $privilege['privilegeGroups']);
@@ -855,6 +856,7 @@ class SamlController extends Controller {
 	 *   isOpenCaseUser: bool,
 	 *   isOpenCaseAdministrator: bool,
 	 *   isTemplateAdministrator: bool,
+	 *   isProcessAdministrator: bool,
 	 *   grantedOrganisations: array<string>,
 	 *   privilegeGroups: array<array{
 	 *     privilege_type: string,
@@ -898,6 +900,7 @@ class SamlController extends Controller {
 			'isOpenCaseUser'        => false,
 			'isOpenCaseAdministrator' => false,
 			'isTemplateAdministrator' => false,
+			'isProcessAdministrator' => false,
 			'grantedOrganisations'  => [],
 			'privilegeGroups'       => [],
 		];
@@ -920,6 +923,7 @@ class SamlController extends Controller {
 		$isOpenCaseUser          = false;
 		$isOpenCaseAdministrator = false;
 		$isTemplateAdministrator = false;
+		$isProcessAdministrator  = false;
 		$grantedOrganisations    = [];
 		$privilegeGroups         = [];
 
@@ -943,6 +947,11 @@ class SamlController extends Controller {
 					$isUser                  = true;
 					$isTemplateAdministrator = true;
 					$privilegeGroups[] = ['privilege_type' => 'opencasetemplateadministrator', 'foelsomhed' => [], 'kle' => [], 'orgenhed' => []];
+
+				} elseif (str_contains($text, '/roles/usersystemrole/opencaseprocessadministrator/1')) {
+					$isUser                 = true;
+					$isProcessAdministrator = true;
+					$privilegeGroups[] = ['privilege_type' => 'opencaseprocessadministrator', 'foelsomhed' => [], 'kle' => [], 'orgenhed' => []];
 
 				} elseif (str_contains($text, '/roles/usersystemrole/opencaseuser/1')) {
 					$isUser         = true;
@@ -1014,6 +1023,7 @@ class SamlController extends Controller {
 			'isOpenCaseUser'          => $isOpenCaseUser,
 			'isOpenCaseAdministrator' => $isOpenCaseAdministrator,
 			'isTemplateAdministrator' => $isTemplateAdministrator,
+			'isProcessAdministrator'  => $isProcessAdministrator,
 			'grantedOrganisations'    => $grantedOrganisations,
 			'privilegeGroups'         => $privilegeGroups,
 		];
@@ -1139,11 +1149,12 @@ class SamlController extends Controller {
 	 *
 	 * @return TemplateResponse
 	 */
-	private function syncOpenCaseRoles(string $userId, bool $isOpenCaseUser, bool $isOpenCaseAdministrator, bool $isTemplateAdministrator): void {
+	private function syncOpenCaseRoles(string $userId, bool $isOpenCaseUser, bool $isOpenCaseAdministrator, bool $isTemplateAdministrator, bool $isProcessAdministrator): void {
 		$desired = [
 			'User'              => $isOpenCaseUser,
 			'Administrator'     => $isOpenCaseAdministrator,
 			'Template Designer' => $isTemplateAdministrator,
+			'Process Designer'  => $isProcessAdministrator,
 		];
 
 		foreach ($desired as $roleName => $shouldHave) {

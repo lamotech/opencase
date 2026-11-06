@@ -31,6 +31,10 @@ use OCP\AppFramework\Db\Entity;
  * @method void setNcGroupId(?string $ncGroupId)
  * @method int|null getGroupfolderId()
  * @method void setGroupfolderId(?int $groupfolderId)
+ * @method string|null getLogoFile()
+ * @method void setLogoFile(?string $logoFile)
+ * @method string|null getMemberGroupId()
+ * @method void setMemberGroupId(?string $memberGroupId)
  */
 class Organisation extends Entity {
 
@@ -43,6 +47,8 @@ class Organisation extends Entity {
     protected ?string $location = null;
     protected ?string $ncGroupId = null;
     protected ?int $groupfolderId = null;
+    protected ?string $logoFile = null;
+    protected ?string $memberGroupId = null;
 
     public function __construct() {
         $this->addType('orgUuid', 'string');
@@ -54,5 +60,7 @@ class Organisation extends Entity {
         $this->addType('location', 'string');
         $this->addType('ncGroupId', 'string');
         $this->addType('groupfolderId', 'integer');
+        $this->addType('logoFile', 'string');
+        $this->addType('memberGroupId', 'string');
     }
 }

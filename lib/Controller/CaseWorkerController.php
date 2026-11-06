@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace OCA\OpenCase\Controller;
 
 use OCA\OpenCase\Db\CaseMapper;
-use OCA\OpenCase\Db\CaseWorker;
 use OCA\OpenCase\Db\CaseWorkerMapper;
 use OCA\OpenCase\Service\AuditService;
+use OCA\OpenCase\Service\CaseWorkerService;
 use OCA\OpenCase\Service\PermissionService;
 use OCP\AppFramework\ApiController;
 use OCP\AppFramework\Http;
@@ -39,6 +39,7 @@ class CaseWorkerController extends ApiController {
         private IDBConnection $db,
         private PermissionService $permissionService,
         private AuditService $auditService,
+        private CaseWorkerService $caseWorkerService,
         private ?string $userId,
     ) {
         parent::__construct($appName, $request);
@@ -176,29 +177,9 @@ class CaseWorkerController extends ApiController {
             return new DataResponse(['error' => 'User is already a caseworker on this case'], Http::STATUS_CONFLICT);
         }
 
-        // Snapshot existing access so we can restore it on removal
-        $existingGrant = $this->permissionService->findGrant($caseId, $targetUserId);
-        $priorCanWrite = $existingGrant !== null ? ($existingGrant->getCanWrite() ? 1 : 0) : null;
-
-        $entity = new CaseWorker();
-        $entity->setCaseId($caseId);
-        $entity->setUserId($targetUserId);
-        $entity->setPriorCanWrite($priorCanWrite);
-        $this->caseworkerMapper->insert($entity);
-
-        // Grant write access (no-op if they already have write)
-        if ($existingGrant === null || !$existingGrant->getCanWrite()) {
-            $this->permissionService->grantUserAccess($caseId, $targetUserId, true, $this->userId ?? '');
-        }
+        $this->caseWorkerService->add($caseId, $targetUserId, $this->userId ?? '');
 
         $serialized = $this->serializeWorker($targetUserId, 'other');
-        $this->auditService->logCaseworkerAdded(
-            $caseId,
-            $this->userId ?? '',
-            $targetUserId,
-            $serialized['display_name'],
-        );
-
         return new DataResponse(['caseworker' => $serialized], Http::STATUS_CREATED);
     }
 

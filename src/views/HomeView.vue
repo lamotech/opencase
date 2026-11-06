@@ -106,6 +106,27 @@
 							</div>
 						</router-link>
 					</li>
+					<!-- Process task -->
+					<li v-else-if="item.type === 'process'"
+						:key="'pt-' + item.data.id"
+						class="opencase-home__suggestion opencase-home__suggestion--urgent"
+						:class="{ 'opencase-home__suggestion--overdue': isPastDeadline(item.data.due_date) }">
+						<router-link :to="{ path: '/case/' + item.data.case_id, hash: '#tab-processes' }">
+							<SitemapIcon :size="20" />
+							<div>
+								<strong>{{ item.data.name }}</strong>
+								<p>
+									{{ item.data.case_number }} · {{ item.data.case_title }}
+									<template v-if="!item.data.assignee">
+										· {{ t('opencase', 'Ikke taget') }}
+									</template>
+									<template v-if="item.data.due_date">
+										· <span :class="{ 'opencase-home__deadline--overdue': isPastDeadline(item.data.due_date) }">{{ t('opencase', 'Frist: {date}', { date: formatDeadline(item.data.due_date) }) }}</span>
+									</template>
+								</p>
+							</div>
+						</router-link>
+					</li>
 					<!-- Access request -->
 					<li v-else-if="item.type === 'access_request'"
 						:key="'ar-' + item.data.id"
@@ -243,6 +264,7 @@ export default {
 			selectedCaseType: null,
 			showNotificationsDialog: false,
 			workflowTasks: [],
+			processTasks: [],
 			myReminders: [],
 			myAccessRequests: [],
 			aiEnabled: loadState('opencase', 'ai_enabled', false),
@@ -259,6 +281,11 @@ export default {
 				deadline: t.step_deadline ?? null,
 				data: t,
 			}))
+			const processTasks = (this.processTasks ?? []).map(t => ({
+				type: 'process',
+				deadline: t.due_date ?? null,
+				data: t,
+			}))
 			const reminders = (this.myReminders ?? []).map(r => ({
 				type: 'reminder',
 				deadline: r.deadline ?? null,
@@ -269,7 +296,7 @@ export default {
 				deadline: r.effective_deadline_at ?? null,
 				data: r,
 			}))
-			return [...tasks, ...reminders, ...accessRequests].sort((a, b) => {
+			return [...tasks, ...processTasks, ...reminders, ...accessRequests].sort((a, b) => {
 				if (!a.deadline && !b.deadline) return 0
 				if (!a.deadline) return 1
 				if (!b.deadline) return -1
@@ -280,6 +307,9 @@ export default {
 
 	mounted() {
 		api.getMyWorkflowTasks().then(tasks => { this.workflowTasks = tasks ?? [] }).catch(() => {})
+		if (this.$store.state.processEngineEnabled) {
+			api.getMyProcessTasks().then(tasks => { this.processTasks = tasks ?? [] }).catch(() => {})
+		}
 		api.getMyAccessRequests().then(requests => { this.myAccessRequests = requests ?? [] }).catch(() => {})
 		api.getMyActiveReminders().then(reminders => { this.myReminders = reminders ?? [] }).catch(() => {})
 		this.$store.dispatch('fetchCaseTypes').catch(() => {})

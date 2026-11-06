@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OCA\OpenCase\Controller;
 
+use OCA\OpenCase\Db\AccessProfile;
 use OCA\OpenCase\Db\CaseMapper;
 use OCA\OpenCase\Db\CaseParticipantMapper;
 use OCA\OpenCase\Db\CaseStatusMapper;
@@ -11,8 +12,10 @@ use OCA\OpenCase\Db\CaseUserMapper;
 use OCA\OpenCase\Db\DocumentMapper;
 use OCA\OpenCase\Db\OrganisationMapper;
 use OCA\OpenCase\Db\ParticipantRoleMapper;
+use OCA\OpenCase\Db\ProcessTaskMapper;
 use OCA\OpenCase\Db\ReminderMapper;
 use OCA\OpenCase\Db\UserInfoMapper;
+use OCA\OpenCase\Service\AccessProfile\GroupAccessProfileType;
 use OCA\OpenCase\Service\PermissionService;
 use OCA\OpenCase\Service\WorkflowService;
 use OCP\AppFramework\ApiController;
@@ -45,6 +48,8 @@ class EmployeeController extends ApiController {
         private PermissionService $permissionService,
         private IUserManager $userManager,
         private IFactory $l10nFactory,
+        private ProcessTaskMapper $processTaskMapper,
+        private GroupAccessProfileType $groupAccessProfileType,
         private ?string $userId,
     ) {
         parent::__construct($appName, $request);
@@ -165,6 +170,45 @@ class EmployeeController extends ApiController {
     }
 
     /**
+     * Returns the access groups (Grupper access profiles) the given user has
+     * access to, from oc_opencase_user_access — shown instead of the SAML
+     * privileges when accessprofile_type is 'group'.
+     */
+    #[NoAdminRequired]
+    #[ApiRoute(verb: 'GET', url: '/api/v1/employees/{uuid}/access-groups')]
+    public function userAccessGroups(string $uuid): DataResponse {
+        $userInfo = $this->userInfoMapper->findByUuid($uuid);
+        $userId = $userInfo?->getUserId();
+        if ($userId === null) {
+            return new DataResponse(['error' => 'User not found'], Http::STATUS_NOT_FOUND);
+        }
+        $qb = $this->db->getQueryBuilder();
+        $qb->select(['ua.access_profile_id', 'ua.access_level', 'ua.grant_source', 'ua.granted_at'])
+            ->from('opencase_user_access', 'ua')
+            ->innerJoin('ua', 'opencase_access_profiles', 'ap', $qb->expr()->eq('ap.id', 'ua.access_profile_id'))
+            ->where($qb->expr()->eq('ua.user_id', $qb->createNamedParameter($userId)))
+            ->andWhere($qb->expr()->eq('ap.profile_type', $qb->createNamedParameter(AccessProfile::TYPE_GROUP)));
+
+        $result = $qb->executeQuery();
+        $rows = $result->fetchAll();
+        $result->closeCursor();
+
+        $groups = $this->groupAccessProfileType->describeGroups(array_map(fn($r) => (int)$r['access_profile_id'], $rows));
+
+        $accessGroups = array_map(fn($row) => [
+            'access_profile_id' => (int)$row['access_profile_id'],
+            'group_id'          => $groups[(int)$row['access_profile_id']]['group_id'] ?? '',
+            'group_name'        => $groups[(int)$row['access_profile_id']]['group_name'] ?? '',
+            'access_level'      => $row['access_level'],
+            'grant_source'      => $row['grant_source'],
+            'granted_at'        => $row['granted_at'],
+        ], $rows);
+        usort($accessGroups, fn(array $a, array $b) => strcasecmp($a['group_name'], $b['group_name']));
+
+        return new DataResponse(['access_groups' => $accessGroups]);
+    }
+
+    /**
      * Returns cases where the given Nextcloud user has a direct manual access grant.
      */
     #[NoAdminRequired]
@@ -198,7 +242,8 @@ class EmployeeController extends ApiController {
 
     /**
      * Returns the open tasks assigned to the given employee: pending document
-     * workflow steps where it is their turn to act, plus active reminders.
+     * workflow steps where it is their turn to act, active reminders, and
+     * process tasks assigned to them.
      * Ordered by due date ascending, undated tasks last.
      *
      * Tasks are filtered against the *calling* user's read access to the
@@ -284,6 +329,26 @@ class EmployeeController extends ApiController {
                 'document_id'    => $documentId,
                 'document_title' => $documentTitle,
                 'case_id'        => $case?->getId(),
+                'case_number'    => $case?->getCaseNumber() ?? '',
+                'case_title'     => $case?->getTitle() ?? '',
+            ];
+        }
+
+        // --- Process tasks assigned to the employee ---
+        foreach ($this->processTaskMapper->findOpenByAssignee($userId) as $processTask) {
+            if (!$this->permissionService->userHasReadAccessToCase($this->userId, $processTask->getCaseId())) {
+                continue;
+            }
+            $case = $this->caseMapper->findById($processTask->getCaseId());
+
+            $tasks[] = [
+                'type'           => 'process',
+                'key'            => 'pt-' . $processTask->getId(),
+                'title'          => $processTask->getName(),
+                'deadline'       => $processTask->getDueDate()?->format('c'),
+                'document_id'    => null,
+                'document_title' => '',
+                'case_id'        => $processTask->getCaseId(),
                 'case_number'    => $case?->getCaseNumber() ?? '',
                 'case_title'     => $case?->getTitle() ?? '',
             ];

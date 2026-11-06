@@ -168,9 +168,13 @@ class CaseMapper extends QBMapper {
         if ($orgUuids !== []) {
             $qb->andWhere($qb->expr()->in('c.org_uuid', $qb->createNamedParameter($orgUuids, IQueryBuilder::PARAM_STR_ARRAY)));
         }
+        // SagDokumentIndeks needs a KLE code and sensitivity, which only FK
+        // Adgang access profiles have — Grupper cases are never transferred.
+        $qb->innerJoin('c', 'opencase_access_profiles', 'ap', $qb->expr()->eq('ap.id', 'c.access_profile_id'))
+            ->andWhere($qb->expr()->eq('ap.profile_type', $qb->createNamedParameter(AccessProfile::TYPE_FK)));
+
         if ($klePatterns !== []) {
-            $qb->innerJoin('c', 'opencase_access_profiles', 'ap', $qb->expr()->eq('ap.id', 'c.access_profile_id'))
-                ->innerJoin('ap', 'opencase_class_subject', 'cs', $qb->expr()->eq('cs.uuid', 'ap.class_subject_uuid'));
+            $qb->innerJoin('ap', 'opencase_class_subject', 'cs', $qb->expr()->eq('cs.uuid', 'ap.class_subject_uuid'));
             $or = [];
             foreach ($klePatterns as $pattern) {
                 $or[] = $qb->expr()->like('cs.code', $qb->createNamedParameter($pattern));
@@ -872,6 +876,7 @@ class CaseMapper extends QBMapper {
         ?string $sensitivityKey = null,
         ?int $casetypeId = null,
         array $customFields = [],
+        ?string $classPlanCode = null,
     ): array {
         $now = (new \DateTime())->format('Y-m-d H:i:s');
         $qb  = $this->db->getQueryBuilder();
@@ -902,14 +907,24 @@ class CaseMapper extends QBMapper {
                 $qb->expr()->eq('ap_f.id', 'c.access_profile_id'));
         }
         if ($classificationCode !== null && $classificationCode !== '') {
+            // The case's own KLE number (Grupper + KLE), else its profile's
             $qb->innerJoin('ap_f', 'opencase_class_subject', 'cs_f',
-                $qb->expr()->eq('ap_f.class_subject_uuid', 'cs_f.uuid'));
+                $qb->expr()->eq($qb->createFunction('COALESCE(c.class_subject_uuid, ap_f.class_subject_uuid)'), 'cs_f.uuid'));
             $qb->andWhere($qb->expr()->eq('cs_f.code', $qb->createNamedParameter($classificationCode)));
         }
         if ($sensitivityKey !== null && $sensitivityKey !== '') {
             $qb->innerJoin('ap_f', 'opencase_sensitivity', 'sens_f',
-                $qb->expr()->eq('ap_f.sensitivity_uuid', 'sens_f.uuid'));
+                $qb->expr()->eq($qb->createFunction('COALESCE(c.sensitivity_uuid, ap_f.sensitivity_uuid)'), 'sens_f.uuid'));
             $qb->andWhere($qb->expr()->eq('sens_f.key', $qb->createNamedParameter($sensitivityKey)));
+        }
+        if ($classPlanCode !== null && $classPlanCode !== '') {
+            $qb->innerJoin('c', 'opencase_class_plan', 'cp_f',
+                $qb->expr()->eq('c.class_plan_uuid', 'cp_f.uuid'));
+            $classPlanLike = $qb->createNamedParameter('%' . $this->db->escapeLikeParameter($classPlanCode) . '%');
+            $qb->andWhere($qb->expr()->orX(
+                $qb->expr()->iLike('cp_f.code', $classPlanLike),
+                $qb->expr()->iLike('cp_f.title', $classPlanLike),
+            ));
         }
 
         if ($orgUuid !== null) {
@@ -1035,6 +1050,7 @@ class CaseMapper extends QBMapper {
         ?string $sensitivityKey = null,
         ?int $casetypeId = null,
         array $customFields = [],
+        ?string $classPlanCode = null,
     ): int {
         $now = (new \DateTime())->format('Y-m-d H:i:s');
         $qb  = $this->db->getQueryBuilder();
@@ -1063,14 +1079,24 @@ class CaseMapper extends QBMapper {
                 $qb->expr()->eq('ap_f.id', 'c.access_profile_id'));
         }
         if ($classificationCode !== null && $classificationCode !== '') {
+            // The case's own KLE number (Grupper + KLE), else its profile's
             $qb->innerJoin('ap_f', 'opencase_class_subject', 'cs_f',
-                $qb->expr()->eq('ap_f.class_subject_uuid', 'cs_f.uuid'));
+                $qb->expr()->eq($qb->createFunction('COALESCE(c.class_subject_uuid, ap_f.class_subject_uuid)'), 'cs_f.uuid'));
             $qb->andWhere($qb->expr()->eq('cs_f.code', $qb->createNamedParameter($classificationCode)));
         }
         if ($sensitivityKey !== null && $sensitivityKey !== '') {
             $qb->innerJoin('ap_f', 'opencase_sensitivity', 'sens_f',
-                $qb->expr()->eq('ap_f.sensitivity_uuid', 'sens_f.uuid'));
+                $qb->expr()->eq($qb->createFunction('COALESCE(c.sensitivity_uuid, ap_f.sensitivity_uuid)'), 'sens_f.uuid'));
             $qb->andWhere($qb->expr()->eq('sens_f.key', $qb->createNamedParameter($sensitivityKey)));
+        }
+        if ($classPlanCode !== null && $classPlanCode !== '') {
+            $qb->innerJoin('c', 'opencase_class_plan', 'cp_f',
+                $qb->expr()->eq('c.class_plan_uuid', 'cp_f.uuid'));
+            $classPlanLike = $qb->createNamedParameter('%' . $this->db->escapeLikeParameter($classPlanCode) . '%');
+            $qb->andWhere($qb->expr()->orX(
+                $qb->expr()->iLike('cp_f.code', $classPlanLike),
+                $qb->expr()->iLike('cp_f.title', $classPlanLike),
+            ));
         }
 
         if ($orgUuid !== null) {
@@ -1206,6 +1232,37 @@ class CaseMapper extends QBMapper {
             // Profile-based access
             $this->profileAccessExists($qb, $userId),
         ];
+    }
+
+    /**
+     * Condition for another mapper's query: the user can read the case in
+     * $caseIdColumn, by any of the three access paths.
+     *
+     * Named parameters are registered on the OUTER builder so they bind to the
+     * statement that executes; only the SQL text comes from the sub-builders.
+     */
+    public function readableCaseExists(IQueryBuilder $qb, string $userId, string $caseIdColumn): string {
+        $grants = $this->db->getQueryBuilder();
+        $grants->select($grants->expr()->literal(1))
+            ->from('opencase_case_users', 'cu')
+            ->where($grants->expr()->eq('cu.case_id', 'c.id'))
+            ->andWhere($grants->expr()->eq('cu.user_id', $qb->createNamedParameter($userId)))
+            ->andWhere($grants->expr()->orX(
+                $grants->expr()->isNull('cu.expires_at'),
+                $grants->expr()->gt('cu.expires_at', $qb->createNamedParameter((new \DateTime())->format('Y-m-d H:i:s'))),
+            ));
+
+        $case = $this->db->getQueryBuilder();
+        $case->select($case->expr()->literal(1))
+            ->from($this->getTableName(), 'c')
+            ->where($case->expr()->eq('c.id', $caseIdColumn))
+            ->andWhere($case->expr()->orX(
+                $case->expr()->eq('c.responsible_user_id', $qb->createNamedParameter($userId)),
+                'EXISTS (' . $grants->getSQL() . ')',
+                $this->profileAccessExists($qb, $userId),
+            ));
+
+        return 'EXISTS (' . $case->getSQL() . ')';
     }
 
     /**

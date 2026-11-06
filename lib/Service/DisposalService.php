@@ -8,6 +8,7 @@ use OCA\OpenCase\Db\AccessProfileMapper;
 use OCA\OpenCase\Db\CaseEntity;
 use OCA\OpenCase\Db\CaseStatusMapper;
 use OCA\OpenCase\Db\ClassificationFacetRepository;
+use OCA\OpenCase\Db\ClassificationPlanMapper;
 use OCA\OpenCase\Db\ClassificationSubjectMapper;
 use OCA\OpenCase\Db\DeletionDeadlineMapper;
 use OCA\OpenCase\Db\DisposalCodeMapper;
@@ -21,7 +22,8 @@ use OCA\OpenCase\Db\DisposalCodeMapper;
  *   - Closing a case stamps closed_date and computes disposal_date from
  *     the disposal code's disposal_years (null for B = never disposed of).
  *   - Closing a case also picks the deletion deadline (slettefrist) with the
- *     fewest deletion_days among those set on its subject and facet, and
+ *     fewest deletion_days among those set on its subject, facet and
+ *     Emneplan item (classification plan Emneplan), and
  *     computes deletion_date as closed_date + deletion_days.
  *
  * Callers apply these to the entity before persisting it; nothing here
@@ -41,6 +43,7 @@ class DisposalService {
         private AccessProfileMapper $accessProfileMapper,
         private ClassificationSubjectMapper $classificationSubjectMapper,
         private ClassificationFacetRepository $classificationFacetRepository,
+        private ClassificationPlanMapper $classificationPlanMapper,
         private DisposalCodeMapper $disposalCodeMapper,
         private DeletionDeadlineMapper $deletionDeadlineMapper,
         private CaseStatusMapper $caseStatusMapper,
@@ -122,7 +125,8 @@ class DisposalService {
 
     /**
      * The given lookup id (disposalcode_id / deletion_deadline_id) as set on
-     * the case's classification subject (via the access profile) and facet.
+     * the case's classification subject (its own or its access profile's)
+     * and facet.
      * Entries are null where the subject/facet is missing or has none set.
      *
      * @return list<int|null>
@@ -131,8 +135,9 @@ class DisposalService {
         $values = [];
 
         $profile = $case->getAccessProfileId() ? $this->accessProfileMapper->findById($case->getAccessProfileId()) : null;
-        if ($profile !== null && $profile->getClassSubjectUuid()) {
-            $subject = $this->classificationSubjectMapper->findByUuid($profile->getClassSubjectUuid());
+        $classSubjectUuid = $case->effectiveClassSubjectUuid($profile);
+        if ($classSubjectUuid) {
+            $subject = $this->classificationSubjectMapper->findByUuid($classSubjectUuid);
             $values[] = match ($column) {
                 'disposalcode_id'      => $subject?->getDisposalcodeId(),
                 'deletion_deadline_id' => $subject?->getDeletionDeadlineId(),
@@ -143,6 +148,15 @@ class DisposalService {
         if ($facetUuid) {
             $value = $this->classificationFacetRepository->find($facetUuid)[$column] ?? null;
             $values[] = $value !== null ? (int)$value : null;
+        }
+
+        $classPlanUuid = $case->getClassPlanUuid();
+        if ($classPlanUuid) {
+            $item = $this->classificationPlanMapper->findByUuid($classPlanUuid);
+            $values[] = match ($column) {
+                'disposalcode_id'      => $item?->getDisposalcodeId(),
+                'deletion_deadline_id' => $item?->getDeletionDeadlineId(),
+            };
         }
 
         return $values;

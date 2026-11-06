@@ -9,13 +9,23 @@ use OCA\OpenCase\Db\CustomFieldScope;
 use OCA\OpenCase\Db\OrganisationMapper;
 
 /**
- * Matches a case's casetype / organisation / KLE code against scope rows
- * (scope_type casetype | organisation | kle). Shared by custom fields and
- * the SagDokumentIndeks (SAPA) transfer rules.
+ * Matches a case's casetype / organisation / KLE code / Emneplan item against
+ * scope rows (scope_type casetype | organisation | kle | class_plan). Shared
+ * by custom fields, phrases, processes and the SagDokumentIndeks (SAPA)
+ * transfer rules (which allow SAPA_SCOPE_TYPES only).
+ *
+ * A class_plan scope value is an Emneplan item uuid (opencase_class_plan) and
+ * matches that item exactly — the Emneplan has no hierarchy to wildcard.
  */
 class CaseScopeMatcher {
 
-    public const SCOPE_TYPES = ['casetype', 'organisation', 'kle'];
+    public const SCOPE_TYPES = ['casetype', 'organisation', 'kle', 'class_plan'];
+
+    /**
+     * SagDokumentIndeks only receives FK Adgang cases with a KLE number, so
+     * an Emneplan scope could never match a case that may be transferred.
+     */
+    public const SAPA_SCOPE_TYPES = ['casetype', 'organisation', 'kle'];
 
     public function __construct(
         private OrganisationMapper $organisationMapper,
@@ -29,8 +39,9 @@ class CaseScopeMatcher {
      *
      * @param array<CustomFieldScope|CaseDocIndexScope> $scopes anything with getScopeType()/getScopeValue()
      * @param string[] $orgAncestors from resolveOrgAncestorUuids()
+     * @param string|null $classPlanUuid the case's Emneplan item (opencase_cases.class_plan_uuid)
      */
-    public function matches(array $scopes, ?int $casetypeId, array $orgAncestors, ?string $kleCode): bool {
+    public function matches(array $scopes, ?int $casetypeId, array $orgAncestors, ?string $kleCode, ?string $classPlanUuid = null): bool {
         $byType = [];
         foreach ($scopes as $scope) {
             $byType[$scope->getScopeType()][] = $scope->getScopeValue();
@@ -50,6 +61,11 @@ class CaseScopeMatcher {
                     break;
                 case 'kle':
                     if ($kleCode === null || !$this->kleCodeMatchesAny($kleCode, $values)) {
+                        return false;
+                    }
+                    break;
+                case 'class_plan':
+                    if ($classPlanUuid === null || $classPlanUuid === '' || !in_array($classPlanUuid, $values, true)) {
                         return false;
                     }
                     break;

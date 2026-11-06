@@ -38,20 +38,26 @@
 						:options="casetypeOptions"
 						:clearable="true" />
 				</div>
-				<div class="ocfs-cases__field">
+				<div v-if="usesKle" class="ocfs-cases__field">
 					<label class="ocfs-cases__label">{{ t('opencase', 'KLE-nummer') }}</label>
 					<NcTextField v-model="form.classificationCode"
 						:placeholder="t('opencase', 'f.eks. 27.69.00')"
 						@keyup.enter="doSearch" />
 				</div>
-				<div class="ocfs-cases__field">
+				<div v-if="isEmneplan" class="ocfs-cases__field">
+					<label class="ocfs-cases__label">{{ t('opencase', 'Emne') }}</label>
+					<NcTextField v-model="form.classPlanCode"
+						:placeholder="t('opencase', 'Emnets navn eller kode')"
+						@keyup.enter="doSearch" />
+				</div>
+				<div v-if="usesKle" class="ocfs-cases__field">
 					<label class="ocfs-cases__label">{{ t('opencase', 'Følsomhed') }}</label>
 					<NcSelect v-model="form.sensitivity"
 						:placeholder="t('opencase', 'Alle følsomhedsniveauer')"
 						:options="sensitivityOptions"
 						:clearable="true" />
 				</div>
-				<div class="ocfs-cases__field">
+				<div v-if="usesKle" class="ocfs-cases__field">
 					<label class="ocfs-cases__label">{{ t('opencase', 'Handlingsfacet') }}</label>
 					<NcSelect v-model="form.classificationFacet"
 						:placeholder="t('opencase', 'Alle handlingsfacetter')"
@@ -156,7 +162,8 @@
 						<th>{{ t('opencase', 'Sagstype') }}</th>
 						<th>{{ t('opencase', 'Titel') }}</th>
 						<th>{{ t('opencase', 'Organisation') }}</th>
-						<th>{{ t('opencase', 'KLE') }}</th>
+						<th>{{ isGroupMode ? t('opencase', 'Adgangsgruppe') : t('opencase', 'KLE') }}</th>
+						<th v-if="isEmneplan">{{ t('opencase', 'Emne') }}</th>
 						<th>{{ t('opencase', 'Status') }}</th>
 						<th>{{ t('opencase', 'Opdateret') }}</th>
 					</tr>
@@ -170,7 +177,8 @@
 						<td>{{ c.casetype_name }}</td>
 						<td class="ocfs-cases__title">{{ c.title }}</td>
 						<td>{{ c.organisation }}</td>
-						<td class="ocfs-cases__kle">{{ c.classification_code }}</td>
+						<td class="ocfs-cases__kle">{{ c.access_profile_type === 'group' ? c.group_name : c.classification_code }}</td>
+						<td v-if="isEmneplan" class="ocfs-cases__kle">{{ classificationPlanLabel(c.class_plan_code, c.class_plan_title) }}</td>
 						<td><CaseStatusBadge :status="c.status_class" :label="c.status_name" /></td>
 						<td class="ocfs-cases__date">{{ formatDate(c.updated_at) }}</td>
 					</tr>
@@ -204,6 +212,7 @@ import MagnifyIcon from 'vue-material-design-icons/Magnify.vue'
 
 import CaseStatusBadge from '../components/CaseStatusBadge.vue'
 import api from '../services/api.js'
+import { classificationPlanLabel } from '../utils/classificationPlanLabel.js'
 
 export default {
 	name: 'CaseFieldSearchView',
@@ -228,6 +237,7 @@ export default {
 				status: null,
 				casetype: null,
 				classificationCode: '',
+				classPlanCode: '',
 				sensitivity: null,
 				classificationFacet: null,
 				insightLevel: null,
@@ -248,6 +258,17 @@ export default {
 	computed: {
 		limit() {
 			return this.$store.state.searchPageSize
+		},
+		isGroupMode() {
+			return this.$store.state.accessProfileType === 'group'
+		},
+		// KLE number, sensitivity and Handlingsfacet: always with FK Adgang,
+		// with Grupper only with the KLE classification plan
+		usesKle() {
+			return !this.isGroupMode || this.$store.state.classificationPlan !== 'Emneplan'
+		},
+		isEmneplan() {
+			return this.$store.state.classificationPlan === 'Emneplan'
 		},
 		effectiveTotal() {
 			return Math.min(this.total, this.$store.state.searchMaxResultCount)
@@ -288,6 +309,7 @@ export default {
 				|| this.form.status !== null
 				|| this.form.casetype !== null
 				|| this.form.classificationCode.trim() !== ''
+				|| this.form.classPlanCode.trim() !== ''
 				|| this.form.sensitivity !== null
 				|| this.form.classificationFacet !== null
 				|| this.form.insightLevel !== null
@@ -310,6 +332,8 @@ export default {
 	},
 
 	methods: {
+		classificationPlanLabel,
+
 		async doSearch() {
 			this.offset = 0
 			await this.fetchResults()
@@ -326,6 +350,7 @@ export default {
 				if (this.form.status) params.status_id = this.form.status.id
 				if (this.form.casetype) params.casetype_id = this.form.casetype.id
 				if (this.form.classificationCode.trim()) params.classification_code = this.form.classificationCode.trim()
+				if (this.form.classPlanCode.trim()) params.class_plan_code = this.form.classPlanCode.trim()
 				if (this.form.sensitivity) params.sensitivity_key = this.form.sensitivity.id
 				if (this.form.classificationFacet) params.classification_facet_uuid = this.form.classificationFacet.id
 				if (this.form.insightLevel) params.insight_level_id = this.form.insightLevel.id
@@ -432,6 +457,7 @@ export default {
 				status: null,
 				casetype: null,
 				classificationCode: '',
+				classPlanCode: '',
 				sensitivity: null,
 				classificationFacet: null,
 				insightLevel: null,

@@ -81,9 +81,22 @@ Afhængigt af den installerede løsning kan dette omfatte:
 - Klassifikationstjenester
 - Distributionstjenester
 - Maskeringstjenesten til aktindsigt (se [Konfiguration](konfiguration.md#maskeringstjeneste))
+- Procesmotoren til procesmodulet (se [Administrer processer](administrer-processer.md))
 - øvrige Enterprise-integrationer
 
 Det anbefales desuden at gennemføre en funktionstest af alle aktiverede integrationer.
+
+Installationsscriptet aktiverer også disse funktioner, som hver har sin egen konfigurationsværdi og kan slås til og fra uafhængigt af Enterprise-versionen:
+
+| Funktion | Konfigurationsværdi |
+|----------|---------------------|
+| Digital Post via Serviceplatformen | `feature_digital-post` |
+| Maskeringstjenesten | `feature_redaction-service` |
+| Procesmodulet | `feature_process-engine` |
+
+```bash
+sudo -u www-data php occ opencase:config:set feature_digital-post 0   # slå Digital Post fra
+```
 
 ---
 

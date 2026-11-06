@@ -19,7 +19,6 @@ use OCA\OpenCase\Db\CustomFieldValueMapper;
 class CustomFieldService {
 
     private const FIELD_TYPES = ['text', 'dropdown', 'checkbox', 'date'];
-    private const SCOPE_TYPES = ['casetype', 'organisation', 'kle'];
 
     public function __construct(
         private CustomFieldDefMapper $defMapper,
@@ -149,7 +148,7 @@ class CustomFieldService {
             if ($scopeValue === '') {
                 continue;
             }
-            if (!in_array($scopeType, self::SCOPE_TYPES, true)) {
+            if (!in_array($scopeType, CaseScopeMatcher::SCOPE_TYPES, true)) {
                 throw new \InvalidArgumentException("Invalid scope_type '{$scopeType}'");
             }
             $entity = new CustomFieldScope();
@@ -195,7 +194,7 @@ class CustomFieldService {
     /**
      * @return CustomFieldDef[]
      */
-    public function getApplicableFields(?int $casetypeId, ?string $orgUuid, ?string $kleCode): array {
+    public function getApplicableFields(?int $casetypeId, ?string $orgUuid, ?string $kleCode, ?string $classPlanUuid = null): array {
         $defs = $this->defMapper->findAll(true);
         if (empty($defs)) {
             return [];
@@ -205,12 +204,12 @@ class CustomFieldService {
         );
         $orgAncestors = $orgUuid !== null ? $this->scopeMatcher->resolveOrgAncestorUuids($orgUuid) : [];
 
-        return array_values(array_filter($defs, function (CustomFieldDef $def) use ($scopesByField, $casetypeId, $orgAncestors, $kleCode) {
+        return array_values(array_filter($defs, function (CustomFieldDef $def) use ($scopesByField, $casetypeId, $orgAncestors, $kleCode, $classPlanUuid) {
             $scopes = $scopesByField[$def->getId()] ?? [];
             if (empty($scopes)) {
                 return true;
             }
-            return $this->scopeMatcher->matches($scopes, $casetypeId, $orgAncestors, $kleCode);
+            return $this->scopeMatcher->matches($scopes, $casetypeId, $orgAncestors, $kleCode, $classPlanUuid);
         }));
     }
 

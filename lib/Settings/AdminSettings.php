@@ -15,6 +15,7 @@ use OCA\OpenCase\Enum\CertificateType;
 use OCA\OpenCase\Service\ApiClientPresenterService;
 use OCA\OpenCase\Service\Certificate;
 use OCA\OpenCase\Service\Configuration;
+use OCA\OpenCase\Service\CustomerTypeService;
 use OCP\App\IAppManager;
 use OCP\AppFramework\Http\TemplateResponse;
 use OCP\AppFramework\Services\IInitialState;
@@ -33,6 +34,7 @@ class AdminSettings implements ISettings {
 		private IInitialState $initialState,
 		private IAppManager $appManager,
 		private ApiClientPresenterService $apiClientPresenterService,
+		private CustomerTypeService $customerTypeService,
 	) {
 	}
 
@@ -50,6 +52,10 @@ class AdminSettings implements ISettings {
 		]);
 
 		$this->initialState->provideInitialState('config', $this->configuration->getAllConfigValues());
+		$this->initialState->provideInitialState('customerType', [
+			'type'   => $this->customerTypeService->activeType(),
+			'chosen' => $this->customerTypeService->isChosen(),
+		]);
 		$this->initialState->provideInitialState('appVersion', $this->appManager->getAppVersion(Application::APP_ID));
 
 		$certificate = $this->certificateRepository->find('Primary');

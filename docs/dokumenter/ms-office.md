@@ -146,4 +146,4 @@ Det anbefales at:
 - [Opret dokument](../dokumenter/opret-dokument.md)
 - [Rediger fil](../dokumenter/rediger-fil.md)
 - [Filversioner](../dokumenter/filversioner.md)
-- [Administrer skabeloner](../administrator/administrer-skabeloner.md)
+- [Administrer brevdesigner](../administrator/administrer-skabeloner.md)
