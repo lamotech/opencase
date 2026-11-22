@@ -42,6 +42,15 @@ class ConfigListCommand extends Command {
 			));
 		}
 
+		// Secret values are masked by ConfigMapper; show whether one is set.
+		// Use opencase:config:get to print a decrypted secret.
+		$entries = array_map(static function (array $entry): array {
+			if ($entry['secret'] ?? false) {
+				$entry['value'] = ($entry['isSet'] ?? false) ? '********' : '';
+			}
+			return $entry;
+		}, $entries);
+
 		if ($input->getOption('plain')) {
 			foreach ($entries as $entry) {
 				$output->writeln($entry['key'] . '=' . $entry['value']);

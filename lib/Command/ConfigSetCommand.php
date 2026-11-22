@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace OCA\OpenCase\Command;
 
 use OCA\OpenCase\Service\Configuration;
+use OCA\OpenCase\Service\SecretCrypto;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
@@ -40,6 +41,11 @@ class ConfigSetCommand extends Command {
 			$output->writeln('<error>Failed to set ' . $key . ':</error>');
 			$output->writeln('<error>' . $e->getMessage() . '</error>');
 			return Command::FAILURE;
+		}
+
+		if (SecretCrypto::isSecretConfigKey($key)) {
+			$output->writeln('<info>' . $key . ' updated (stored encrypted)</info>');
+			return Command::SUCCESS;
 		}
 
 		if ($previous === null) {

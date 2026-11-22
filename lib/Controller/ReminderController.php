@@ -30,6 +30,8 @@ use OCP\Notification\IManager as INotificationManager;
  */
 class ReminderController extends ApiController {
 
+    use CaseAccessGuard;
+
     public function __construct(
         string $appName,
         IRequest $request,
@@ -90,6 +92,9 @@ class ReminderController extends ApiController {
         if ($this->caseMapper->findById($caseId) === null) {
             return new DataResponse(['error' => 'Case not found'], Http::STATUS_NOT_FOUND);
         }
+        if ($denied = $this->denyUnlessCaseRead($caseId)) {
+            return $denied;
+        }
 
         $reminders = array_map(
             fn($r) => $this->serialize($r),
@@ -105,6 +110,9 @@ class ReminderController extends ApiController {
         if ($this->caseMapper->findById($caseId) === null) {
             return new DataResponse(['error' => 'Case not found'], Http::STATUS_NOT_FOUND);
         }
+        if ($denied = $this->denyUnlessCaseWrite($caseId)) {
+            return $denied;
+        }
 
         $params = $this->request->getParams();
         $title  = trim($params['title'] ?? '');
@@ -114,6 +122,9 @@ class ReminderController extends ApiController {
         }
 
         $responsibleUserId = ($params['responsible_user_id'] ?? '') ?: ($this->userId ?? '');
+        if ($responsibleUserId !== '' && !$this->userManager->userExists($responsibleUserId)) {
+            return new DataResponse(['error' => 'Unknown responsible user'], Http::STATUS_BAD_REQUEST);
+        }
         $deadlineRaw       = $params['deadline'] ?? null;
         $deadline          = null;
         if ($deadlineRaw !== null && $deadlineRaw !== '') {
@@ -148,6 +159,9 @@ class ReminderController extends ApiController {
         if ($this->documentMapper->findById($documentId) === null) {
             return new DataResponse(['error' => 'Document not found'], Http::STATUS_NOT_FOUND);
         }
+        if ($denied = $this->denyUnlessDocumentRead($documentId)) {
+            return $denied;
+        }
 
         $reminders = array_map(
             fn($r) => $this->serialize($r),
@@ -164,6 +178,12 @@ class ReminderController extends ApiController {
         if ($document === null) {
             return new DataResponse(['error' => 'Document not found'], Http::STATUS_NOT_FOUND);
         }
+        // The assignee may be granted case-level write access below, so the
+        // caller needs write on the case, not just on the document.
+        $caseId = $document->getCaseId();
+        if ($denied = $this->denyUnlessDocumentRead($documentId) ?? $this->denyUnlessCaseWrite($caseId)) {
+            return $denied;
+        }
 
         $params = $this->request->getParams();
         $title  = trim($params['title'] ?? '');
@@ -173,6 +193,9 @@ class ReminderController extends ApiController {
         }
 
         $responsibleUserId = ($params['responsible_user_id'] ?? '') ?: ($this->userId ?? '');
+        if ($responsibleUserId !== '' && !$this->userManager->userExists($responsibleUserId)) {
+            return new DataResponse(['error' => 'Unknown responsible user'], Http::STATUS_BAD_REQUEST);
+        }
         $deadlineRaw       = $params['deadline'] ?? null;
         $deadline          = null;
         if ($deadlineRaw !== null && $deadlineRaw !== '') {
@@ -191,7 +214,6 @@ class ReminderController extends ApiController {
 
         $reminder = $this->reminderMapper->insert($reminder);
 
-        $caseId = $document->getCaseId();
         $this->auditService->logReminderCreated($caseId, $this->userId ?? '', $reminder->getId(), $title, $reminder->getResponsibleUserId());
 
         if ($responsibleUserId !== '' && $responsibleUserId !== $this->userId) {
@@ -209,6 +231,10 @@ class ReminderController extends ApiController {
         if ($reminder === null) {
             return new DataResponse(['error' => 'Reminder not found'], Http::STATUS_NOT_FOUND);
         }
+        $caseId = $this->resolveCaseId($reminder);
+        if ($denied = $this->denyUnlessReminderWrite($reminder, $caseId)) {
+            return $denied;
+        }
 
         $params = $this->request->getParams();
 
@@ -219,6 +245,9 @@ class ReminderController extends ApiController {
         $prevResponsible = $reminder->getResponsibleUserId();
         if (array_key_exists('responsible_user_id', $params)) {
             $newResponsible = ($params['responsible_user_id'] ?? '') ?: null;
+            if ($newResponsible !== null && !$this->userManager->userExists($newResponsible)) {
+                return new DataResponse(['error' => 'Unknown responsible user'], Http::STATUS_BAD_REQUEST);
+            }
             $reminder->setResponsibleUserId($newResponsible);
         }
 
@@ -241,8 +270,7 @@ class ReminderController extends ApiController {
 
         $reminder = $this->reminderMapper->update($reminder);
 
-        $caseId = $reminder->getEntity() === 'case' ? $reminder->getEntityKey() : 0;
-        $this->auditService->logReminderUpdated($caseId, $this->userId ?? '', $reminder->getId(), $reminder->getTitle(), $changes);
+        $this->auditService->logReminderUpdated($caseId ?? 0, $this->userId ?? '', $reminder->getId(), $reminder->getTitle(), $changes);
 
         $newResponsible = $reminder->getResponsibleUserId();
         if (
@@ -251,13 +279,8 @@ class ReminderController extends ApiController {
             && $newResponsible !== $this->userId
         ) {
             $this->sendReminderNotification($reminder);
-            $caseIdForGrant = match ($reminder->getEntity()) {
-                'case'     => $reminder->getEntityKey(),
-                'document' => $this->documentMapper->findById($reminder->getEntityKey())?->getCaseId() ?? 0,
-                default    => 0,
-            };
-            if ($caseIdForGrant > 0) {
-                $this->ensureWriteAccess($caseIdForGrant, $newResponsible);
+            if ($caseId !== null) {
+                $this->ensureWriteAccess($caseId, $newResponsible);
             }
         }
 
@@ -271,18 +294,55 @@ class ReminderController extends ApiController {
         if ($reminder === null) {
             return new DataResponse(['error' => 'Reminder not found'], Http::STATUS_NOT_FOUND);
         }
+        $caseId = $this->resolveCaseId($reminder);
+        if ($denied = $this->denyUnlessReminderWrite($reminder, $caseId)) {
+            return $denied;
+        }
 
-        $caseId = $reminder->getEntity() === 'case' ? $reminder->getEntityKey() : 0;
-        $this->auditService->logReminderDeleted($caseId, $this->userId ?? '', $id, $reminder->getTitle());
+        $this->auditService->logReminderDeleted($caseId ?? 0, $this->userId ?? '', $id, $reminder->getTitle());
 
         $this->reminderMapper->delete($reminder);
 
         return new DataResponse([], Http::STATUS_NO_CONTENT);
     }
 
+    /**
+     * Case the reminder hangs off, or null if it can't be resolved (e.g. the
+     * document was deleted).
+     */
+    private function resolveCaseId(Reminder $reminder): ?int {
+        $caseId = match ($reminder->getEntity()) {
+            'case'     => $reminder->getEntityKey(),
+            'document' => $this->documentMapper->findById($reminder->getEntityKey())?->getCaseId(),
+            default    => null,
+        };
+        return ($caseId !== null && $caseId > 0) ? $caseId : null;
+    }
+
+    /**
+     * Changing or deleting a reminder requires write access to its case. An
+     * orphaned reminder (no resolvable case) may only be touched by its
+     * creator or responsible user.
+     */
+    private function denyUnlessReminderWrite(Reminder $reminder, ?int $caseId): ?DataResponse {
+        if ($caseId !== null) {
+            return $this->denyUnlessCaseWrite($caseId);
+        }
+        $uid = $this->userId ?? '';
+        if ($uid !== '' && ($uid === $reminder->getCreatedBy() || $uid === $reminder->getResponsibleUserId())) {
+            return null;
+        }
+        return new DataResponse(['error' => 'Access denied'], Http::STATUS_FORBIDDEN);
+    }
+
+    /**
+     * Give the reminder's assignee write access so they can act on it. Callers
+     * must already have verified that the acting user has write access.
+     */
     private function ensureWriteAccess(int $caseId, string $userId): void {
         if (!$this->permissionService->userHasWriteAccessToCase($userId, $caseId)) {
             $this->permissionService->grantUserAccess($caseId, $userId, true, $this->userId ?? '');
+            $this->auditService->logAccessGranted($caseId, $this->userId ?? '', $userId, true, null);
         }
     }
 

@@ -110,13 +110,32 @@ Opret en serviceaftale i **Fælleskommunal Administrator** for:
 Importer det udstedte systemcertifikat i OpenCase.
 Certifikatet anvendes ved alle kald til organisationsservicen.
 
-Kopier certifikatet til en mappe på serveren og kør kommandoen i Nextcloud rod mappen:
+Kopier certifikatet til en mappe på serveren og begræns adgangen til filen, så kun webserverens bruger kan læse den:
 
 ```bash
-php occ opencase:register-certificate
+chown www-data:www-data /sti/til/certifikat.p12
+chmod 600 /sti/til/certifikat.p12
+```
+
+Kør derefter kommandoen i Nextcloud rod mappen:
+
+```bash
+sudo -u www-data php occ opencase:register-certificate
 ```
 
 Vælg '0' for Primary og indtast stien til certifikatet samt password.
+
+Slet derefter den oprindelige `.p12`-fil. Kommandoen tilbyder at gøre det for dig. Hvis den samme fil skal registreres som flere certifikattyper, skal du først slette den, når alle typer er registreret.
+
+**Sådan opbevares certifikatet**
+
+- Certifikatfilen kopieres til OpenCases egen datamappe i Nextclouds datakatalog (`appdata_<instanceid>/opencase/certificates/`). OpenCase bruger ikke den oprindelige fil efter registreringen.
+- Certifikatets password gemmes **krypteret** i databasen med Nextclouds indbyggede kryptering (`OCP\Security\ICrypto`). Nøglen udledes af `secret` i `config/config.php`.
+- Password og filplacering sendes aldrig til browseren.
+
+Da password kan dekrypteres med `secret` fra `config.php`, skal `config.php`, datakataloget og backups af dem beskyttes tilsvarende. Hvis `secret` ændres, skal certifikaterne registreres igen.
+
+Ved opgradering fra version 1.2.10 eller tidligere krypteres eksisterende passwords automatisk, og certifikatfilerne kopieres til OpenCases datamappe. Derefter kan de oprindelige filer slettes. Hvis der er mistanke om, at en databasebackup med passwords i klar tekst er kommet uvedkommende i hænde, bør systemcertifikatet fornyes i MitID Erhverv.
 
 ![Organisation](../images/administration/primary-certifikate.png)
 

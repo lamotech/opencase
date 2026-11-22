@@ -28,19 +28,10 @@ class Certificate {
 			throw new Exception("Certificate not found: Primary certificate must be configured");
 		}
 
-		$this->loadCertificate($record['filepath'], $record['password']);
+		$this->loadCertificate($repository->readContent($record), $record['password']);
 	}
 
-	private function loadCertificate(string $filepath, ?string $password): void {
-		if (!file_exists($filepath)) {
-			throw new Exception("Certificate file not found: {$filepath}");
-		}
-
-		$certContent = file_get_contents($filepath);
-		if ($certContent === false) {
-			throw new Exception("Failed to read certificate file: {$filepath}");
-		}
-
+	private function loadCertificate(string $certContent, ?string $password): void {
 		$pkcs12 = [];
 		if (!openssl_pkcs12_read($certContent, $pkcs12, $password ?? '')) {
 			throw new Exception("Failed to parse PKCS#12 certificate: " . openssl_error_string());
@@ -98,24 +89,26 @@ class Certificate {
 	}
 
 	/**
-	 * Parse a PKCS#12 certificate file and return its subject, serial number and
-	 * expiry, without requiring a registered CertificateType/repository record.
+	 * Describe a registered certificate (exact type, no fallback to Primary) for
+	 * display in the admin settings. Reads the file and password server-side; the
+	 * password and storage location are never part of the result.
 	 *
-	 * Response (success): ['valid' => true, 'subject', 'serialNumber', 'expiresAt']
-	 * Response (failure): ['valid' => false, 'error' => 'not_found' | 'cannot_read']
+	 * Response (success): ['valid' => true, 'subject', 'serialNumber', 'expiresAt', 'legacyStorage']
+	 * Response (failure): ['valid' => false, 'error' => 'not_configured' | 'cannot_read']
 	 */
-	public static function parseCertificateFile(string $filepath, ?string $password): array {
-		if (!file_exists($filepath)) {
-			return ['valid' => false, 'error' => 'not_found'];
-		}
-
-		$certContent = file_get_contents($filepath);
-		if ($certContent === false) {
+	public static function describeRegistered(CertificateRepository $repository, CertificateType $type): array {
+		try {
+			$record = $repository->find($type->value);
+			if ($record === null) {
+				return ['valid' => false, 'error' => 'not_configured'];
+			}
+			$content = $repository->readContent($record);
+		} catch (\Throwable) {
 			return ['valid' => false, 'error' => 'cannot_read'];
 		}
 
 		$pkcs12 = [];
-		if (!openssl_pkcs12_read($certContent, $pkcs12, $password ?? '')) {
+		if (!openssl_pkcs12_read($content, $pkcs12, $record['password'] ?? '')) {
 			return ['valid' => false, 'error' => 'cannot_read'];
 		}
 
@@ -134,6 +127,7 @@ class Certificate {
 			'subject' => $certInfo['subject']['CN'] ?? $certInfo['name'] ?? '',
 			'serialNumber' => $certInfo['serialNumberHex'] ?? (string)($certInfo['serialNumber'] ?? ''),
 			'expiresAt' => $certInfo['validTo_time_t'],
+			'legacyStorage' => ($record['storage'] ?? '') !== CertificateRepository::STORAGE_APPDATA,
 		];
 	}
 

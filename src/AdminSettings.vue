@@ -88,8 +88,8 @@
 				<p><strong>php occ opencase:register-certificate</strong></p>
 				<br/>
 
-				<div v-if="certError === 'not_found'" class="certificate-error">
-					{{ t('opencase', 'The certificate was not found at the specified path') }}
+				<div v-if="certError === 'not_configured'" class="certificate-error">
+					{{ t('opencase', 'No certificate has been registered') }}
 				</div>
 				<div v-else-if="certError === 'cannot_read'" class="certificate-error">
 					{{ t('opencase', 'The certificate cannot be read') }}
@@ -98,7 +98,10 @@
 					<div><strong>{{ t('opencase', 'Name:') }}</strong> {{ certSubject }}</div>
 					<div><strong>{{ t('opencase', 'Serial number:') }}</strong> {{ certSerialNumber }}</div>
 					<div><strong>{{ t('opencase', 'Expires:') }}</strong> {{ certExpiresFormatted }}</div>
-				</div>				
+				</div>
+				<div v-if="certLegacyStorage" class="certificate-error">
+					{{ t('opencase', 'The certificate is read from a file outside Nextcloud. Register it again to store it securely in Nextcloud.') }}
+				</div>
 			</NcSettingsSection>
 
 			<NcSettingsSection :name="t('opencase', 'Organisation')">
@@ -722,7 +725,8 @@
 								autocomplete="new-password"
 								:disabled="!enterpriseVersion"
 								:style="{ width: '300px', maxWidth: '100%', boxSizing: 'border-box' }"
-								@change="saveConfigValue('sftp_ssh_key_pass_phrase', sftpSshKeyPassPhrase)">
+								:placeholder="secretPlaceholder('sftp_ssh_key_pass_phrase')"
+								@change="saveSecret('sftp_ssh_key_pass_phrase', 'sftpSshKeyPassPhrase')">
 						</td>
 					</tr>
 				</table>
@@ -760,8 +764,8 @@
 					</tr>
 				</table>
 
-				<div v-if="certDatafordeler.error === 'not_found'" class="certificate-error">
-					{{ t('opencase', 'The certificate was not found at the specified path') }}
+				<div v-if="certDatafordeler.error === 'not_configured'" class="certificate-error">
+					{{ t('opencase', 'No certificate has been registered') }}
 				</div>
 				<div v-else-if="certDatafordeler.error === 'cannot_read'" class="certificate-error">
 					{{ t('opencase', 'The certificate cannot be read') }}
@@ -770,6 +774,9 @@
 					<div><strong>{{ t('opencase', 'Name:') }}</strong> {{ certDatafordeler.subject }}</div>
 					<div><strong>{{ t('opencase', 'Serial number:') }}</strong> {{ certDatafordeler.serialNumber }}</div>
 					<div><strong>{{ t('opencase', 'Expires:') }}</strong> {{ certDatafordelerExpiresFormatted }}</div>
+				</div>
+				<div v-if="certDatafordeler.legacyStorage" class="certificate-error">
+					{{ t('opencase', 'The certificate is read from a file outside Nextcloud. Register it again to store it securely in Nextcloud.') }}
 				</div>
 			</NcSettingsSection>
 
@@ -804,7 +811,8 @@
 								autocomplete="new-password"
 								:disabled="!enterpriseVersion"
 								:style="{ width: '400px', maxWidth: '100%', boxSizing: 'border-box' }"
-								@change="saveConfigValue('datafordeler_apikey_cvr', datafordelerApikeyCvr)">
+								:placeholder="secretPlaceholder('datafordeler_apikey_cvr')"
+								@change="saveSecret('datafordeler_apikey_cvr', 'datafordelerApikeyCvr')">
 						</td>
 					</tr>
 				</table>
@@ -841,7 +849,8 @@
 								autocomplete="new-password"
 								:disabled="!enterpriseVersion"
 								:style="{ width: '400px', maxWidth: '100%', boxSizing: 'border-box' }"
-								@change="saveConfigValue('datafordeler_apikey_estate', datafordelerApikeyEstate)">
+								:placeholder="secretPlaceholder('datafordeler_apikey_estate')"
+								@change="saveSecret('datafordeler_apikey_estate', 'datafordelerApikeyEstate')">
 						</td>
 					</tr>
 				</table>
@@ -1031,7 +1040,8 @@
 								autocomplete="new-password"
 								:disabled="!redactionServiceEnabled"
 								:style="{ width: '400px', maxWidth: '100%', boxSizing: 'border-box' }"
-								@change="saveConfigValue('redaction_service_api_key', redactionServiceApiKey.trim())">
+								:placeholder="secretPlaceholder('redaction_service_api_key')"
+								@change="saveSecret('redaction_service_api_key', 'redactionServiceApiKey')">
 						</td>
 					</tr>
 				</table>
@@ -1098,7 +1108,8 @@
 								autocomplete="new-password"
 								:disabled="!processEngineEnabled"
 								:style="{ width: '400px', maxWidth: '100%', boxSizing: 'border-box' }"
-								@change="saveConfigValue('process_engine_password', processEnginePassword.trim())">
+								:placeholder="secretPlaceholder('process_engine_password')"
+								@change="saveSecret('process_engine_password', 'processEnginePassword')">
 						</td>
 					</tr>
 				</table>
@@ -2229,13 +2240,15 @@ export default {
 		},
 	},
 	data() {
-		const certificate = loadState('opencase', 'certificate', { filepath: '', password: '' })
+		const certificate = loadState('opencase', 'certificate', { valid: false, error: 'not_configured' })
 		const config = loadState('opencase', 'config', {})
+		// Stored secrets are never sent to the page, only whether each one is set
+		const configSecrets = loadState('opencase', 'configSecrets', {})
 		const syncLog = loadState('opencase', 'syncLog', [])
 		const syncLogKlassifikation = loadState('opencase', 'syncLogKlassifikation', [])
 		const prerequisites = loadState('opencase', 'prerequisites', {})
 		const apiClients = loadState('opencase', 'apiClients', [])
-		const certificateDatafordeler = loadState('opencase', 'certificateDatafordeler', { valid: false, error: 'not_found' })
+		const certificateDatafordeler = loadState('opencase', 'certificateDatafordeler', { valid: false, error: 'not_configured' })
 		const exportLog = loadState('opencase', 'exportLog', [])
 		const appVersion = loadState('opencase', 'appVersion', '')
 		const importLocations = loadState('opencase', 'importLocations', [])
@@ -2264,12 +2277,12 @@ export default {
 			assistantEnabled: prerequisites.assistant || false,
 			integrationOpenaiEnabled: prerequisites.integration_openai || false,
 			syncLog,
-			filepath: certificate.filepath,
-			password: certificate.password,
-			certSubject: '',
-			certSerialNumber: '',
-			certExpiresAt: 0,
-			certError: '',
+			configSecrets,
+			certSubject: certificate.valid ? certificate.subject : '',
+			certSerialNumber: certificate.valid ? certificate.serialNumber : '',
+			certExpiresAt: certificate.valid ? certificate.expiresAt : 0,
+			certError: certificate.valid ? '' : certificate.error,
+			certLegacyStorage: certificate.legacyStorage === true,
 			accessControlEnable: config.access_control_enable === '1',
 			idpMetadataUrl: config.idp_metadata_url || '',
 			organisationEnable: config.organisation_enable === '1',
@@ -2313,9 +2326,9 @@ export default {
 			entityIdPostforespoerg: config.entity_id_postforespoerg || '',
 			endpointPostforespoerg: config.endpoint_postforespoerg || '',
 			datafordelerEndpointCvr: config.datafordeler_endpoint_cvr || '',
-			datafordelerApikeyCvr: config.datafordeler_apikey_cvr || '',
+			datafordelerApikeyCvr: '',
 			datafordelerEndpointEstate: config.datafordeler_endpoint_estate || '',
-			datafordelerApikeyEstate: config.datafordeler_apikey_estate || '',
+			datafordelerApikeyEstate: '',
 			datafordelerEndpointCpr: config.datafordeler_endpoint_cpr || '',
 			certDatafordeler: certificateDatafordeler,
 			msofficeAddinName: config.msoffice_addin_name || 'OpenCase',
@@ -2324,18 +2337,18 @@ export default {
 			msofficeGraphTenantId: config.msoffice_graph_tenant_id || '',
 			msofficeUriCopied: false,
 			redactionServiceUrl: config.redaction_service_url || '',
-			redactionServiceApiKey: config.redaction_service_api_key || '',
+			redactionServiceApiKey: '',
 			testingRedactionService: false,
 			redactionServiceTest: null,
 			processEngineUrl: config.process_engine_url || '',
 			processEngineUser: config.process_engine_user || 'opencase',
-			processEnginePassword: config.process_engine_password || '',
+			processEnginePassword: '',
 			testingProcessEngine: false,
 			processEngineTest: null,
 			sftpHost: config.sftp_host || '',
 			sftpUserName: config.sftp_user_name || '',
 			sftpSshPrivateKeyFullFileName: config.sftp_ssh_private_key_full_fileName || '',
-			sftpSshKeyPassPhrase: config.sftp_ssh_key_pass_phrase || '',
+			sftpSshKeyPassPhrase: '',
 			tlUsername: '',
 			tlFrom: '',
 			tlTo: '',
@@ -2449,9 +2462,6 @@ export default {
 		},
 	},
 	async mounted() {
-		if (this.filepath && this.password) {
-			this.validateCertificate()
-		}
 		// Resume polling if a sync was already running when the page was opened
 		try {
 			const res = await axios.get(generateUrl('/apps/opencase/settings/sync-organisations/status'))
@@ -2477,7 +2487,7 @@ export default {
 			try {
 				// Make sure what is in the fields is what gets tested
 				await this.saveConfigValue('redaction_service_url', this.redactionServiceUrl.trim())
-				await this.saveConfigValue('redaction_service_api_key', this.redactionServiceApiKey.trim())
+				await this.saveSecret('redaction_service_api_key', 'redactionServiceApiKey')
 				const { data } = await axios.post(generateUrl('/apps/opencase/settings/test-redaction-service'))
 				this.redactionServiceTest = data
 			} catch (e) {
@@ -2493,7 +2503,7 @@ export default {
 				// Make sure what is in the fields is what gets tested
 				await this.saveConfigValue('process_engine_url', this.processEngineUrl.trim())
 				await this.saveConfigValue('process_engine_user', this.processEngineUser.trim())
-				await this.saveConfigValue('process_engine_password', this.processEnginePassword.trim())
+				await this.saveSecret('process_engine_password', 'processEnginePassword')
 				const { data } = await axios.post(generateUrl('/apps/opencase/settings/test-process-engine'))
 				this.processEngineTest = data
 			} catch (e) {
@@ -2501,6 +2511,25 @@ export default {
 			} finally {
 				this.testingProcessEngine = false
 			}
+		},
+		secretPlaceholder(key) {
+			return this.configSecrets[key] ? t('opencase', 'Gemt – skriv en ny værdi for at ændre den') : ''
+		},
+		/**
+		 * Save a secret config value. A blank field means "keep the stored value":
+		 * the page never receives stored secrets, so there is nothing to compare with.
+		 *
+		 * @param {string} key Config key
+		 * @param {string} field Name of the data property bound to the input
+		 */
+		async saveSecret(key, field) {
+			const value = (this[field] || '').trim()
+			if (value === '') {
+				return
+			}
+			await this.saveConfigValue(key, value)
+			this.configSecrets = { ...this.configSecrets, [key]: true }
+			this[field] = ''
 		},
 		async saveConfigValue(key, value) {
 			try {
@@ -2811,31 +2840,6 @@ export default {
 				console.error('Classification CSV upload failed', e)
 			} finally {
 				this[uploadingKey] = false
-			}
-		},
-		async validateCertificate() {
-			this.certSubject = ''
-			this.certSerialNumber = ''
-			this.certExpiresAt = 0
-			this.certError = ''
-
-			try {
-				const response = await axios.post(
-					generateUrl('/apps/opencase/settings/certificate/validate'),
-					{
-						filepath: this.filepath,
-						password: this.password,
-					},
-				)
-				if (response.data.valid) {
-					this.certSubject = response.data.subject
-					this.certSerialNumber = response.data.serialNumber
-					this.certExpiresAt = response.data.expiresAt
-				} else {
-					this.certError = response.data.error
-				}
-			} catch (e) {
-				this.certError = 'cannot_read'
 			}
 		},
 		async loadTransactionLogTypes() {

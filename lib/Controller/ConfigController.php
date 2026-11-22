@@ -7,6 +7,7 @@ namespace OCA\OpenCase\Controller;
 use OCA\OpenCase\Db\CaseMapper;
 use OCA\OpenCase\Db\ClassificationFacetRepository;
 use OCA\OpenCase\Db\ConfigMapper;
+use OCA\OpenCase\Service\SecretCrypto;
 use OCA\OpenCase\Db\OrganisationMapper;
 use OCA\OpenCase\Db\SensitivityMapper;
 use OCA\OpenCase\Service\AccessProfile\AccessProfileTypeResolver;
@@ -96,6 +97,15 @@ class ConfigController extends OCSController {
     public function update(string $key): DataResponse {
         if ($denied = $this->checkAdministrator()) {
             return $denied;
+        }
+
+        // Secrets are set by Nextcloud admins only (admin settings or occ),
+        // not by OpenCase Administrators through this API.
+        if (SecretCrypto::isSecretConfigKey($key)) {
+            return new DataResponse(
+                ['error' => "{$key} can only be changed in the Nextcloud administration settings."],
+                Http::STATUS_FORBIDDEN,
+            );
         }
 
         $value = (string)($this->request->getParam('value', ''));

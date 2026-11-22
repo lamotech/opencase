@@ -158,7 +158,6 @@ return [
         ['name' => 'settings#upload_classification_facets',   'url' => '/settings/classification/facets/upload',   'verb' => 'POST'],
         ['name' => 'settings#upload_classification_plan',     'url' => '/settings/classification/plan/upload',     'verb' => 'POST'],
         ['name' => 'settings#upload_organisations',           'url' => '/settings/organisations/upload',           'verb' => 'POST'],
-        ['name' => 'settings#validate_certificate',     'url' => '/settings/certificate/validate', 'verb' => 'POST'],
         ['name' => 'settings#download_metadata',        'url' => '/settings/metadata',             'verb' => 'POST'],
         ['name' => 'settings#download_msoffice_manifest', 'url' => '/settings/msoffice/{app}/manifest.xml', 'verb' => 'GET'],
         ['name' => 'settings#download_export_schema',    'url' => '/settings/export/schema.xsd',    'verb' => 'GET'],

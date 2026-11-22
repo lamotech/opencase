@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace OCA\OpenCase\Db;
 
+use OCA\OpenCase\Service\SecretCrypto;
 use OCP\IDBConnection;
 
 /**
@@ -11,10 +12,16 @@ use OCP\IDBConnection;
  *
  * Does not extend the NC Entity/Mapper base because the table has no
  * auto-increment id column — the config_key IS the primary key.
+ *
+ * Secret keys (SecretCrypto::CONFIG_KEYS) are encrypted on write, decrypted by
+ * get(), and masked as '' by getAll()/getAllWithMeta().
  */
 class ConfigMapper {
 
-    public function __construct(private IDBConnection $db) {
+    public function __construct(
+        private IDBConnection $db,
+        private SecretCrypto $secretCrypto,
+    ) {
     }
 
     /**
@@ -30,13 +37,22 @@ class ConfigMapper {
         $value = $result->fetchOne();
         $result->closeCursor();
 
-        return $value !== false ? (string)$value : $default;
+        if ($value === false) {
+            return $default;
+        }
+        return SecretCrypto::isSecretConfigKey($key)
+            ? (string)$this->secretCrypto->decrypt((string)$value)
+            : (string)$value;
     }
 
     /**
      * Insert or update a config value.
      */
     public function set(string $key, string $value): void {
+        if (SecretCrypto::isSecretConfigKey($key)) {
+            $value = (string)$this->secretCrypto->encrypt($value);
+        }
+
         $qb = $this->db->getQueryBuilder();
         $updated = $qb->update('opencase_config')
             ->set('config_value', $qb->createNamedParameter($value))
@@ -55,7 +71,7 @@ class ConfigMapper {
     }
 
     /**
-     * Return all config entries as an associative array.
+     * Return all config entries as an associative array. Secret values are ''.
      *
      * @return array<string, string>
      */
@@ -67,7 +83,9 @@ class ConfigMapper {
 
         $config = [];
         while ($row = $result->fetch()) {
-            $config[$row['config_key']] = (string)$row['config_value'];
+            $config[$row['config_key']] = SecretCrypto::isSecretConfigKey($row['config_key'])
+                ? ''
+                : (string)$row['config_value'];
         }
         $result->closeCursor();
 
@@ -75,9 +93,10 @@ class ConfigMapper {
     }
 
     /**
-     * Return all config entries including human-readable metadata.
+     * Return all config entries including human-readable metadata. Secret
+     * values are '' with secret = true and isSet telling whether one is stored.
      *
-     * @return list<array{key: string, value: string, name: string|null, description: string|null}>
+     * @return list<array{key: string, value: string, name: string|null, description: string|null, secret: bool, isSet: bool}>
      */
     public function getAllWithMeta(): array {
         $qb = $this->db->getQueryBuilder();
@@ -88,11 +107,14 @@ class ConfigMapper {
 
         $entries = [];
         while ($row = $result->fetch()) {
+            $secret = SecretCrypto::isSecretConfigKey($row['config_key']);
             $entries[] = [
                 'key'         => $row['config_key'],
-                'value'       => (string)$row['config_value'],
+                'value'       => $secret ? '' : (string)$row['config_value'],
                 'name'        => $row['name'] ?? null,
                 'description' => $row['description'] ?? null,
+                'secret'      => $secret,
+                'isSet'       => (string)$row['config_value'] !== '',
             ];
         }
         $result->closeCursor();

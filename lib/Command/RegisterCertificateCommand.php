@@ -11,6 +11,7 @@ use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Question\ChoiceQuestion;
+use Symfony\Component\Console\Question\ConfirmationQuestion;
 use Symfony\Component\Console\Question\Question;
 
 class RegisterCertificateCommand extends Command {
@@ -97,15 +98,13 @@ class RegisterCertificateCommand extends Command {
 		}
 
 		$code = $certType->value;
-		$existing = $this->certificateRepository->find($code);
+		$existed = $this->certificateRepository->exists($code);
 
-		if ($existing !== null) {
-			$this->certificateRepository->update($code, $filepath, $password);
-			$output->writeln('<info>Certificate updated successfully</info>');
-		} else {
-			$this->certificateRepository->insert($code, $filepath, $password);
-			$output->writeln('<info>Certificate registered successfully</info>');
-		}
+		// Copies the file into the app's data folder and stores the password encrypted.
+		$this->certificateRepository->save($code, $certContent, $password);
+		$output->writeln($existed
+			? '<info>Certificate updated successfully</info>'
+			: '<info>Certificate registered successfully</info>');
 
 		$subject = $certInfo['subject']['CN'] ?? $certInfo['name'] ?? 'Unknown';
 		$serialNumber = $certInfo['serialNumberHex'] ?? $certInfo['serialNumber'] ?? 'Unknown';
@@ -116,6 +115,19 @@ class RegisterCertificateCommand extends Command {
 		$output->writeln('  Subject:       ' . $subject);
 		$output->writeln('  Serial Number: ' . $serialNumber);
 		$output->writeln('  Expires:       ' . $expiresAt->format('Y-m-d H:i:s'));
+
+		$output->writeln('');
+		$output->writeln('The certificate has been copied into the Nextcloud app data folder and the password is stored encrypted.');
+		$deleteQuestion = new ConfirmationQuestion('Delete the original file ' . $filepath . ' now? [y/N] ', false);
+		if ($helper->ask($input, $output, $deleteQuestion)) {
+			if (@unlink($filepath)) {
+				$output->writeln('<info>Original file deleted</info>');
+			} else {
+				$output->writeln('<comment>Could not delete ' . $filepath . ' - please remove it manually</comment>');
+			}
+		} else {
+			$output->writeln('<comment>Remember to delete ' . $filepath . ' or restrict its permissions (chmod 600). It may also be registered as another certificate type - register those again before deleting it.</comment>');
+		}
 
 		return Command::SUCCESS;
 	}

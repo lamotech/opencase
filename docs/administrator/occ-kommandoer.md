@@ -14,8 +14,8 @@ php occ opencase:<kommando> [parametre]
 
 | Kommando | Beskrivelse |
 |----------|-------------|
-| `opencase:config:get` | Udskriver en enkelt værdi fra tabellen `opencase_config`. |
-| `opencase:config:list` | Viser alle konfigurationsværdier i `opencase_config`. |
+| `opencase:config:get` | Udskriver en enkelt værdi fra tabellen `opencase_config`. Hemmelige værdier (adgangskoder og API-nøgler) udskrives dekrypteret. |
+| `opencase:config:list` | Viser alle konfigurationsværdier i `opencase_config`. Hemmelige værdier vises som `********`. |
 | `opencase:config:set` | Opretter eller ændrer en konfigurationsværdi. |
 
 ---
@@ -35,7 +35,7 @@ php occ opencase:<kommando> [parametre]
 |----------|-------------|
 | `opencase:export-closed-cases` | Eksporterer lukkede sager til den konfigurerede eksportmappe. |
 | `opencase:register-api-client` | Registrerer et klientcertifikat til det mTLS-beskyttede API. |
-| `opencase:register-certificate` | Registrerer eller opdaterer et PKCS#12-certifikat. |
+| `opencase:register-certificate` | Registrerer eller opdaterer et PKCS#12-certifikat. Filen kopieres til OpenCases datamappe, og password gemmes krypteret. |
 | `opencase:reindex` | Genopbygger OpenCases fuldtekstindeks i Elasticsearch. |
 | `opencase:filecache:sync` | Genopbygger OpenCases virtuelle filsystem i `oc_filecache`. |
 

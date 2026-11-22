@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- Certificate passwords are now stored encrypted with `OCP\Security\ICrypto` instead of in plain text. Existing passwords are encrypted automatically on upgrade.
+- The certificate password is no longer sent to the browser on the admin settings page.
+- Certificate files are copied into OpenCase's data folder (IAppData) when registered, instead of being read from an arbitrary path. Existing certificates are copied automatically on upgrade.
+- Removed `POST /settings/certificate/validate`, which accepted any file path and password. The admin settings now show the registered certificates, described server-side.
+- `occ opencase:register-certificate` offers to delete the original `.p12` file after registration.
+- Mailbox passwords for import locations are now stored encrypted. Existing passwords are encrypted automatically on upgrade.
+- The secret config values `process_engine_password`, `redaction_service_api_key`, `sftp_ssh_key_pass_phrase`, `datafordeler_apikey_cvr` and `datafordeler_apikey_estate` are now stored encrypted, and are no longer sent to the browser. The admin settings fields are blank and show "Gemt" when a value is set; leaving a field blank keeps the stored value. Existing values are encrypted automatically on upgrade.
+- The config API (`/api/v1/config`) for OpenCase Administrators no longer returns secret values and rejects changes to them. They can only be changed by Nextcloud admins in the administration settings or with `occ opencase:config:set`.
+- `occ opencase:config:list` shows `********` for secret values, and `occ opencase:config:set` no longer prints them. `occ opencase:config:get` still prints the decrypted value.
+
 ### Added
 
 - First release

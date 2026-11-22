@@ -4,14 +4,27 @@ declare(strict_types=1);
 
 namespace OCA\OpenCase\Db;
 
+use OCA\OpenCase\Service\SecretCrypto;
 use OCP\DB\QueryBuilder\IQueryBuilder;
 use OCP\IDBConnection;
 
+/**
+ * mailbox_password is stored encrypted (SecretCrypto). Rows returned by the
+ * find methods keep it encrypted; use mailboxPassword() to get the plaintext.
+ */
 class ImportLocationRepository {
 
     public function __construct(
         private IDBConnection $db,
+        private SecretCrypto $secretCrypto,
     ) {}
+
+    /**
+     * The decrypted mailbox password of a row returned by a find method.
+     */
+    public function mailboxPassword(array $location): string {
+        return (string)$this->secretCrypto->decrypt($location['mailbox_password'] ?? null);
+    }
 
     /**
      * Return all non-expired import locations of the given type.
@@ -87,7 +100,7 @@ class ImportLocationRepository {
                 'mailbox_server'         => $qb->createNamedParameter($server),
                 'mailbox_port'           => $qb->createNamedParameter($port),
                 'mailbox_user'           => $qb->createNamedParameter($user),
-                'mailbox_password'       => $qb->createNamedParameter($password),
+                'mailbox_password'       => $qb->createNamedParameter($this->secretCrypto->encrypt($password)),
                 'mailbox_use_ssl'        => $qb->createNamedParameter($useSsl, IQueryBuilder::PARAM_BOOL),
                 'file_extension_filter'  => $qb->createNamedParameter($fileExtensionFilter),
             ])
@@ -115,7 +128,7 @@ class ImportLocationRepository {
         // Leave the stored password untouched when the edit form's password
         // field was left blank (the admin isn't shown the current password).
         if ($password !== null && $password !== '') {
-            $qb->set('mailbox_password', $qb->createNamedParameter($password));
+            $qb->set('mailbox_password', $qb->createNamedParameter($this->secretCrypto->encrypt($password)));
         }
 
         $qb->where($qb->expr()->eq('id', $qb->createNamedParameter($id, IQueryBuilder::PARAM_INT)));

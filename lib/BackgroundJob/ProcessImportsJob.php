@@ -202,7 +202,15 @@ class ProcessImportsJob extends TimedJob {
         }
 
         $port     = (int)($location['mailbox_port'] ?? 993) ?: 993;
-        $password = (string)($location['mailbox_password'] ?? '');
+        try {
+            $password = $this->importLocationRepository->mailboxPassword($location);
+        } catch (\RuntimeException $e) {
+            $this->logger->error(
+                "ProcessImportsJob: mailbox location {$locationId} — " . $e->getMessage(),
+                ['app' => 'opencase']
+            );
+            return;
+        }
         $useSsl   = (bool)((int)($location['mailbox_use_ssl'] ?? 1));
 
         // Port 993 is implicit TLS (encrypted from the first byte); any other

@@ -18,9 +18,9 @@ use OCA\OpenCase\Service\Process\FlowableClient;
 use OCA\OpenCase\Service\AddinOriginService;
 use OCA\OpenCase\Service\ApiClientPresenterService;
 use OCA\OpenCase\Service\CaseExportService;
-use OCA\OpenCase\Service\Certificate;
 use OCA\OpenCase\Service\CaseService;
 use OCA\OpenCase\Service\Configuration;
+use OCA\OpenCase\Service\SecretCrypto;
 use OCA\OpenCase\Service\ClassificationCsvImportService;
 use OCA\OpenCase\Service\ClassificationPlanService;
 use OCA\OpenCase\Service\ClassificationSyncService;
@@ -55,7 +55,6 @@ use OCP\IUserManager;
  *   POST   /settings/sync-klassifikation                      — trigger klassifikation sync
  *   POST   /settings/classification/subjects/upload           — manual CSV import of KLE classifications
  *   POST   /settings/classification/facets/upload             — manual CSV import of handling facets
- *   POST   /settings/certificate/validate                     — validate a PKCS#12 certificate
  *   GET    /settings/msoffice/{app}/manifest.xml               — download an MS Office add-in manifest
  *   GET    /settings/export/schema.xsd                         — download the case export XML schema
  *   POST   /settings/export/run                                — run the case export now (manual trigger)
@@ -233,6 +232,11 @@ class SettingsController extends Controller {
 
         if ($key === '') {
             return new JSONResponse(['error' => 'key is required'], Http::STATUS_BAD_REQUEST);
+        }
+        // The page never receives stored secrets, so a blank secret field
+        // means "unchanged", not "clear it".
+        if (SecretCrypto::isSecretConfigKey($key) && trim($value) === '') {
+            return new JSONResponse(['saved' => false, 'unchanged' => true]);
         }
         if ($key === AccessProfileTypeResolver::CONFIG_KEY
             && !in_array($value, [AccessProfile::TYPE_FK, AccessProfile::TYPE_GROUP], true)) {
@@ -479,20 +483,6 @@ class SettingsController extends Controller {
                 Http::STATUS_INTERNAL_SERVER_ERROR,
             );
         }
-    }
-
-    /**
-     * Validate a PKCS#12 certificate file.
-     *
-     * Request body: { "filepath": "...", "password": "..." }
-     * Response (success): { valid: true, subject, serialNumber, expiresAt }
-     * Response (failure): { valid: false, error }
-     */
-    public function validateCertificate(): JSONResponse {
-        $filepath = (string)($this->request->getParam('filepath', ''));
-        $password = (string)($this->request->getParam('password', ''));
-
-        return new JSONResponse(Certificate::parseCertificateFile($filepath, $password));
     }
 
     /**

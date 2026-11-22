@@ -51,23 +51,21 @@ class AdminSettings implements ISettings {
 			'integration_openai' => $this->appManager->isEnabledForUser('integration_openai'),
 		]);
 
+		// Secret values are blank in 'config'; 'configSecrets' only says whether each is set.
 		$this->initialState->provideInitialState('config', $this->configuration->getAllConfigValues());
+		$this->initialState->provideInitialState('configSecrets', $this->configuration->getSecretConfigStatus());
 		$this->initialState->provideInitialState('customerType', [
 			'type'   => $this->customerTypeService->activeType(),
 			'chosen' => $this->customerTypeService->isChosen(),
 		]);
 		$this->initialState->provideInitialState('appVersion', $this->appManager->getAppVersion(Application::APP_ID));
 
-		$certificate = $this->certificateRepository->find('Primary');
-		$this->initialState->provideInitialState('certificate', [
-			'filepath' => $certificate['filepath'] ?? '',
-			'password' => $certificate['password'] ?? '',
-		]);
-
-		$datafordelerCertificate = $this->certificateRepository->find(CertificateType::Datafordeler->value);
-		$this->initialState->provideInitialState('certificateDatafordeler', $datafordelerCertificate !== null
-			? Certificate::parseCertificateFile($datafordelerCertificate['filepath'], $datafordelerCertificate['password'])
-			: ['valid' => false, 'error' => 'not_found']);
+		// Certificates are described server-side. Never send the certificate
+		// password or file location to the browser.
+		$this->initialState->provideInitialState('certificate',
+			Certificate::describeRegistered($this->certificateRepository, CertificateType::Primary));
+		$this->initialState->provideInitialState('certificateDatafordeler',
+			Certificate::describeRegistered($this->certificateRepository, CertificateType::Datafordeler));
 
 		$this->initialState->provideInitialState('syncLog', $this->orgSyncLogRepository->findLatest(5));
 		$this->initialState->provideInitialState('syncLogKlassifikation', $this->klassSyncLogRepository->findLatest(5));

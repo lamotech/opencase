@@ -6,10 +6,12 @@ namespace OCA\OpenCase\Service;
 use OCP\IDBConnection;
 
 class Configuration {
+	/** Decrypted values. */
 	private array $cache = [];
 
 	public function __construct(
 		private IDBConnection $db,
+		private SecretCrypto $secretCrypto,
 	) {}
 
 	public function getConfigValue(string $key, ?string $default = null): ?string {
@@ -30,25 +32,29 @@ class Configuration {
 			return $default;
 		}
 
-		$this->cache[$key] = $row['config_value'];
-		return $row['config_value'];
+		$value = SecretCrypto::isSecretConfigKey($key)
+			? $this->secretCrypto->decrypt($row['config_value'])
+			: $row['config_value'];
+
+		$this->cache[$key] = $value;
+		return $value;
 	}
 
 	public function setConfigValue(string $key, ?string $value): void {
-		$existing = $this->getConfigValue($key);
+		$stored = SecretCrypto::isSecretConfigKey($key) ? $this->secretCrypto->encrypt($value) : $value;
 
 		$qb = $this->db->getQueryBuilder();
 
-		if ($existing !== null || $this->configKeyExists($key)) {
+		if ($this->configKeyExists($key)) {
 			$qb->update('opencase_config')
-				->set('config_value', $qb->createNamedParameter($value))
+				->set('config_value', $qb->createNamedParameter($stored))
 				->where($qb->expr()->eq('config_key', $qb->createNamedParameter($key)))
 				->executeStatement();
 		} else {
 			$qb->insert('opencase_config')
 				->values([
 					'config_key' => $qb->createNamedParameter($key),
-					'config_value' => $qb->createNamedParameter($value),
+					'config_value' => $qb->createNamedParameter($stored),
 				])
 				->executeStatement();
 		}
@@ -65,6 +71,11 @@ class Configuration {
 		unset($this->cache[$key]);
 	}
 
+	/**
+	 * All config values for the admin settings page. Secret values are never
+	 * included (they are returned as ''); use getSecretConfigStatus() to show
+	 * whether one is set.
+	 */
 	public function getAllConfigValues(): array {
 		$qb = $this->db->getQueryBuilder();
 		$qb->select('config_key', 'config_value')
@@ -74,12 +85,29 @@ class Configuration {
 		$configs = [];
 
 		while ($row = $result->fetch()) {
+			if (SecretCrypto::isSecretConfigKey($row['config_key'])) {
+				$configs[$row['config_key']] = '';
+				continue;
+			}
 			$configs[$row['config_key']] = $row['config_value'];
 			$this->cache[$row['config_key']] = $row['config_value'];
 		}
 
 		$result->closeCursor();
 		return $configs;
+	}
+
+	/**
+	 * Whether each secret config value is set, without revealing it.
+	 *
+	 * @return array<string, bool>
+	 */
+	public function getSecretConfigStatus(): array {
+		$status = [];
+		foreach (SecretCrypto::CONFIG_KEYS as $key) {
+			$status[$key] = (string)$this->getConfigValue($key, '') !== '';
+		}
+		return $status;
 	}
 
 	private function configKeyExists(string $key): bool {
